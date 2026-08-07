@@ -46,7 +46,3 @@ You can download the latest stable release directly from the GitHub releases pag
 ---
 
 
-## 💻 Building from Source
-
-To build Vibe Music locally, you will need **Android Studio** (latest stable version) and **JDK 17**.
-
