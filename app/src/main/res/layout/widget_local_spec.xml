@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_pill_bg"
+    android:orientation="horizontal"
+    android:paddingHorizontal="24dp"
+    android:gravity="center_vertical">
+
+    <TextView
+        android:id="@+id/widget_title"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:textColor="#FFFFFF"
+        android:textStyle="bold"
+        android:textSize="16sp"
+        android:singleLine="true"
+        android:ellipsize="marquee"
+        android:marqueeRepeatLimit="marquee_forever" />
+
+    <TextView
+        android:id="@+id/widget_specs"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="FLAC / 1411kbps"
+        android:textColor="#FF3B30"
+        android:textStyle="bold"
+        android:textSize="14sp"
+        android:layout_marginStart="16dp" />
+
+</LinearLayout>

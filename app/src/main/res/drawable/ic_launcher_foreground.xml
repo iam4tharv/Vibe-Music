@@ -1,0 +1,40 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- The actual icon should be placed inside a 66dp safe zone. 
+         Let's scale the paths to fit within ~60x60 in the center (from 24 to 84). -->
+         
+    <!-- Heartbeat wave to music note -->
+    <!-- Let's draw it using a path -->
+    <path
+        android:pathData="M 28,62 C 32,62 34,58 36,54 L 40,46 C 42,42 45,42 47,48 L 52,65 C 55,75 58,75 60,65 L 67,40 C 69,32 74,32 76,40 L 78,48 C 80,54 82,56 86,52 C 86,52 86,52 86,70 C 86,76 80,82 74,82 C 68,82 62,76 62,70 C 62,64 68,58 74,58 C 76,58 78,59 80,60 L 80,45"
+        android:strokeColor="#FFB3B3"
+        android:strokeWidth="4"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000"/>
+
+    <!-- Radio waves -->
+    <path
+        android:pathData="M 50,32 A 15,15 0 0,1 68,32"
+        android:strokeColor="#FFB3B3"
+        android:strokeWidth="3.5"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000"/>
+
+    <path
+        android:pathData="M 54,38 A 8,8 0 0,1 64,38"
+        android:strokeColor="#FFB3B3"
+        android:strokeWidth="3.5"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000"/>
+
+    <!-- Dot -->
+    <path
+        android:pathData="M 72,28 A 2.5,2.5 0 1,1 77,28 A 2.5,2.5 0 1,1 72,28"
+        android:fillColor="#FFB3B3"/>
+
+</vector>

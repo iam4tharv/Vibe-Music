@@ -1,0 +1,162 @@
+--- app/src/main/kotlin/com/music/echo/ui/vibee/VibeeManager.kt
++++ app/src/main/kotlin/com/music/echo/ui/vibee/VibeeManager.kt
+@@ -14,6 +14,7 @@
+ import com.music.echo.BuildConfig
+ import com.music.echo.playback.PlayerConnection
+ import kotlinx.coroutines.CoroutineScope
++import kotlinx.coroutines.delay
+ import kotlinx.coroutines.Dispatchers
+ import kotlinx.coroutines.Job
+ import kotlinx.coroutines.flow.MutableStateFlow
+@@ -341,20 +342,22 @@
+                     
+                     Determine the user's intent and output a JSON object.
+                     Rules:
+-                    1. If the user wants to play a specific song or artist, output:
++                    1. If the user EXPLICITLY wants to play a specific song or artist, output:
+                        {"action": "play_song", "query": "song/artist name"}
+                     2. If the user just says "play", "resume", or "play any song", output:
+                        {"action": "play"}
+                     3. If the user wants to pause or stop, output:
+                        {"action": "pause"}
+-                    4. If the user wants to skip or play next, output:
++                    4. If the user wants to skip, play next, or go back, output:
+                        {"action": "next"}
+                     5. If the user wants to add a song to the queue, output:
+                        {"action": "add_to_queue", "query": "song name"}
+                     6. If the user wants to remove a song from the queue, output:
+                        {"action": "remove_from_queue", "query": "song name"}
+-                    7. If the user wants to change a setting, output:
+-                       {"action": "toggle_setting", "setting": "SETTING_KEY", "value": true/false}
+-                       Available SETTING_KEYs: "spatialaudio", "crossfeed", "liquidglass", "betterlyrics", "autotranslate", "floatingnavbar", "dynamictheme", "pureblack", "sponsorblock", "listenbrainz", "showlyrics", "swipelyrics", "swipethumbnail".
+-                    8. For anything else (casual chat, jokes, questions, unrecognized), output:
+-                       {"action": "chat", "message": "your friendly, natural, and conversational voice response. Feel free to chat!"}
++                    7. If the user wants to move/rearrange a song in the queue, output:
++                       {"action": "move_in_queue", "query": "song name", "to": "position (like 'next', 'last', or index number)"}
++                    8. If the user wants to change a setting, output:
++                       {"action": "toggle_setting", "setting": "SETTING_KEY", "value": true/false}
++                       Choose the most appropriate SETTING_KEY from this list (approximate matching is fine): ${SettingToggleHelper.ALL_SETTINGS.joinToString(", ")}.
++                    9. For anything else (casual chat, jokes, questions, unrecognized), output:
++                       {"action": "chat", "message": "your friendly, natural voice response"}
+                     
+                     CRITICAL: You MUST ALWAYS return a JSON object. NEVER return an empty response. Output ONLY valid JSON. Do not include markdown formatting.
+@@ -432,15 +435,22 @@
+                         } else if (action == "remove_from_queue") {
+                             val q = jsonObj.optString("query", "")
+                             if (q.isNotBlank()) executeRemoveFromQueue(q)
+                             else msg = "I couldn't remove that."
+                             return@launch
++                        } else if (action == "move_in_queue") {
++                            val q = jsonObj.optString("query", "")
++                            val to = jsonObj.optString("to", "next")
++                            if (q.isNotBlank()) executeMoveInQueue(q, to)
++                            else msg = "I couldn't move that."
++                            return@launch
+                         } else if (action == "toggle_setting") {
+                             val settingName = jsonObj.optString("setting", "")
+                             val value = jsonObj.optBoolean("value", false)
+                             if (settingName.isNotBlank()) executeToggleSetting(settingName, value)
+                             else msg = "I couldn't change that setting."
+                             return@launch
+@@ -628,21 +638,62 @@
+         }
+     }
+ 
++    private suspend fun executeRemoveFromQueue(query: String) {
++        wasPlayingBeforeVibee = false
++        withContext(Dispatchers.Main) {
++            val player = playerConnection?.player
++            if (player == null) {
++                respond("Player is not ready.", endSession = true)
++                return@withContext
++            }
++            val windows = playerConnection?.queueWindows?.value ?: emptyList()
++            val index = windows.indexOfFirst { it.mediaItem.mediaMetadata.title?.toString()?.contains(query, ignoreCase = true) == true }
++            if (index != -1) {
++                player.removeMediaItem(index)
++                respond("Removed from queue.", endSession = true)
++            } else {
++                respond("I couldn't find that song in the queue.", endSession = true)
++            }
++        }
++    }
++
++    private suspend fun executeMoveInQueue(query: String, to: String) {
++        wasPlayingBeforeVibee = false
++        withContext(Dispatchers.Main) {
++            val player = playerConnection?.player
++            if (player == null) {
++                respond("Player is not ready.", endSession = true)
++                return@withContext
++            }
++            val windows = playerConnection?.queueWindows?.value ?: emptyList()
++            val currentIndex = windows.indexOfFirst { it.mediaItem.mediaMetadata.title?.toString()?.contains(query, ignoreCase = true) == true }
++            if (currentIndex != -1) {
++                val currentWindowIndex = player.currentMediaItemIndex
++                var newIndex = currentWindowIndex + 1
++                if (to.contains("last", ignoreCase = true) || to.contains("end", ignoreCase = true)) {
++                    newIndex = windows.size - 1
++                } else if (to.matches(Regex("\\d+"))) {
++                    newIndex = (to.toIntOrNull() ?: 1) - 1
++                }
++                newIndex = newIndex.coerceIn(0, windows.size - 1)
++                player.moveMediaItem(currentIndex, newIndex)
++                respond("Moved song in the queue.", endSession = true)
++            } else {
++                respond("I couldn't find that song in the queue.", endSession = true)
++            }
++        }
++    }
++
+     private suspend fun executeToggleSetting(setting: String, value: Boolean) {
+-        val key = when (setting.lowercase(Locale.getDefault()).replace(" ", "").replace("_", "")) {
+-            "spatialaudio" -> SpatialAudioEnabledKey
+-            "crossfeed" -> CrossfeedEnabledKey
+-            "liquidglass" -> LiquidGlassGlobalEnabledKey
+-            "betterlyrics" -> EnableBetterLyricsKey
+-            "autotranslate" -> AutoTranslateKey
+-            "floatingnavbar" -> UseFloatingNavBarKey
+-            "dynamictheme" -> DynamicThemeKey
+-            "pureblack" -> PureBlackKey
+-            "sponsorblock" -> SponsorBlockEnabledKey
+-            "listenbrainz" -> ListenBrainzEnabledKey
+-            "showlyrics" -> ShowLyricsKey
+-            "swipelyrics" -> SwipeLyricsKey
+-            "swipethumbnail" -> SwipeThumbnailKey
+-            else -> null
+-        }
+-        
+-        if (key != null) {
+-            context.dataStore.edit { it[key] = value }
+-            val status = if (value) "on" else "off"
+-            respond("Turned $status $setting.", endSession = true)
++        val success = SettingToggleHelper.toggleSetting(context, setting, value)
++        if (success) {
++            val status = if (value) "on" else "off"
++            respond("Turned $status $setting.", endSession = true)
+         } else {
+             respond("I don't know that setting.", endSession = true)
+         }
+@@ -647,6 +698,11 @@
+     private fun speak(text: String, endSession: Boolean = true) {
+         if (!isTtsReady) {
+             if (endSession) {
+                 coroutineScope.launch(Dispatchers.Main) {
+                     abandonAudioFocus()
+                     state.value = VibeeState.IDLE; startWakeWordListeningIfNeeded()
+                     if (wasPlayingBeforeVibee) {
+                         playerConnection?.player?.play()
+                         wasPlayingBeforeVibee = false
+                     }
+                 }
+             }
+             return
+         }
++
++        // Duck the music while speaking by resuming it and requesting MAY_DUCK focus
++        if (wasPlayingBeforeVibee) {
++            playerConnection?.player?.play()
++            requestAudioFocus()
++        }
++
+         val utteranceId = if (endSession) "vibee_tts_end" else "vibee_tts_continue"
