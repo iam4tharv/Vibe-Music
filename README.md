@@ -120,9 +120,15 @@ If you love Vibe Music, consider supporting its development:
 <summary><b>🇮🇳 UPI Donation</b></summary>
 <br/>
 <p align="center">
-  <img src="assets/upi.svg" alt="UPI QR Code" width="220" />
+  <a href="upi://pay?pa=dev.atharv@fam&pn=Atharv&am=100&cu=INR&tn=Donation%20to%20Vibe%20Music&tr=ORDER123">
+    <img src="assets/upi.svg" alt="UPI QR Code" width="220" />
+  </a>
   <br/><br/>
   <h3><b>UPI ID: dev.atharv@fam</b></h3>
+  <br/>
+  <a href="upi://pay?pa=dev.atharv@fam&pn=Atharv&am=100&cu=INR&tn=Donation%20to%20Vibe%20Music&tr=ORDER123">
+    <b>Click here to Pay via UPI</b>
+  </a>
 </p>
 </details>
 
