@@ -130,8 +130,7 @@ If you love Vibe Music, consider supporting its development:
     <b>Click here to Pay via UPI</b>
   </a>
   <br/>
-  <sub>UPI ID: <code>dev.atharv@fam</code></sub>
->>>>>>> cd36db15bae3117fa04528398640c360c31f3d80
+  <sub>UPI ID: dev.atharv@fam</code></sub>
 </p>
 </details>
 
