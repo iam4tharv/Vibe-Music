@@ -1,4 +1,3 @@
-@ -0,0 +1,191 @@
 <p align="center">
   <img src="app/src/main/res/drawable/ic_qs_vibe_logo.png" alt="Vibe Music Logo" width="150" />
 </p>
@@ -108,27 +107,15 @@ You can download the latest stable release directly from the [**GitHub Releases*
 
 ## 🤝 Community & Support
 
-<p align="center">
-  <a href="https://discord.gg/vibe-music">
-    <img src="assets/discord.png" alt="Join us on Discord" width="280" />
-  </a>
-  &nbsp;&nbsp;&nbsp;&nbsp;
-  <a href="https://t.me/vibemusic">
-    <img src="assets/telegram.png" alt="Join us on Telegram" width="280" />
-  </a>
-</p>
+<a href="https://t.me/vibemusicupdates">
+  <img src="assets/telegram.png" alt="Join us on Telegram" width="280" />
+</a>
 
 ---
 
 ## ☕ Support the Project
 
 If you love Vibe Music, consider supporting its development:
-
-<p align="center">
-  <a href="https://buymeacoffee.com/vibemusic">
-    <img src="assets/bmac.png" alt="Buy Me a Coffee" width="280" />
-  </a>
-</p>
 
 <details>
 <summary><b>🇮🇳 UPI Donation</b></summary>
@@ -139,7 +126,7 @@ If you love Vibe Music, consider supporting its development:
   </a>
   <br/>
   <a href="upi://pay?pa=dev.atharv@fam&pn=Atharv&am=100&cu=INR&tn=Donation%20to%20Vibe%20Music&tr=ORDER123">
-    <b>Click here to Pay via UPI (₹100)</b>
+    <b>Click here to Pay via UPI </b>
   </a>
   <br/>
   <sub>UPI ID: <code>dev.atharv@fam</code></sub>
