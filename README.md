@@ -96,11 +96,10 @@ The multiplayer feature was architecturally designed from the ground up for low-
 
 ## ⚙️ Installation
 
-You can download the latest stable release directly from the [**GitHub Releases**](../../releases) page.
+You can download the latest stable release directly by clicking on this [Vibe Music](https://github.com/iam4tharv/vibe-music/releases/latest/download/Vibemusic.apk).
 
-1. Navigate to the **Releases** section of this repository.
-2. Download the latest **`vibe-music-release.apk`**.
-3. Install the APK on your Android device.
+1. Download the latest **`Vibemusic.apk`**.
+2. Install the APK on your Android device.
    > **Note:** Ensure *"Install from Unknown Sources"* is enabled in your device settings.
 
 ---
@@ -132,13 +131,6 @@ If you love Vibe Music, consider supporting its development:
   <sub>UPI ID: <code>dev.atharv@fam</code></sub>
 </p>
 </details>
-
----
-
-## 🔐 Privacy & Security
-
-- [**Privacy Policy**](PRIVACY_POLICY.md)
-- [**Security Policy**](SECURITY.md)
 
 ---
 
