@@ -202,7 +202,7 @@ fun SwitchPreference(
                         painter = painterResource(
                             id = if (checked) R.drawable.check else R.drawable.close
                         ),
-                        contentDescription = null,
+                        contentDescription = "Icon",
                         modifier = Modifier.size(SwitchDefaults.IconSize),
                     )
                 }

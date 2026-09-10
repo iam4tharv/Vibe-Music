@@ -437,8 +437,7 @@ highlightKey: String? = null) {
                                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                                     ) {
                                         Icon(
-                                            painter = painterResource(R.drawable.lyrics),
-                                            contentDescription = null,
+                                            painter = painterResource(R.drawable.lyrics), contentDescription = "Lyrics",
                                             tint = MaterialTheme.colorScheme.onSecondaryContainer,
                                             modifier = Modifier.size(16.dp),
                                         )
@@ -659,7 +658,7 @@ highlightKey: String? = null) {
                                     painter = painterResource(
                                         id = if (hideExplicit) R.drawable.check else R.drawable.close
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                     modifier = Modifier.size(SwitchDefaults.IconSize)
                                 )
                             }
@@ -680,7 +679,7 @@ highlightKey: String? = null) {
                                     painter = painterResource(
                                         id = if (hideVideoSongs) R.drawable.check else R.drawable.close
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                     modifier = Modifier.size(SwitchDefaults.IconSize)
                                 )
                             }
@@ -702,7 +701,7 @@ highlightKey: String? = null) {
                                     painter = painterResource(
                                         id = if (hideYoutubeShorts) R.drawable.check else R.drawable.close
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                     modifier = Modifier.size(SwitchDefaults.IconSize)
                                 )
                             }
@@ -724,7 +723,7 @@ highlightKey: String? = null) {
                                     painter = painterResource(
                                         id = if (sponsorBlockEnabled) R.drawable.check else R.drawable.close
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                     modifier = Modifier.size(SwitchDefaults.IconSize)
                                 )
                             }
@@ -753,7 +752,7 @@ highlightKey: String? = null) {
                                     painter = painterResource(
                                         id = if (showArtistDescription) R.drawable.check else R.drawable.close
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                     modifier = Modifier.size(SwitchDefaults.IconSize)
                                 )
                             }
@@ -774,7 +773,7 @@ highlightKey: String? = null) {
                                     painter = painterResource(
                                         id = if (showArtistSubscriberCount) R.drawable.check else R.drawable.close
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                     modifier = Modifier.size(SwitchDefaults.IconSize)
                                 )
                             }
@@ -795,7 +794,7 @@ highlightKey: String? = null) {
                                     painter = painterResource(
                                         id = if (showMonthlyListeners) R.drawable.check else R.drawable.close
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                     modifier = Modifier.size(SwitchDefaults.IconSize)
                                 )
                             }
@@ -817,7 +816,7 @@ highlightKey: String? = null) {
                                     painter = painterResource(
                                         id = if (showArtistVideo) R.drawable.check else R.drawable.close
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                     modifier = Modifier.size(SwitchDefaults.IconSize)
                                 )
                             }
@@ -839,7 +838,7 @@ highlightKey: String? = null) {
                                     painter = painterResource(
                                         id = if (showArtistBackgroundVideo) R.drawable.check else R.drawable.close
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                     modifier = Modifier.size(SwitchDefaults.IconSize)
                                 )
                             }
@@ -867,7 +866,7 @@ highlightKey: String? = null) {
                                     painter = painterResource(
                                         id = if (albumCanvasEnabled) R.drawable.check else R.drawable.close
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                     modifier = Modifier.size(SwitchDefaults.IconSize)
                                 )
                             }
@@ -947,7 +946,7 @@ highlightKey: String? = null) {
                                         painter = painterResource(
                                             id = if (proxyEnabled) R.drawable.check else R.drawable.close
                                         ),
-                                        contentDescription = null,
+                                        contentDescription = "Icon",
                                         modifier = Modifier.size(SwitchDefaults.IconSize)
                                     )
                                 }
@@ -987,7 +986,7 @@ highlightKey: String? = null) {
                                     painter = painterResource(
                                         id = if (enableLrclib) R.drawable.check else R.drawable.close
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                     modifier = Modifier.size(SwitchDefaults.IconSize)
                                 )
                             }
@@ -1008,7 +1007,7 @@ highlightKey: String? = null) {
                                     painter = painterResource(
                                         id = if (enableKugou) R.drawable.check else R.drawable.close
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                     modifier = Modifier.size(SwitchDefaults.IconSize)
                                 )
                             }
@@ -1030,7 +1029,7 @@ highlightKey: String? = null) {
                                     painter = painterResource(
                                         id = if (enableBetterLyrics) R.drawable.check else R.drawable.close
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Lyrics",
                                     modifier = Modifier.size(SwitchDefaults.IconSize)
                                 )
                             }
@@ -1052,7 +1051,7 @@ highlightKey: String? = null) {
                                     painter = painterResource(
                                         id = if (enableSimpMusic) R.drawable.check else R.drawable.close
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                     modifier = Modifier.size(SwitchDefaults.IconSize)
                                 )
                             }
@@ -1074,7 +1073,7 @@ highlightKey: String? = null) {
                                     painter = painterResource(
                                         id = if (enableYouLyPlus) R.drawable.check else R.drawable.close
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                     modifier = Modifier.size(SwitchDefaults.IconSize)
                                 )
                             }
@@ -1096,7 +1095,7 @@ highlightKey: String? = null) {
                                     painter = painterResource(
                                         id = if (enablePaxsenix) R.drawable.check else R.drawable.close
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                     modifier = Modifier.size(SwitchDefaults.IconSize)
                                 )
                             }
@@ -1166,7 +1165,7 @@ highlightKey: String? = null) {
                                     painter = painterResource(
                                         id = if (randomizeHomeOrder) R.drawable.check else R.drawable.close
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                     modifier = Modifier.size(SwitchDefaults.IconSize)
                                 )
                             }
@@ -1250,7 +1249,7 @@ highlightKey: String? = null) {
             ) {
                 Icon(
                     painterResource(R.drawable.arrow_back),
-                    contentDescription = null,
+                    contentDescription = "Icon",
                 )
             }
         }

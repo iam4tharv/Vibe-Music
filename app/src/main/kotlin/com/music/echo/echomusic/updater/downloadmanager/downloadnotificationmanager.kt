@@ -231,7 +231,8 @@ object DownloadNotificationManager {
             method.invoke(builder, text)
         } catch (e: Exception) {
             builder.getExtras().putCharSequence("android.shortCriticalText", text)
-        }
+        
+}
     }
 
     private fun setRequestPromotedOngoingSafely(builder: Notification.Builder, promoted: Boolean) {
@@ -246,9 +247,15 @@ object DownloadNotificationManager {
                     val method = Notification.Builder::class.java.getMethod(name, Boolean::class.javaPrimitiveType)
                     method.invoke(builder, promoted)
                     break
-                } catch (e: Exception) {}
+                } catch (e: Exception) {
+    com.music.echo.utils.ErrorNotifier.notifyError(e.message ?: "An unexpected error occurred")
+    e.printStackTrace()
+}
             }
-        } catch (e: Exception) {}
+        } catch (e: Exception) {
+    com.music.echo.utils.ErrorNotifier.notifyError(e.message ?: "An unexpected error occurred")
+    e.printStackTrace()
+}
     }
 
     private fun buildDownloadStartingLegacy(version: String, fileSize: String): Notification {

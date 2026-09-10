@@ -5,8 +5,10 @@ package com.music.echo.ui.player
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -77,6 +79,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import coil3.SingletonImageLoader
 import coil3.compose.AsyncImage
+import com.music.echo.ui.component.shimmer.ShimmeringAsyncImage
 import coil3.request.CachePolicy
 import coil3.request.ImageRequest
 import com.music.echo.LocalListenTogetherManager
@@ -159,7 +162,8 @@ private fun getMediaItems(
     
     val currentMediaItem = try {
         player.currentMediaItem
-    } catch (e: Exception) { null }
+    } catch (e: Exception) { null 
+}
     
     val previousMediaItem = if (swipeThumbnail && !timeline.isEmpty) {
         val previousIndex = timeline.getPreviousWindowIndex(
@@ -168,7 +172,8 @@ private fun getMediaItems(
             shuffleModeEnabled
         )
         if (previousIndex != C.INDEX_UNSET) {
-            try { player.getMediaItemAt(previousIndex) } catch (e: Exception) { null }
+            try { player.getMediaItemAt(previousIndex) } catch (e: Exception) { null 
+}
         } else null
     } else null
 
@@ -179,7 +184,8 @@ private fun getMediaItems(
             shuffleModeEnabled
         )
         if (nextIndex != C.INDEX_UNSET) {
-            try { player.getMediaItemAt(nextIndex) } catch (e: Exception) { null }
+            try { player.getMediaItemAt(nextIndex) } catch (e: Exception) { null 
+}
         } else null
     } else null
 
@@ -337,7 +343,8 @@ fun Thumbnail(
                 thumbnailLazyGridState.animateScrollToItem(index)
             } catch (e: Exception) {
                 thumbnailLazyGridState.scrollToItem(index)
-            }
+            
+}
         }
     }
 
@@ -604,6 +611,15 @@ private fun ThumbnailItem(
 
     val canvasThumbnailAnimation by rememberPreference(CanvasThumbnailAnimationKey, defaultValue = true)
 
+    val playingScale by animateFloatAsState(
+        targetValue = if (isPlaying && isCurrentItem) 1.0f else 0.92f,
+        animationSpec = spring(
+            dampingRatio = 0.82f,
+            stiffness = 320f
+        ),
+        label = "ThumbnailPlayingScale"
+    )
+
     Box(
         modifier = modifier
             .then(
@@ -680,6 +696,8 @@ private fun ThumbnailItem(
             modifier = Modifier
                 .size(dimensions.thumbnailSize)
                 .graphicsLayer {
+                    scaleX = playingScale
+                    scaleY = playingScale
                     rotationZ = rotation
                 }
                 .clip(
@@ -900,7 +918,7 @@ private fun ThumbnailImage(
                 .diskCachePolicy(CachePolicy.ENABLED)
                 .networkCachePolicy(CachePolicy.ENABLED)
                 .build(),
-            contentDescription = null,
+            contentDescription = "Icon",
             contentScale = if (cropArtwork) ContentScale.Crop else ContentScale.Fit,
             error = painterResource(R.drawable.music_note),
             fallback = painterResource(R.drawable.music_note),

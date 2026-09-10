@@ -24,6 +24,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.music.echo.extensions.bounceClick
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -43,7 +44,7 @@ fun ResizableIconButton(
 ) {
     Image(
         painter = painterResource(icon),
-        contentDescription = null,
+        contentDescription = "Icon",
         colorFilter = ColorFilter.tint(color),
         modifier = modifier
             .clickable(
@@ -73,6 +74,7 @@ fun IconButton(
             .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
             .clip(CircleShape)
             .background(color = colors.containerColor)
+            .bounceClick()
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = onLongClick,

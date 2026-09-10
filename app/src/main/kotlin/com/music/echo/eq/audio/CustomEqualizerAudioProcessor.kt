@@ -114,7 +114,7 @@ class CustomEqualizerAudioProcessor : AudioProcessor {
         }
 
         
-        if (encoding != C.ENCODING_PCM_16BIT || channelCount > 2) {
+        if ((encoding != C.ENCODING_PCM_16BIT && encoding != C.ENCODING_PCM_FLOAT) || channelCount > 2) {
             val exception = AudioProcessor.UnhandledAudioFormatException(inputAudioFormat)
             throw exception 
         }
@@ -163,12 +163,12 @@ class CustomEqualizerAudioProcessor : AudioProcessor {
         
         when (encoding) {
             C.ENCODING_PCM_16BIT -> {
-                
-                
                 processAudioBuffer16Bit(inputBuffer, outputBuffer)
             }
+            C.ENCODING_PCM_FLOAT -> {
+                processAudioBufferFloat(inputBuffer, outputBuffer)
+            }
             else -> {
-                
                 outputBuffer.put(inputBuffer)
             }
         }
@@ -178,52 +178,72 @@ class CustomEqualizerAudioProcessor : AudioProcessor {
     }
 
     
-    private fun processAudioBuffer16Bit(input: ByteBuffer, output: ByteBuffer) {
-        
-        
-        
+    private fun processAudioBufferFloat(input: ByteBuffer, output: ByteBuffer) {
+        val sampleCount = input.remaining() / 4 // 4 bytes per float
+        repeat(sampleCount / channelCount) {
+            when (channelCount) {
+                1 -> {
+                    val sample = input.getFloat().toDouble()
+                    var processed = sample * preampGain
+                    for (filter in filters) {
+                        processed = filter.processSample(processed)
+                    }
+                    val outputSample = processed.coerceIn(-1.0, 1.0).toFloat()
+                    output.putFloat(outputSample)
+                }
+                2 -> {
+                    val leftSample = input.getFloat().toDouble()
+                    val rightSample = input.getFloat().toDouble()
+                    var processedLeft = leftSample * preampGain
+                    var processedRight = rightSample * preampGain
+                    for (filter in filters) {
+                        val (left, right) = filter.processStereo(processedLeft, processedRight)
+                        processedLeft = left
+                        processedRight = right
+                    }
+                    val outputLeft = processedLeft.coerceIn(-1.0, 1.0).toFloat()
+                    val outputRight = processedRight.coerceIn(-1.0, 1.0).toFloat()
+                    output.putFloat(outputLeft)
+                    output.putFloat(outputRight)
+                }
+                else -> {
+                    repeat(channelCount) {
+                        output.putFloat(input.getFloat())
+                    }
+                }
+            }
+        }
+    }
 
+    private fun processAudioBuffer16Bit(input: ByteBuffer, output: ByteBuffer) {
         val sampleCount = input.remaining() / 2 
 
         repeat(sampleCount / channelCount) {
             when (channelCount) {
                 1 -> {
-                    
                     val sample = input.getShort().toDouble() / 32768.0 
-                    var processed = sample
+                    var processed = sample * preampGain
 
-                    
                     for (filter in filters) {
                         processed = filter.processSample(processed)
                     }
 
-                    
-                    processed *= preampGain
-
-                    
                     val outputSample = (processed * 32768.0).coerceIn(-32768.0, 32767.0).toInt().toShort()
                     output.putShort(outputSample)
                 }
                 2 -> {
-                    
                     val leftSample = input.getShort().toDouble() / 32768.0
                     val rightSample = input.getShort().toDouble() / 32768.0
 
-                    var processedLeft = leftSample
-                    var processedRight = rightSample
+                    var processedLeft = leftSample * preampGain
+                    var processedRight = rightSample * preampGain
 
-                    
                     for (filter in filters) {
                         val (left, right) = filter.processStereo(processedLeft, processedRight)
                         processedLeft = left
                         processedRight = right
                     }
 
-                    
-                    processedLeft *= preampGain
-                    processedRight *= preampGain
-
-                    
                     val outputLeft = (processedLeft * 32768.0).coerceIn(-32768.0, 32767.0).toInt().toShort()
                     val outputRight = (processedRight * 32768.0).coerceIn(-32768.0, 32767.0).toInt().toShort()
 
@@ -231,7 +251,6 @@ class CustomEqualizerAudioProcessor : AudioProcessor {
                     output.putShort(outputRight)
                 }
                 else -> {
-                    
                     repeat(channelCount) {
                         output.putShort(input.getShort())
                     }

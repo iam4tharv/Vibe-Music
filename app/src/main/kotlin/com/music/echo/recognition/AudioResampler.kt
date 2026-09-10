@@ -102,7 +102,8 @@ object AudioResampler {
         } catch (e: Exception) {
             ensureActive()
             Result.failure(e)
-        } finally {
+        
+} finally {
             sonicRef?.reset()
         }
     }

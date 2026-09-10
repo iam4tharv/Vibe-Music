@@ -294,7 +294,8 @@ fun StorageSettings(
                         database.downloadedSongsByNameAsc().first()
                     } catch (e: Exception) {
                         emptyList()
-                    }
+                    
+}
                     downloadedSongs.forEach { song ->
                         song.thumbnailUrl?.let { urlsToPreserve.add(it.encodeUtf8().sha256().hex()) }
                         song.album?.thumbnailUrl?.let { urlsToPreserve.add(it.encodeUtf8().sha256().hex()) }
@@ -557,7 +558,7 @@ fun StorageSettings(
             ) {
                 Icon(
                     painterResource(R.drawable.arrow_back),
-                    contentDescription = null,
+                    contentDescription = "Icon",
                 )
             }
         }

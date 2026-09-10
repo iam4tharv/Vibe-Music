@@ -1,9 +1,5 @@
 package com.music.kugou
 
-import com.music.kugou.models.DownloadLyricsResponse
-import com.music.kugou.models.Keyword
-import com.music.kugou.models.SearchLyricsResponse
-import com.music.kugou.models.SearchSongResponse
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.compression.ContentEncoding
@@ -14,11 +10,58 @@ import io.ktor.http.ContentType
 import io.ktor.http.encodeURLParameter
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
 import kotlinx.serialization.json.Json
 import java.lang.Integer.min
 import kotlin.math.abs
+
+data class Keyword(val title: String, val artist: String, val album: String? = null)
+
+@Serializable
+data class DownloadLyricsResponse(
+    val content: String,
+)
+
+@Serializable
+data class SearchSongResponse(
+    val status: Int,
+    val errcode: Int,
+    val error: String,
+    val data: Data,
+) {
+    @Serializable
+    data class Data(
+        val info: List<Info>,
+    ) {
+        @Serializable
+        data class Info(
+            val duration: Int,
+            val hash: String,
+        )
+    }
+}
+
+@Serializable
+data class SearchLyricsResponse(
+    val status: Int,
+    val info: String,
+    val errcode: Int,
+    val errmsg: String,
+    val expire: Int,
+    val candidates: List<Candidate>,
+) {
+    @Serializable
+    data class Candidate(
+        val id: Long,
+        @SerialName("product_from")
+        val productFrom: String,
+        val duration: Long,
+        val accesskey: String,
+    )
+}
 
 @OptIn(ExperimentalSerializationApi::class, ExperimentalEncodingApi::class)
 private val client = HttpClient {
@@ -46,7 +89,7 @@ private const val HEAD_CUT_LIMIT = 30
 
 /**
  * KuGou Lyrics Library
- * Modified from [ViMusic](https://github.com/vfsfitvnm/ViMusic)
+ * Modified from ViMusic
  */
 object KuGou {
     var useTraditionalChinese: Boolean = false

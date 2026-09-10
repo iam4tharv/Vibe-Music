@@ -207,7 +207,9 @@ fun LyricsImageCard(
                             tileMode = TileMode.Clamp
                         )
                     }
-                } catch (_: Exception) {}
+                } catch (_: Exception) {
+    com.music.echo.utils.ErrorNotifier.notifyError("An unexpected error occurred")
+}
             }
         }
     }
@@ -229,7 +231,7 @@ fun LyricsImageCard(
                 LyricsBackgroundStyle.BLUR -> {
                     Image(
                         painter = painter,
-                        contentDescription = null,
+                        contentDescription = "Lyrics",
                         contentScale = ContentScale.Crop,
                         modifier = Modifier
                             .fillMaxSize()
@@ -270,7 +272,7 @@ fun LyricsImageCard(
                     
                     Image(
                         painter = painter,
-                        contentDescription = null,
+                        contentDescription = "Icon",
                         contentScale = ContentScale.Crop,
                         modifier = Modifier
                             .fillMaxSize()
@@ -309,7 +311,7 @@ fun LyricsImageCard(
                 ) {
                     Image(
                         painter = painter,
-                        contentDescription = null,
+                        contentDescription = "Icon",
                         contentScale = ContentScale.Crop,
                         modifier = Modifier
                             .size(coverArtSize)
@@ -399,7 +401,7 @@ fun LyricsImageCard(
                 ) {
                     Image(
                         painter = painterResource(id = R.drawable.music_note),
-                        contentDescription = null,
+                        contentDescription = "Icon",
                         modifier = Modifier.size(22.dp)
                     )
 

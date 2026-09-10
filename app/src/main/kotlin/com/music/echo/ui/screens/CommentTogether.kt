@@ -17,6 +17,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.music.echo.extensions.bounceClick
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -87,7 +88,7 @@ fun CommentTogetherScreen(navController: NavController) {
                 },
                 navigationIcon = {
                     IconButton(onClick = { navController.navigateUp() }) {
-                        Icon(painterResource(R.drawable.arrow_back), contentDescription = null)
+                        Icon(painterResource(R.drawable.arrow_back), contentDescription = "Icon")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -150,8 +151,7 @@ fun CommentTogetherScreen(navController: NavController) {
                                 }
                                 IconButton(onClick = { replyingTo = null }) {
                                     Icon(
-                                        painter = painterResource(R.drawable.close),
-                                        contentDescription = null,
+                                        painter = painterResource(R.drawable.close), contentDescription = "Close",
                                         modifier = Modifier.size(16.dp)
                                     )
                                 }
@@ -246,6 +246,7 @@ private fun MessageItem(
             tonalElevation = 2.dp,
             modifier = Modifier
                 .widthIn(max = 280.dp)
+                .bounceClick()
                 .combinedClickable(
                     onClick = {},
                     onLongClick = { onReply(message) }
@@ -391,7 +392,7 @@ private fun EmptyChatPlaceholder() {
         ) {
             Icon(
                 painter = painterResource(R.drawable.chat_msg),
-                contentDescription = null,
+                contentDescription = "Icon",
                 tint = MaterialTheme.colorScheme.onPrimaryContainer,
                 modifier = Modifier.size(56.dp)
             )
@@ -445,7 +446,8 @@ private fun formatMessageWithLinks(text: String): AnnotatedString {
                         Toast.makeText(context, "Playing now", Toast.LENGTH_SHORT).show()
                     } catch (e: Exception) {
                         context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-                    }
+                    
+}
                 }
             )
             

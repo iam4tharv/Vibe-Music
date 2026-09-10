@@ -379,7 +379,7 @@ class HomeViewModel @Inject constructor(
                         mappedSongs.addAll(kotlinx.coroutines.awaitAll(*deferreds.toTypedArray()).filterNotNull())
                         combined = mappedSongs
                     } catch (e: Exception) {
-                        e.printStackTrace()
+                        android.util.Log.e("HomeViewModel", "Error combining quick picks", e)
                     }
                 }
 
@@ -530,7 +530,7 @@ class HomeViewModel @Inject constructor(
                         val page = YouTube.related(endpoint).getOrNull() ?: return@async null
                         SimilarRecommendation(
                             title = song,
-                            items = (page.songs.shuffled().take(10) +
+                            items = ((page.songs.shuffled().take(10) as List<YTItem>) +
                                     page.albums.shuffled().take(5) +
                                     page.artists.shuffled().take(3) +
                                     page.playlists.shuffled().take(3))

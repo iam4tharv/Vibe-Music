@@ -300,7 +300,7 @@ fun TrendingAppleMusicSection(
                             if (track.thumbnailUrl != null) {
                                 SubcomposeAsyncImage(
                                     model = track.thumbnailUrl,
-                                    contentDescription = null,
+                                    contentDescription = "Album Art",
                                     contentScale = ContentScale.Crop,
                                     loading = {
                                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -442,7 +442,7 @@ fun TrendingAlbumsSection(
                     ) {
                         Icon(
                             painter = painterResource(R.drawable.globe_search),
-                            contentDescription = null,
+                            contentDescription = "Icon",
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(32.dp)
                         )
@@ -524,7 +524,7 @@ fun TrendingVideosSection(
                 
                 AsyncImage(
                     model = video.thumbnailUrl,
-                    contentDescription = null,
+                    contentDescription = "Album Art",
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop
                 )

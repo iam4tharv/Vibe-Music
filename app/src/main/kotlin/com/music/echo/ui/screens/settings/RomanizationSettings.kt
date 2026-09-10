@@ -101,7 +101,7 @@ highlightKey: String? = null) {
                                     painter = painterResource(
                                         id = if (lyricsRomanizeAsMain) R.drawable.check else R.drawable.close
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Lyrics",
                                     modifier = Modifier.size(SwitchDefaults.IconSize)
                                 )
                             }
@@ -122,7 +122,7 @@ highlightKey: String? = null) {
                                     painter = painterResource(
                                         id = if (lyricsRomanizeJapanese) R.drawable.check else R.drawable.close
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Lyrics",
                                     modifier = Modifier.size(SwitchDefaults.IconSize)
                                 )
                             }
@@ -143,7 +143,7 @@ highlightKey: String? = null) {
                                     painter = painterResource(
                                         id = if (lyricsRomanizeKorean) R.drawable.check else R.drawable.close
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Lyrics",
                                     modifier = Modifier.size(SwitchDefaults.IconSize)
                                 )
                             }
@@ -164,7 +164,7 @@ highlightKey: String? = null) {
                                     painter = painterResource(
                                         id = if (lyricsRomanizeChinese) R.drawable.check else R.drawable.close
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Lyrics",
                                     modifier = Modifier.size(SwitchDefaults.IconSize)
                                 )
                             }
@@ -185,7 +185,7 @@ highlightKey: String? = null) {
                                     painter = painterResource(
                                         id = if (lyricsRomanizeHindi) R.drawable.check else R.drawable.close
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Lyrics",
                                     modifier = Modifier.size(SwitchDefaults.IconSize)
                                 )
                             }
@@ -206,7 +206,7 @@ highlightKey: String? = null) {
                                     painter = painterResource(
                                         id = if (lyricsRomanizePunjabi) R.drawable.check else R.drawable.close
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Lyrics",
                                     modifier = Modifier.size(SwitchDefaults.IconSize)
                                 )
                             }
@@ -235,7 +235,7 @@ highlightKey: String? = null) {
                                     painter = painterResource(
                                         id = if (lyricsRomanizeRussian) R.drawable.check else R.drawable.close
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Lyrics",
                                     modifier = Modifier.size(SwitchDefaults.IconSize)
                                 )
                             }
@@ -256,7 +256,7 @@ highlightKey: String? = null) {
                                     painter = painterResource(
                                         id = if (lyricsRomanizeUkrainian) R.drawable.check else R.drawable.close
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Lyrics",
                                     modifier = Modifier.size(SwitchDefaults.IconSize)
                                 )
                             }
@@ -277,7 +277,7 @@ highlightKey: String? = null) {
                                     painter = painterResource(
                                         id = if (lyricsRomanizeSerbian) R.drawable.check else R.drawable.close
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Lyrics",
                                     modifier = Modifier.size(SwitchDefaults.IconSize)
                                 )
                             }
@@ -298,7 +298,7 @@ highlightKey: String? = null) {
                                     painter = painterResource(
                                         id = if (lyricsRomanizeBulgarian) R.drawable.check else R.drawable.close
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Lyrics",
                                     modifier = Modifier.size(SwitchDefaults.IconSize)
                                 )
                             }
@@ -319,7 +319,7 @@ highlightKey: String? = null) {
                                     painter = painterResource(
                                         id = if (lyricsRomanizeBelarusian) R.drawable.check else R.drawable.close
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Lyrics",
                                     modifier = Modifier.size(SwitchDefaults.IconSize)
                                 )
                             }
@@ -340,7 +340,7 @@ highlightKey: String? = null) {
                                     painter = painterResource(
                                         id = if (lyricsRomanizeKyrgyz) R.drawable.check else R.drawable.close
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Lyrics",
                                     modifier = Modifier.size(SwitchDefaults.IconSize)
                                 )
                             }
@@ -361,7 +361,7 @@ highlightKey: String? = null) {
                                     painter = painterResource(
                                         id = if (lyricsRomanizeMacedonian) R.drawable.check else R.drawable.close
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Lyrics",
                                     modifier = Modifier.size(SwitchDefaults.IconSize)
                                 )
                             }
@@ -389,7 +389,7 @@ highlightKey: String? = null) {
                                     painter = painterResource(
                                         id = if (lyricsRomanizeCyrillicByLine) R.drawable.check else R.drawable.close
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Lyrics",
                                     modifier = Modifier.size(SwitchDefaults.IconSize)
                                 )
                             }
@@ -432,7 +432,7 @@ highlightKey: String? = null) {
             ) {
                 Icon(
                     painterResource(R.drawable.arrow_back),
-                    contentDescription = null,
+                    contentDescription = "Icon",
                 )
             }
         }

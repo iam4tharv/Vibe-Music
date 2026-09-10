@@ -66,7 +66,7 @@ fun LazyGridScope.GridMenuItem(
         Icon(
             painter = painterResource(icon),
             tint = tint(),
-            contentDescription = null
+            contentDescription = "Icon"
         )
     },
     title = title,
@@ -176,8 +176,7 @@ fun LazyGridScope.SleepTimerGridMenu(
                 contentAlignment = Alignment.Center,
                 content = {
                     Icon(
-                        painterResource(R.drawable.bedtime),
-                        contentDescription = null,
+                        painterResource(R.drawable.bedtime), contentDescription = "Sleep Timer",
                         modifier = Modifier.alpha(if (enabled) 1f else 0.5f)
                     )
                 }

@@ -514,7 +514,8 @@ object LyricsUtils {
             }
         } catch (e: Exception) {
             null
-        }
+        
+}
     }
 
     private fun parseLine(line: String, words: List<WordTimestamp>? = null): List<LyricsEntry>? {

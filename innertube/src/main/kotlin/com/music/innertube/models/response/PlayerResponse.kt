@@ -65,7 +65,7 @@ data class PlayerResponse(
             val audioTrack: AudioTrack?
         ) {
             val isAudio: Boolean
-                get() = width == null
+                get() = width == null || mimeType.startsWith("audio/", ignoreCase = true)
             val isOriginal: Boolean
                 get() = audioTrack?.isAutoDubbed == null
 

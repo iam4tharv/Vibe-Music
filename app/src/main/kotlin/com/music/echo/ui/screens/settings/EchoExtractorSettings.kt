@@ -1,5 +1,6 @@
 package com.music.echo.ui.screens.settings
 
+import android.annotation.SuppressLint
 import android.widget.Toast
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
@@ -140,6 +141,7 @@ fun VibeExtractorSettings(
     val seconds = (timeRemaining / 1000L) % 60
 
     val lastUpdatedText = if (lastUpdated > 0L) {
+        @SuppressLint("NonObservableLocale")
         val sdf = SimpleDateFormat("yyyy-MM-dd 'at' hh:mm a", Locale.getDefault())
         sdf.format(Date(lastUpdated))
     } else {
@@ -169,7 +171,7 @@ fun VibeExtractorSettings(
                     icon = painterResource(R.drawable.sync),
                     title = { Text(stringResource(R.string.force_update_cipher)) },
                     description = {
-                        if (isRateLimited) {
+                        androidx.compose.animation.AnimatedContent(targetState = isRateLimited, label = "") { rateLimited -> if (rateLimited) {
                             val waitHours = rateLimitRemaining / (1000 * 60 * 60)
                             val waitMinutes = (rateLimitRemaining / (1000 * 60)) % 60
                             val waitSeconds = (rateLimitRemaining / 1000) % 60
@@ -181,13 +183,14 @@ fun VibeExtractorSettings(
                         } else {
                             Text(stringResource(R.string.force_update_cipher_desc))
                         }
+                        }
                     },
                     trailingContent = {
                         Box(
                             contentAlignment = Alignment.Center,
                             modifier = Modifier.size(40.dp)
                         ) {
-                            if (isUpdating) {
+                            androidx.compose.animation.AnimatedVisibility(visible = isUpdating) {
                                 CircularProgressIndicator(
                                     modifier = Modifier.size(40.dp),
                                     strokeWidth = 4.dp,
@@ -290,8 +293,7 @@ fun VibeExtractorSettings(
             verticalAlignment = Alignment.Top
         ) {
             Icon(
-                painter = painterResource(R.drawable.info),
-                contentDescription = null,
+                painter = painterResource(R.drawable.info), contentDescription = "Info",
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(end = 8.dp)
             )
@@ -314,7 +316,7 @@ fun VibeExtractorSettings(
             ) {
                 Icon(
                     painterResource(R.drawable.arrow_back),
-                    contentDescription = null
+                    contentDescription = "Icon"
                 )
             }
         },

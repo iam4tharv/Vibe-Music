@@ -166,11 +166,16 @@ object TidalCanvasProvider {
                 if (!videoCover.isNullOrBlank()) {
                     val videoUrl = formatVideoUrl(videoCover)
                     if (videoUrl != null) {
+                        val albumName = if (types == "TRACKS") {
+                            obj["album"]?.jsonObject?.get("title")?.jsonPrimitive?.contentOrNull
+                        } else {
+                            resultTitle
+                        }
                         return CanvasArtwork(
                             name = resultTitle ?: songValidation ?: albumValidation ?: "",
                             artist = primaryArtist ?: artistValidation ?: "",
                             videoUrl = videoUrl,
-                            albumName = if (types == "TRACKS") albumObj?.get("title")?.jsonPrimitive?.contentOrNull else resultTitle
+                            albumName = albumName
                         )
                     }
                 }

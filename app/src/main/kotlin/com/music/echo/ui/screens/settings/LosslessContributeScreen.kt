@@ -193,7 +193,7 @@ fun LosslessContributeScreen(
 
                         Icon(
                             painter = painterResource(R.drawable.cloud),
-                            contentDescription = null,
+                            contentDescription = "Icon",
                             modifier = Modifier.size(72.dp),
                             tint = MaterialTheme.colorScheme.primary
                         )
@@ -219,7 +219,7 @@ fun LosslessContributeScreen(
                                 .height(56.dp),
                             shape = RoundedCornerShape(28.dp)
                         ) {
-                            Icon(painterResource(R.drawable.github), contentDescription = null)
+                            Icon(painterResource(R.drawable.github), contentDescription = "Icon")
                             Spacer(modifier = Modifier.width(12.dp))
                             Text("Connect Account")
                         }
@@ -262,14 +262,13 @@ fun LosslessContributeScreen(
                                             if (thumbnailUrl != null) {
                                                 AsyncImage(
                                                     model = thumbnailUrl,
-                                                    contentDescription = null,
+                                                    contentDescription = "Album Art",
                                                     modifier = Modifier.size(48.dp).clip(RoundedCornerShape(8.dp)),
                                                     contentScale = ContentScale.Crop
                                                 )
                                             } else {
                                                 Icon(
-                                                    painter = painterResource(R.drawable.music_note),
-                                                    contentDescription = null,
+                                                    painter = painterResource(R.drawable.music_note), contentDescription = "Music Note",
                                                     modifier = Modifier.size(48.dp).padding(8.dp),
                                                     tint = MaterialTheme.colorScheme.primary
                                                 )
@@ -342,7 +341,7 @@ fun LosslessContributeScreen(
                                 ) {
                                     Icon(
                                         painter = painterResource(R.drawable.error),
-                                        contentDescription = null,
+                                        contentDescription = "Icon",
                                         tint = MaterialTheme.colorScheme.onErrorContainer,
                                         modifier = Modifier.size(20.dp)
                                     )
@@ -387,7 +386,7 @@ fun LosslessContributeScreen(
                                         leadingContent = {
                                             AsyncImage(
                                                 model = song.thumbnail,
-                                                contentDescription = null,
+                                                contentDescription = "Album Art",
                                                 modifier = Modifier
                                                     .size(56.dp)
                                                     .clip(RoundedCornerShape(8.dp)),
@@ -435,7 +434,7 @@ fun LosslessContributeScreen(
                             ) {
                                 AsyncImage(
                                     model = selectedSong?.thumbnail,
-                                    contentDescription = null,
+                                    contentDescription = "Album Art",
                                     modifier = Modifier
                                         .size(64.dp)
                                         .clip(RoundedCornerShape(8.dp)),
@@ -491,7 +490,7 @@ fun LosslessContributeScreen(
                             ) {
                                 Icon(
                                     painter = painterResource(if (selectedFileUri == null) R.drawable.cloud else R.drawable.done),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                     modifier = Modifier.size(48.dp),
                                     tint = if (selectedFileUri == null) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary
                                 )
@@ -608,7 +607,7 @@ fun LosslessContributeScreen(
                                 Box(contentAlignment = Alignment.Center) {
                                     Icon(
                                         painter = painterResource(R.drawable.done),
-                                        contentDescription = null,
+                                        contentDescription = "Icon",
                                         modifier = Modifier.size(40.dp),
                                         tint = MaterialTheme.colorScheme.onPrimaryContainer
                                     )
@@ -680,7 +679,7 @@ fun LosslessContributeScreen(
                                 Box(contentAlignment = Alignment.Center) {
                                     Icon(
                                         painter = painterResource(R.drawable.error),
-                                        contentDescription = null,
+                                        contentDescription = "Icon",
                                         modifier = Modifier.size(40.dp),
                                         tint = MaterialTheme.colorScheme.onErrorContainer
                                     )
@@ -749,7 +748,7 @@ private fun LosslessHubGoalCard() {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
                                 painter = painterResource(R.drawable.graphic_eq),
-                                contentDescription = null,
+                                contentDescription = "Icon",
                                 tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(24.dp)
                             )

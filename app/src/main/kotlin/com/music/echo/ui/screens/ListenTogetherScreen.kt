@@ -321,7 +321,7 @@ fun ListenTogetherScreen(
                     ) {
                         Icon(
                             painter = painterResource(R.drawable.logout),
-                            contentDescription = null,
+                            contentDescription = "Icon",
                             modifier = Modifier.size(20.dp)
                         )
                         Spacer(Modifier.width(8.dp))
@@ -458,7 +458,7 @@ fun ListenTogetherScreen(
                 ) {
                     Icon(
                         painterResource(R.drawable.arrow_back),
-                        contentDescription = null
+                        contentDescription = "Icon"
                     )
                 }
             },
@@ -518,7 +518,7 @@ private fun NotConfiguredContent() {
         ) {
             Icon(
                 painter = painterResource(R.drawable.group),
-                contentDescription = null,
+                contentDescription = "Icon",
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(64.dp)
             )
@@ -633,7 +633,7 @@ private fun ConnectionStatusCard(
                     ) {
                         Icon(
                             painter = painterResource(R.drawable.link),
-                            contentDescription = null,
+                            contentDescription = "Icon",
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(Modifier.width(6.dp))
@@ -869,7 +869,7 @@ private fun UserAvatar(
                             painter = painterResource(
                                 if (user.isHost) R.drawable.crown else R.drawable.person
                             ),
-                            contentDescription = null,
+                            contentDescription = "Icon",
                             tint = MaterialTheme.colorScheme.onPrimary,
                             modifier = Modifier.size(12.dp)
                         )
@@ -1017,8 +1017,7 @@ private fun PendingSuggestionsSection(
                         .padding(vertical = 8.dp)
                 ) {
                     Icon(
-                        painter = painterResource(R.drawable.queue_music),
-                        contentDescription = null,
+                        painter = painterResource(R.drawable.queue_music), contentDescription = "Queue",
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(24.dp)
                     )
@@ -1111,8 +1110,7 @@ private fun JoinCreateRoomSection(
                     elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
                 ) {
                     Icon(
-                        painter = painterResource(R.drawable.add),
-                        contentDescription = null,
+                        painter = painterResource(R.drawable.add), contentDescription = "Add",
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(Modifier.width(6.dp))
@@ -1130,7 +1128,7 @@ private fun JoinCreateRoomSection(
                 ) {
                     Icon(
                         painter = painterResource(R.drawable.login),
-                        contentDescription = null,
+                        contentDescription = "Icon",
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(Modifier.width(6.dp))
@@ -1262,7 +1260,7 @@ private fun JoinCreateRoomSection(
                     ) {
                         Icon(
                             painterResource(R.drawable.error),
-                            contentDescription = null,
+                            contentDescription = "Icon",
                             modifier = Modifier.size(20.dp),
                             tint = MaterialTheme.colorScheme.onErrorContainer
                         )
@@ -1292,8 +1290,7 @@ private fun JoinCreateRoomSection(
                     )
                 ) {
                     Icon(
-                        painter = painterResource(R.drawable.add),
-                        contentDescription = null,
+                        painter = painterResource(R.drawable.add), contentDescription = "Add",
                         modifier = Modifier.size(20.dp)
                     )
                     Spacer(Modifier.width(8.dp))
@@ -1311,7 +1308,7 @@ private fun JoinCreateRoomSection(
                 ) {
                     Icon(
                         painter = painterResource(R.drawable.login),
-                        contentDescription = null,
+                        contentDescription = "Icon",
                         modifier = Modifier.size(20.dp)
                     )
                     Spacer(Modifier.width(8.dp))
@@ -1381,7 +1378,7 @@ private fun UserActionDialog(
         icon = {
             Icon(
                 painter = painterResource(R.drawable.group),
-                contentDescription = null,
+                contentDescription = "Icon",
                 modifier = Modifier.size(28.dp)
             )
         },
@@ -1420,8 +1417,7 @@ private fun UserActionDialog(
                     modifier = Modifier.padding(16.dp)
                 ) {
                     Icon(
-                        painter = painterResource(R.drawable.close),
-                        contentDescription = null,
+                        painter = painterResource(R.drawable.close), contentDescription = "Close",
                         tint = MaterialTheme.colorScheme.error,
                         modifier = Modifier.size(24.dp)
                     )
@@ -1455,8 +1451,7 @@ private fun UserActionDialog(
                     modifier = Modifier.padding(16.dp)
                 ) {
                     Icon(
-                        painter = painterResource(R.drawable.close),
-                        contentDescription = null,
+                        painter = painterResource(R.drawable.close), contentDescription = "Close",
                         tint = MaterialTheme.colorScheme.error,
                         modifier = Modifier.size(24.dp)
                     )
@@ -1490,7 +1485,7 @@ private fun UserActionDialog(
                 ) {
                     Icon(
                         painter = painterResource(R.drawable.crown),
-                        contentDescription = null,
+                        contentDescription = "Icon",
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(24.dp)
                     )

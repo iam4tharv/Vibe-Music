@@ -70,6 +70,7 @@ highlightKey: String? = null) {
     val searchLower = searchQuery.lowercase()
 
     val accountText = stringResource(R.string.account)
+    val statsText = stringResource(R.string.stats)
     val appearanceText = stringResource(R.string.appearance)
     val playerText = stringResource(R.string.player_and_audio)
     val listenTogetherText = stringResource(R.string.listen_together)
@@ -138,6 +139,17 @@ highlightKey: String? = null) {
                         icon = painterResource(R.drawable.account),
                         title = { Text(accountText) },
                         onClick = { navController.navigate("settings/account") }
+                    )
+                )
+            }
+
+            if (statsText.lowercase().contains(searchLower) || "wrapped".contains(searchLower)) {
+                add(
+                    Material3SettingsItem(
+                        isHighlighted = (highlightKey == statsText),
+                        icon = painterResource(R.drawable.stats),
+                        title = { Text(statsText) },
+                        onClick = { navController.navigate("stats") }
                     )
                 )
             }
@@ -370,7 +382,7 @@ highlightKey: String? = null) {
             ) {
                 Icon(
                     painterResource(R.drawable.arrow_back),
-                    contentDescription = null
+                    contentDescription = "Icon"
                 )
             }
         }

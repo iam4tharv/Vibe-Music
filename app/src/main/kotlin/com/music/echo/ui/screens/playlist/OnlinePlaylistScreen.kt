@@ -65,6 +65,7 @@ import androidx.compose.runtime.toMutableStateList
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.music.echo.extensions.bounceClick
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -97,6 +98,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import coil3.compose.AsyncImage
+import com.music.echo.ui.component.shimmer.ShimmeringAsyncImage
 import coil3.request.ImageRequest
 import com.music.innertube.models.PlaylistItem
 import com.music.innertube.models.SongItem
@@ -300,6 +302,7 @@ fun OnlinePlaylistScreen(
                             isSelected = inSelectMode && songItem.id in selection,
                             shape = listItemShape(index, filteredSongs.size),
                             modifier = Modifier
+                                .bounceClick()
                                 .combinedClickable(
                                     enabled = !hideExplicit || !songItem.explicit,
                                     onClick = {
@@ -381,6 +384,7 @@ fun OnlinePlaylistScreen(
                                         item = item,
                                         modifier = Modifier
                                             .width(160.dp)
+                                            .bounceClick()
                                             .combinedClickable(
                                                 onClick = {
                                                     when (item) {
@@ -499,7 +503,7 @@ fun OnlinePlaylistScreen(
                         painter = painterResource(
                             if (inSelectMode) R.drawable.close else R.drawable.arrow_back
                         ),
-                        contentDescription = null
+                        contentDescription = "Icon"
                     )
                 }
             },
@@ -530,8 +534,7 @@ fun OnlinePlaylistScreen(
                         }
                     ) {
                         Icon(
-                            painter = painterResource(R.drawable.more_vert),
-                            contentDescription = null
+                            painter = painterResource(R.drawable.more_vert), contentDescription = "Options"
                         )
                     }
                 } else if (!isSearching) {
@@ -540,7 +543,7 @@ fun OnlinePlaylistScreen(
                     ) {
                         Icon(
                             painter = painterResource(R.drawable.search),
-                            contentDescription = null
+                            contentDescription = "Icon"
                         )
                     }
                 }
@@ -614,10 +617,10 @@ private fun OnlinePlaylistHeader(
                     .padding(horizontal = 48.dp),
                 contentAlignment = Alignment.Center
             ) {
-                AsyncImage(
+                ShimmeringAsyncImage(
                     model = ImageRequest.Builder(LocalContext.current).data(playlist.thumbnail)
                         .build(),
-                    contentDescription = null,
+                    contentDescription = "Album Art",
                     modifier = Modifier
                         .then(
                             if (LocalConfiguration.current.screenWidthDp > 600) Modifier.size(300.dp)
@@ -781,7 +784,7 @@ private fun OnlinePlaylistHeader(
                             painter = painterResource(
                                 if (dbPlaylist?.playlist?.bookmarkedAt != null) R.drawable.favorite else R.drawable.favorite_border
                             ),
-                            contentDescription = null,
+                            contentDescription = "Play",
                             modifier = Modifier.size(20.dp),
                             tint = if (dbPlaylist?.playlist?.bookmarkedAt != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -825,7 +828,7 @@ private fun OnlinePlaylistHeader(
                             painter = painterResource(
                                 if (isPlaying && mediaMetadata?.album?.id == playlist.id) R.drawable.pause else R.drawable.play
                             ),
-                            contentDescription = null,
+                            contentDescription = "Play",
                             modifier = Modifier.size(20.dp),
                             tint = MaterialTheme.colorScheme.onPrimary
                         )

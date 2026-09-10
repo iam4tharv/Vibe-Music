@@ -36,6 +36,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -376,7 +377,8 @@ class ListenTogetherClient @Inject constructor(
         connectivityObserver?.isCurrentlyConnected() ?: true 
     } catch (e: Exception) { 
         true 
-    }
+    
+}
 
     private val client = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
@@ -841,9 +843,9 @@ class ListenTogetherClient @Inject constructor(
                 
                 MessageTypes.USER_JOINED -> {
                     val payload = codec.decodePayload(msgType, payloadBytes, detectedFormat) as? UserJoinedPayload ?: return
-                    _roomState.value = _roomState.value?.copy(
-                        users = _roomState.value!!.users + UserInfo(payload.userId, payload.username, false)
-                    )
+                    _roomState.update { state -> state?.copy(
+                        users = state.users + UserInfo(payload.userId, payload.username, false)
+                    ) }
                     _pendingJoinRequests.value = _pendingJoinRequests.value.filter { it.userId != payload.userId }
                     
                     
@@ -857,21 +859,21 @@ class ListenTogetherClient @Inject constructor(
                 
                 MessageTypes.USER_LEFT -> {
                     val payload = codec.decodePayload(msgType, payloadBytes, detectedFormat) as? UserLeftPayload ?: return
-                    _roomState.value = _roomState.value?.copy(
-                        users = _roomState.value!!.users.filter { it.userId != payload.userId }
-                    )
+                    _roomState.update { state -> state?.copy(
+                        users = state.users.filter { it.userId != payload.userId }
+                    ) }
                     log(LogLevel.INFO, "User left", payload.username)
                     scope.launch { _events.emit(ListenTogetherEvent.UserLeft(payload.userId, payload.username)) }
                 }
                 
                 MessageTypes.HOST_CHANGED -> {
                     val payload = codec.decodePayload(msgType, payloadBytes, detectedFormat) as? HostChangedPayload ?: return
-                    _roomState.value = _roomState.value?.copy(
+                    _roomState.update { state -> state?.copy(
                         hostId = payload.newHostId,
-                        users = _roomState.value!!.users.map { 
+                        users = state.users.map { 
                             it.copy(isHost = it.userId == payload.newHostId)
                         }
-                    )
+                    ) }
                     if (payload.newHostId == _userId.value) {
                         _role.value = RoomRole.HOST
                     } else if (_role.value == RoomRole.HOST) {
@@ -899,54 +901,54 @@ class ListenTogetherClient @Inject constructor(
                     
                     when (payload.action) {
                         PlaybackActions.PLAY -> {
-                            _roomState.value = _roomState.value?.copy(
+                            _roomState.update { state -> state?.copy(
                                 isPlaying = true,
-                                position = payload.position ?: _roomState.value!!.position
-                            )
+                                position = payload.position ?: state.position
+                            ) }
                         }
                         PlaybackActions.PAUSE -> {
-                            _roomState.value = _roomState.value?.copy(
+                            _roomState.update { state -> state?.copy(
                                 isPlaying = false,
-                                position = payload.position ?: _roomState.value!!.position
-                            )
+                                position = payload.position ?: state.position
+                            ) }
                         }
                         PlaybackActions.SEEK -> {
-                            _roomState.value = _roomState.value?.copy(
-                                position = payload.position ?: _roomState.value!!.position
-                            )
+                            _roomState.update { state -> state?.copy(
+                                position = payload.position ?: state.position
+                            ) }
                         }
                         PlaybackActions.CHANGE_TRACK -> {
-                            _roomState.value = _roomState.value?.copy(
+                            _roomState.update { state -> state?.copy(
                                 currentTrack = payload.trackInfo,
                                 isPlaying = false,
                                 position = 0
-                            )
+                            ) }
                         }
                         PlaybackActions.QUEUE_ADD -> {
                             val ti = payload.trackInfo
                             if (ti != null) {
-                                val currentQueue = _roomState.value?.queue ?: emptyList()
-                                _roomState.value = _roomState.value?.copy(
-                                    queue = if (payload.insertNext == true) listOf(ti) + currentQueue else currentQueue + ti
-                                )
+                                _roomState.update { state -> 
+                                    val currentQueue = state?.queue ?: emptyList()
+                                    state?.copy(queue = if (payload.insertNext == true) listOf(ti) + currentQueue else currentQueue + ti)
+                                }
                             }
                         }
                         PlaybackActions.QUEUE_REMOVE -> {
                             val id = payload.trackId
                             if (!id.isNullOrEmpty()) {
-                                val currentQueue = _roomState.value?.queue ?: emptyList()
-                                _roomState.value = _roomState.value?.copy(
-                                    queue = currentQueue.filter { it.id != id }
-                                )
+                                _roomState.update { state ->
+                                    val currentQueue = state?.queue ?: emptyList()
+                                    state?.copy(queue = currentQueue.filter { it.id != id })
+                                }
                             }
                         }
                         PlaybackActions.QUEUE_CLEAR -> {
-                            _roomState.value = _roomState.value?.copy(queue = emptyList())
+                            _roomState.update { it?.copy(queue = emptyList()) }
                         }
                         PlaybackActions.SET_VOLUME -> {
                             val vol = payload.volume
                             if (vol != null) {
-                                _roomState.value = _roomState.value?.copy(volume = vol.coerceIn(0f, 1f))
+                                _roomState.update { it?.copy(volume = vol.coerceIn(0f, 1f)) }
                             }
                         }
                     }
@@ -1092,11 +1094,11 @@ class ListenTogetherClient @Inject constructor(
                 MessageTypes.USER_RECONNECTED -> {
                     val payload = codec.decodePayload(msgType, payloadBytes, detectedFormat) as? UserReconnectedPayload ?: return
                     
-                    _roomState.value = _roomState.value?.copy(
-                        users = _roomState.value!!.users.map { user ->
+                    _roomState.update { state -> state?.copy(
+                        users = state.users.map { user ->
                             if (user.userId == payload.userId) user.copy(isConnected = true) else user
                         }
-                    )
+                    ) }
                     log(LogLevel.INFO, "User reconnected", payload.username)
                     scope.launch { _events.emit(ListenTogetherEvent.UserReconnected(payload.userId, payload.username)) }
                 }
@@ -1104,11 +1106,11 @@ class ListenTogetherClient @Inject constructor(
                 MessageTypes.USER_DISCONNECTED -> {
                     val payload = codec.decodePayload(msgType, payloadBytes, detectedFormat) as? UserDisconnectedPayload ?: return
                     
-                    _roomState.value = _roomState.value?.copy(
-                        users = _roomState.value!!.users.map { user ->
+                    _roomState.update { state -> state?.copy(
+                        users = state.users.map { user ->
                             if (user.userId == payload.userId) user.copy(isConnected = false) else user
                         }
-                    )
+                    ) }
                     log(LogLevel.INFO, "User temporarily disconnected", payload.username)
                     scope.launch { _events.emit(ListenTogetherEvent.UserDisconnected(payload.userId, payload.username)) }
                 }
@@ -1141,9 +1143,9 @@ class ListenTogetherClient @Inject constructor(
 
                 MessageTypes.ROOM_SETTINGS_CHANGED -> {
                     val payload = codec.decodePayload(msgType, payloadBytes, detectedFormat) as? UpdateRoomSettingsPayload ?: return
-                    _roomState.value = _roomState.value?.copy(
+                    _roomState.update { state -> state?.copy(
                         allowParticipantControl = payload.allowParticipantControl
-                    )
+                    ) }
                     log(LogLevel.INFO, "Room settings changed", "allowParticipantControl=${payload.allowParticipantControl}")
                     scope.launch {
                         _events.emit(ListenTogetherEvent.RoomSettingsChanged(payload.allowParticipantControl))
@@ -1302,7 +1304,7 @@ class ListenTogetherClient @Inject constructor(
             MessageTypes.UPDATE_ROOM_SETTINGS,
             UpdateRoomSettingsPayload(allowParticipantControl)
         )
-        _roomState.value = _roomState.value?.copy(allowParticipantControl = allowParticipantControl)
+        _roomState.update { it?.copy(allowParticipantControl = allowParticipantControl) }
     }
 
     

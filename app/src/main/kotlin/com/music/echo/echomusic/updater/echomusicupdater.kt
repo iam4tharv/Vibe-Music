@@ -405,7 +405,7 @@ fun UpdateScreen(navController: NavHostController) {
                                 ) {
                                     Icon(
                                         painter = painterResource(R.drawable.deployed_app_update),
-                                        contentDescription = null,
+                                        contentDescription = "Icon",
                                         modifier = Modifier.size(120.dp),
                                         tint = MaterialTheme.colorScheme.primary
                                     )
@@ -433,7 +433,7 @@ fun UpdateScreen(navController: NavHostController) {
                                 ) {
                                     Icon(
                                         painter = painterResource(R.drawable.error),
-                                        contentDescription = null,
+                                        contentDescription = "Icon",
                                         modifier = Modifier.size(120.dp),
                                         tint = MaterialTheme.colorScheme.error
                                     )
@@ -468,7 +468,7 @@ fun UpdateScreen(navController: NavHostController) {
                                     if (!currentStatus.imageUrl.isNullOrBlank()) {
                                         AsyncImage(
                                             model = currentStatus.imageUrl,
-                                            contentDescription = null,
+                                            contentDescription = "Album Art",
                                             modifier = Modifier
                                                 .fillMaxWidth()
                                                 .height(200.dp)
@@ -524,7 +524,7 @@ fun UpdateScreen(navController: NavHostController) {
                                     if (isDownloading) {
                                         if (downloadProgress > 0f) {
                                             androidx.compose.material3.LinearProgressIndicator(
-                                                progress = downloadProgress,
+                                                progress = { downloadProgress },
                                                 modifier = Modifier
                                                     .fillMaxWidth()
                                                     .height(8.dp)
@@ -623,6 +623,7 @@ private fun formatGitHubDate(githubDate: String): String = try {
     dateTime.format(displayFormatter)
 } catch (e: Exception) {
     githubDate
+
 }
 
 

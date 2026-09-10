@@ -38,7 +38,7 @@ fun AutoPlaylistButton(
         ) {
             Icon(
                 painter = painterResource(id = icon),
-                contentDescription = null,
+                contentDescription = "Icon",
                 tint = iconTint,
                 modifier = Modifier.size(24.dp)
             )

@@ -92,7 +92,7 @@ object AiPlaylistGenerator {
                 .build()
 
             try {
-                val response = client.newCall(request).execute()
+                client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
                     onLog("AI Request failed: ${response.code}")
                     return@withContext null
@@ -102,6 +102,7 @@ object AiPlaylistGenerator {
                 val responseJson = JSONObject(responseString)
                 val choices = responseJson.optJSONArray("choices") ?: return@withContext null
                 choices.optJSONObject(0)?.optJSONObject("message")?.optString("content") ?: "{}"
+                }
             } catch (e: Exception) {
                 onLog("Network error: ${e.message}")
                 return@withContext null

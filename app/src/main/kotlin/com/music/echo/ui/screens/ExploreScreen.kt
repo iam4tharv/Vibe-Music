@@ -47,6 +47,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.music.echo.extensions.bounceClick
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -291,6 +292,7 @@ fun ExploreScreen(
                                     },
                                     modifier = Modifier
                                         .width(horizontalLazyGridItemWidth)
+                                        .bounceClick()
                                         .combinedClickable(
                                             onClick = {
                                                 if (song.id == mediaMetadata?.id) {
@@ -343,6 +345,7 @@ fun ExploreScreen(
                                 isPlaying = isPlaying,
                                 coroutineScope = coroutineScope,
                                 modifier = Modifier
+                                    .bounceClick()
                                     .combinedClickable(
                                         onClick = {
                                             navController.navigate("album/${album.id}")
@@ -383,6 +386,7 @@ fun ExploreScreen(
                                 isPlaying = isPlaying,
                                 coroutineScope = coroutineScope,
                                 modifier = Modifier
+                                    .bounceClick()
                                     .combinedClickable(
                                         onClick = {
                                             if (video.id == mediaMetadata?.id) {

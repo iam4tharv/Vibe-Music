@@ -27,6 +27,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
+import com.music.echo.extensions.bounceClick
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
@@ -166,8 +167,7 @@ fun ArtistItemsScreen(
                             },
                         ) {
                             Icon(
-                                painter = painterResource(R.drawable.more_vert),
-                                contentDescription = null,
+                                painter = painterResource(R.drawable.more_vert), contentDescription = "Options",
                             )
                         }
                     },
@@ -227,6 +227,7 @@ fun ArtistItemsScreen(
                     fillMaxWidth = true,
                     coroutineScope = coroutineScope,
                     modifier = Modifier
+                        .bounceClick()
                         .combinedClickable(
                             onClick = {
                                 when (item) {
@@ -295,7 +296,7 @@ fun ArtistItemsScreen(
             ) {
                 Icon(
                     painterResource(R.drawable.arrow_back),
-                    contentDescription = null,
+                    contentDescription = "Icon",
                 )
             }
         },

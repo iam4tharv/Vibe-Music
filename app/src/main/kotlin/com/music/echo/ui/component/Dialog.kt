@@ -217,7 +217,7 @@ fun InfoLabel(
 ) {
     Icon(
         painter = painterResource(id = R.drawable.info),
-        contentDescription = null,
+        contentDescription = "Icon",
         tint = MaterialTheme.colorScheme.secondary,
         modifier = Modifier.padding(4.dp)
     )

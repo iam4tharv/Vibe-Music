@@ -14,6 +14,7 @@ import androidx.navigation.NavController
 import com.music.echo.R
 import com.music.echo.constants.ChipSortTypeKey
 import com.music.echo.constants.LibraryFilter
+import com.music.echo.extensions.bounceClick
 import com.music.echo.ui.component.ChipsRow
 import com.music.echo.utils.rememberEnumPreference
 import androidx.activity.compose.BackHandler
@@ -150,8 +151,9 @@ fun LibraryScreen(navController: NavController) {
                     icon = { Icon(painter = painterResource(R.drawable.add), contentDescription = "Create playlist") },
                     onClick = { showCreatePlaylistOptionsDialog = true },
                     shape = androidx.compose.foundation.shape.CircleShape,
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    contentColor = MaterialTheme.colorScheme.onSurface
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.bounceClick()
                 )
                 
                 Box {
@@ -161,7 +163,8 @@ fun LibraryScreen(navController: NavController) {
                         onClick = { showImportMenu = true },
                         shape = androidx.compose.foundation.shape.CircleShape,
                         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                        contentColor = MaterialTheme.colorScheme.onSurface
+                        contentColor = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.bounceClick()
                     )
                     
                     DropdownMenu(
@@ -191,7 +194,7 @@ fun LibraryScreen(navController: NavController) {
     if (showYoutubeImportDialog) {
         var url by remember { mutableStateOf(TextFieldValue("")) }
         com.music.echo.ui.component.TextFieldDialog(
-            icon = { Icon(painter = painterResource(R.drawable.link), contentDescription = null) },
+            icon = { Icon(painter = painterResource(R.drawable.link), contentDescription = "Icon") },
             title = {
                 Column {
                     Text(text = "Import playlist from YouTube Music")

@@ -295,7 +295,9 @@ fun AudioDeviceBottomSheet(onDismiss: () -> Unit, modifier: Modifier = Modifier)
                 context.unregisterReceiver(bluetoothReceiver)
                 handler.removeCallbacksAndMessages(null)
             } catch (e: IllegalArgumentException) {
-            }
+    com.music.echo.utils.ErrorNotifier.notifyError(e.message ?: "An unexpected error occurred")
+    e.printStackTrace()
+}
         }
     }
 
@@ -336,7 +338,7 @@ fun AudioDeviceBottomSheet(onDismiss: () -> Unit, modifier: Modifier = Modifier)
                     ) {
                         Icon(
                             imageVector = Icons.Outlined.Error,
-                            contentDescription = null,
+                            contentDescription = "Icon",
                             modifier = Modifier.size(48.dp),
                             tint = MaterialTheme.colorScheme.error
                         )
@@ -417,7 +419,7 @@ fun AudioDeviceBottomSheet(onDismiss: () -> Unit, modifier: Modifier = Modifier)
                                                 Box(contentAlignment = Alignment.Center) {
                                                     Icon(
                                                         imageVector = Icons.Filled.ExpandMore,
-                                                        contentDescription = null,
+                                                        contentDescription = "Icon",
                                                         modifier = Modifier
                                                             .size(28.dp)
                                                             .graphicsLayer { rotationZ = chevronRotation },
@@ -501,7 +503,7 @@ fun AudioDeviceBottomSheet(onDismiss: () -> Unit, modifier: Modifier = Modifier)
                                                 ) {
                                                     Icon(
                                                         imageVector = deviceIcon,
-                                                        contentDescription = null,
+                                                        contentDescription = "Icon",
                                                         modifier = Modifier.size(20.dp),
                                                         tint = if (isSelected)
                                                             MaterialTheme.colorScheme.onSecondaryContainer
@@ -523,7 +525,7 @@ fun AudioDeviceBottomSheet(onDismiss: () -> Unit, modifier: Modifier = Modifier)
                                                     if (isSelected) {
                                                         Icon(
                                                             imageVector = Icons.Filled.VolumeUp,
-                                                            contentDescription = null,
+                                                            contentDescription = "Icon",
                                                             modifier = Modifier.size(16.dp),
                                                             tint = MaterialTheme.colorScheme.secondary
                                                         )
@@ -739,7 +741,7 @@ fun VolumeControlRow(
                 ) {
                     Icon(
                         imageVector = if (currentValue > 0) Icons.Filled.VolumeUp else Icons.Filled.VolumeOff,
-                        contentDescription = null,
+                        contentDescription = "Icon",
                         tint = if (currentValue / maxVolume > 0.2f) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.size(24.dp)
                     )
@@ -787,7 +789,7 @@ fun AudioQualitySelector(context: Context) {
         )
 
         val options = listOf(
-            "Opus",
+            "Opus (160 kbps)",
             "JioSaavn 320k"
         )
 
@@ -854,7 +856,7 @@ fun DownloadQualitySelector() {
         )
 
         val options = listOf(
-            "Opus",
+            "Opus (160 kbps)",
             "JioSaavn 320k"
         )
         val selectedIndex = when (downloadQuality) {
@@ -946,13 +948,15 @@ private fun loadDevices(
                                             level
                                         } catch (e: Exception) {
                                             null
-                                        }
+                                        
+}
                                     }
                                     if (battery != null && battery >= 0 && battery <= 100) battery else null
                                 } else null
                             } catch (e: Exception) {
                                 null
-                            }
+                            
+}
                         } else null
 
                         AudioDevice(
@@ -1146,7 +1150,7 @@ private fun AudioDeviceRow(
 
                 Icon(
                     imageVector = deviceIcon,
-                    contentDescription = null,
+                    contentDescription = "Icon",
                     tint = onContainer,
                     modifier = Modifier.size(24.dp)
                 )
@@ -1252,7 +1256,7 @@ fun DeviceSelector(
                 ) {
                     Icon(
                         imageVector = deviceIcon,
-                        contentDescription = null,
+                        contentDescription = "Icon",
                         modifier = Modifier.size(18.dp)
                     )
                     Text(

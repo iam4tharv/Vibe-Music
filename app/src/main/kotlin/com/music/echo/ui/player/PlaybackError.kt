@@ -66,7 +66,7 @@ fun PlaybackError(
         
         Icon(
             painter = painterResource(R.drawable.error),
-            contentDescription = null,
+            contentDescription = "Icon",
             tint = MaterialTheme.colorScheme.error,
             modifier = Modifier.size(48.dp)
         )
@@ -118,7 +118,7 @@ fun PlaybackError(
         ) {
             Icon(
                 painter = painterResource(R.drawable.replay),
-                contentDescription = null,
+                contentDescription = "Play",
                 modifier = Modifier.size(18.dp)
             )
             Spacer(modifier = Modifier.width(6.dp))

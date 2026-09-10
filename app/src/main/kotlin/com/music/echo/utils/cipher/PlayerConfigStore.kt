@@ -285,7 +285,8 @@ object PlayerConfigStore {
             context.assets.open(ASSET_NAME).bufferedReader().use { it.readText() }
         } catch (e: Exception) {
             null
-        }
+        
+}
 
     internal var cacheDirForTest: File? = null
 
@@ -312,7 +313,8 @@ object PlayerConfigStore {
             lines[0] to lastFetchMs
         } catch (e: Exception) {
             null
-        }
+        
+}
     }
 
     private fun writeMeta(etag: String, lastFetchMs: Long) {

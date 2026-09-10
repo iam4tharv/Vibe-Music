@@ -37,6 +37,8 @@ import com.music.echo.LocalPlayerAwareWindowInsets
 import com.music.echo.R
 import com.music.echo.constants.AudioNormalizationKey
 import com.music.echo.constants.AudioOffload
+import com.music.echo.constants.AdvancedResamplingKey
+
 import com.music.echo.constants.AudioQuality
 import com.music.echo.constants.AudioQualityKey
 import com.music.echo.constants.AutoDownloadOnLikeKey
@@ -44,7 +46,10 @@ import com.music.echo.constants.AutomixCrossfadeKey
 import com.music.echo.constants.AutomixDebugOverlayKey
 import com.music.echo.constants.CrossfadeDurationKey
 import com.music.echo.constants.CrossfadeEnabledKey
+import com.music.echo.constants.CrossfeedEnabledKey
 import com.music.echo.constants.CrossfadeGaplessKey
+import com.music.echo.constants.SpatialAudioEnabledKey
+import com.music.echo.constants.SpatialAudioStrengthKey
 import com.music.echo.constants.AutoLoadMoreKey
 import com.music.echo.constants.AutoSkipNextOnErrorKey
 import com.music.echo.constants.DisableLoadMoreWhenRepeatAllKey
@@ -134,11 +139,18 @@ highlightKey: String? = null) {
     )
     val (audioNormalization, onAudioNormalizationChange) = rememberPreference(
         AudioNormalizationKey,
-        defaultValue = true
+        defaultValue = false
     )
 
     val (audioOffload, onAudioOffloadChange) = rememberPreference(
         key = AudioOffload,
+        defaultValue = false
+    )
+
+    val (spatialAudio, onSpatialAudioChange) = rememberPreference(key = SpatialAudioEnabledKey, defaultValue = false)
+    val (crossfeed, onCrossfeedChange) = rememberPreference(key = CrossfeedEnabledKey, defaultValue = false)
+    val (advancedResampling, onAdvancedResamplingChange) = rememberPreference(
+        key = AdvancedResamplingKey,
         defaultValue = false
     )
 
@@ -266,7 +278,7 @@ highlightKey: String? = null) {
             values = listOf(AudioQuality.OPUS, AudioQuality.JIOSAAVN),
             valueText = {
                 when (it) {
-                    AudioQuality.OPUS -> "Opus"
+                    AudioQuality.OPUS -> "Opus (160 kbps)"
                     AudioQuality.JIOSAAVN -> "JioSaavn (320 kbps)"
                 }
             },
@@ -339,7 +351,7 @@ highlightKey: String? = null) {
             title = stringResource(R.string.player),
             items = buildList {
                 add(Material3SettingsItem(
-                    isHighlighted = (highlightKey == "Data Saver"),
+isHighlighted = (highlightKey == "Data Saver"),
                     icon = painterResource(R.drawable.graphic_eq),
                     title = { Text("Data Saver") },
                     description = { Text("Sets audio quality to Opus and player background to Liquid Glass") },
@@ -364,21 +376,21 @@ highlightKey: String? = null) {
                         if (newValue) {
                             onAudioQualityChange(AudioQuality.OPUS)
                             onPlayerBackgroundStyleChange(com.music.echo.constants.PlayerBackgroundStyle.LIQUID_GLASS)
-                                } else {
-                                    onAudioQualityChange(AudioQuality.JIOSAAVN)
-                                    onPlayerBackgroundStyleChange(com.music.echo.constants.PlayerBackgroundStyle.APPLE_MUSIC)
+                        } else {
+                            onAudioQualityChange(AudioQuality.JIOSAAVN)
+                            onPlayerBackgroundStyleChange(com.music.echo.constants.PlayerBackgroundStyle.APPLE_MUSIC)
                         }
                     }
                 ))
 
                 add(Material3SettingsItem(
-    isHighlighted = (highlightKey == stringResource(R.string.audio_quality)),
+isHighlighted = (highlightKey == stringResource(R.string.audio_quality)),
                     icon = painterResource(R.drawable.graphic_eq),
                     title = { Text(stringResource(R.string.audio_quality)) },
                     description = {
                         Text(
                             when (audioQuality) {
-                                AudioQuality.OPUS -> "Opus"
+                                AudioQuality.OPUS -> "Opus (160 kbps)"
                                 AudioQuality.JIOSAAVN -> "JioSaavn (320 kbps)"
                             }
                         )
@@ -387,7 +399,7 @@ highlightKey: String? = null) {
                 ))
                 
                 add(Material3SettingsItem(
-    isHighlighted = (highlightKey == "Show audio fallback notifications"),
+isHighlighted = (highlightKey == "Show audio fallback notifications"),
                     icon = painterResource(R.drawable.notification),
                     title = { Text("Show audio fallback notifications") },
                     description = {
@@ -409,7 +421,7 @@ highlightKey: String? = null) {
                 ))
 
                 add(Material3SettingsItem(
-    isHighlighted = (highlightKey == stringResource(R.string.download_quality_title)),
+isHighlighted = (highlightKey == stringResource(R.string.download_quality_title)),
                     icon = painterResource(R.drawable.download),
                     title = { Text(stringResource(R.string.download_quality_title)) },
                     description = {
@@ -425,7 +437,7 @@ highlightKey: String? = null) {
 
 
                 add(Material3SettingsItem(
-    isHighlighted = (highlightKey == stringResource(R.string.crossfade)),
+isHighlighted = (highlightKey == stringResource(R.string.crossfade)),
                     icon = painterResource(R.drawable.linear_scale),
                     title = { Text(stringResource(R.string.crossfade)) },
                     description = { 
@@ -447,7 +459,7 @@ highlightKey: String? = null) {
                                     painter = painterResource(
                                         id = if (crossfadeEnabled) R.drawable.check else R.drawable.close
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                     modifier = Modifier.size(SwitchDefaults.IconSize)
                                 )
                             }
@@ -463,7 +475,7 @@ highlightKey: String? = null) {
                 ))
                 if (crossfadeEnabled) {
                     add(Material3SettingsItem(
-    isHighlighted = (highlightKey == stringResource(R.string.crossfade_duration)),
+isHighlighted = (highlightKey == stringResource(R.string.crossfade_duration)),
                         icon = painterResource(R.drawable.timer),
                         title = { Text(stringResource(R.string.crossfade_duration)) },
                         description = {
@@ -479,7 +491,7 @@ highlightKey: String? = null) {
                         }
                     ))
                     add(Material3SettingsItem(
-    isHighlighted = (highlightKey == stringResource(R.string.crossfade_gapless)),
+isHighlighted = (highlightKey == stringResource(R.string.crossfade_gapless)),
                         icon = painterResource(R.drawable.album),
                         title = { Text(stringResource(R.string.crossfade_gapless)) },
                         description = { Text(stringResource(R.string.crossfade_gapless_desc)) },
@@ -492,7 +504,7 @@ highlightKey: String? = null) {
                                         painter = painterResource(
                                             id = if (crossfadeGapless) R.drawable.check else R.drawable.close
                                         ),
-                                        contentDescription = null,
+                                        contentDescription = "Icon",
                                         modifier = Modifier.size(SwitchDefaults.IconSize)
                                     )
                                 }
@@ -501,7 +513,7 @@ highlightKey: String? = null) {
                         onClick = { onCrossfadeGaplessChange(!crossfadeGapless) }
                     ))
                     add(Material3SettingsItem(
-                        isHighlighted = highlightKey == stringResource(R.string.automix),
+isHighlighted = highlightKey == stringResource(R.string.automix),
                         icon = painterResource(R.drawable.graphic_eq),
                         title = { Text(stringResource(R.string.automix)) },
                         description = { Text(stringResource(R.string.automix_desc)) },
@@ -514,7 +526,7 @@ highlightKey: String? = null) {
                                         painter = painterResource(
                                             id = if (automixCrossfade) R.drawable.check else R.drawable.close
                                         ),
-                                        contentDescription = null,
+                                        contentDescription = "Icon",
                                         modifier = Modifier.size(SwitchDefaults.IconSize)
                                     )
                                 }
@@ -524,7 +536,7 @@ highlightKey: String? = null) {
                     ))
                     if (automixCrossfade) {
                         add(Material3SettingsItem(
-                            isHighlighted = highlightKey == stringResource(R.string.automix_debug),
+isHighlighted = highlightKey == stringResource(R.string.automix_debug),
                             icon = painterResource(R.drawable.bug_report),
                             title = { Text(stringResource(R.string.automix_debug)) },
                             description = { Text(stringResource(R.string.automix_debug_desc)) },
@@ -537,7 +549,7 @@ highlightKey: String? = null) {
                                             painter = painterResource(
                                                 id = if (automixDebugOverlay) R.drawable.check else R.drawable.close
                                             ),
-                                            contentDescription = null,
+                                            contentDescription = "Icon",
                                             modifier = Modifier.size(SwitchDefaults.IconSize)
                                         )
                                     }
@@ -548,7 +560,7 @@ highlightKey: String? = null) {
                     }
                 }
                 add(Material3SettingsItem(
-    isHighlighted = (highlightKey == stringResource(R.string.history_duration)),
+isHighlighted = (highlightKey == stringResource(R.string.history_duration)),
                     icon = painterResource(R.drawable.history),
                     title = { Text(stringResource(R.string.history_duration)) },
                     description = {
@@ -564,7 +576,7 @@ highlightKey: String? = null) {
                     }
                 ))
                 add(Material3SettingsItem(
-    isHighlighted = (highlightKey == stringResource(R.string.skip_silence)),
+isHighlighted = (highlightKey == stringResource(R.string.skip_silence)),
                     icon = painterResource(R.drawable.fast_forward),
                     title = { Text(stringResource(R.string.skip_silence)) },
                     description = { Text(stringResource(R.string.skip_silence_desc)) },
@@ -577,7 +589,7 @@ highlightKey: String? = null) {
                                     painter = painterResource(
                                         id = if (skipSilence) R.drawable.check else R.drawable.close
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                     modifier = Modifier.size(SwitchDefaults.IconSize)
                                 )
                             }
@@ -586,7 +598,7 @@ highlightKey: String? = null) {
                     onClick = { onSkipSilenceChange(!skipSilence) }
                 ))
                 add(Material3SettingsItem(
-    isHighlighted = (highlightKey == stringResource(R.string.skip_silence_instant)),
+isHighlighted = (highlightKey == stringResource(R.string.skip_silence_instant)),
                     icon = painterResource(R.drawable.skip_next),
                     title = { Text(stringResource(R.string.skip_silence_instant)) },
                     description = { Text(stringResource(R.string.skip_silence_instant_desc)) },
@@ -600,7 +612,7 @@ highlightKey: String? = null) {
                                     painter = painterResource(
                                         id = if (skipSilenceInstant) R.drawable.check else R.drawable.close
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                     modifier = Modifier.size(SwitchDefaults.IconSize)
                                 )
                             }
@@ -609,7 +621,7 @@ highlightKey: String? = null) {
                     onClick = { if (skipSilence) onSkipSilenceInstantChange(!skipSilenceInstant) }
                 ))
                 add(Material3SettingsItem(
-    isHighlighted = (highlightKey == stringResource(R.string.audio_normalization)),
+isHighlighted = (highlightKey == stringResource(R.string.audio_normalization)),
                     icon = painterResource(R.drawable.volume_up),
                     title = { Text(stringResource(R.string.audio_normalization)) },
                     trailingContent = {
@@ -621,7 +633,7 @@ highlightKey: String? = null) {
                                     painter = painterResource(
                                         id = if (audioNormalization) R.drawable.check else R.drawable.close
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                     modifier = Modifier.size(SwitchDefaults.IconSize)
                                 )
                             }
@@ -630,7 +642,7 @@ highlightKey: String? = null) {
                     onClick = { onAudioNormalizationChange(!audioNormalization) }
                 ))
                 add(Material3SettingsItem(
-    isHighlighted = (highlightKey == stringResource(R.string.audio_offload)),
+isHighlighted = (highlightKey == stringResource(R.string.audio_offload)),
                     icon = painterResource(R.drawable.graphic_eq),
                     title = { Text(stringResource(R.string.audio_offload)) },
                     description = {
@@ -649,7 +661,7 @@ highlightKey: String? = null) {
                                     painter = painterResource(
                                         id = if (!crossfadeEnabled && audioOffload) R.drawable.check else R.drawable.close
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                     modifier = Modifier.size(SwitchDefaults.IconSize)
                                 )
                             }
@@ -659,7 +671,69 @@ highlightKey: String? = null) {
                 ))
                 
                 add(Material3SettingsItem(
-                    isHighlighted = (highlightKey == "Shake to Play Next"),
+isHighlighted = (highlightKey == "Advanced Resampling"),
+                    icon = painterResource(R.drawable.graphic_eq),
+                    title = { Text("Advanced Resampling") },
+                    description = { Text("Use high-end math algorithms to convert sample rates cleanly if conversion is necessary, preventing distortion") },
+                    trailingContent = {
+                        Switch(
+                            checked = advancedResampling,
+                            onCheckedChange = onAdvancedResamplingChange,
+                            thumbContent = {
+                                Icon(
+                                    painter = painterResource(
+                                        id = if (advancedResampling) R.drawable.check else R.drawable.close
+                                    ),
+                                    contentDescription = "Icon",
+                                    modifier = Modifier.size(SwitchDefaults.IconSize)
+                                )
+                            }
+                        )
+                    },
+                    onClick = { onAdvancedResamplingChange(!advancedResampling) }
+                ))
+                add(Material3SettingsItem(
+isHighlighted = (highlightKey == "Spatial Audio Tuning"),
+                    icon = painterResource(R.drawable.graphic_eq),
+                    title = { Text("Spatial Audio Tuning") },
+                    description = { Text("Enable wider soundstage and spatial separation") },
+                    trailingContent = {
+                        Switch(
+                            checked = spatialAudio,
+                            onCheckedChange = onSpatialAudioChange,
+                            thumbContent = {
+                                Icon(
+                                    painter = painterResource(id = if (spatialAudio) R.drawable.check else R.drawable.close),
+                                    contentDescription = "Icon",
+                                    modifier = Modifier.size(SwitchDefaults.IconSize)
+                                )
+                            }
+                        )
+                    },
+                    onClick = { onSpatialAudioChange(!spatialAudio) }
+                ))
+                add(Material3SettingsItem(
+isHighlighted = (highlightKey == "Crossfeed Tuning"),
+                    icon = painterResource(R.drawable.apple_headset),
+                    title = { Text("Crossfeed Tuning") },
+                    description = { Text("Mix channels slightly to reduce extreme stereo separation for headphones") },
+                    trailingContent = {
+                        Switch(
+                            checked = crossfeed,
+                            onCheckedChange = onCrossfeedChange,
+                            thumbContent = {
+                                Icon(
+                                    painter = painterResource(id = if (crossfeed) R.drawable.check else R.drawable.close),
+                                    contentDescription = "Icon",
+                                    modifier = Modifier.size(SwitchDefaults.IconSize)
+                                )
+                            }
+                        )
+                    },
+                    onClick = { onCrossfeedChange(!crossfeed) }
+                ))
+                add(Material3SettingsItem(
+isHighlighted = (highlightKey == "Shake to Play Next"),
                     icon = painterResource(R.drawable.vibration),
                     title = { Text("Shake to Play Next") },
                     description = { Text("Shake the device to skip to the next song") },
@@ -672,7 +746,7 @@ highlightKey: String? = null) {
                                     painter = painterResource(
                                         id = if (shakeToPlayNext) R.drawable.check else R.drawable.close
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Play",
                                     modifier = Modifier.size(SwitchDefaults.IconSize)
                                 )
                             }
@@ -682,7 +756,7 @@ highlightKey: String? = null) {
                 ))
 
                 add(Material3SettingsItem(
-    isHighlighted = (highlightKey == "Preload Next Song"),
+isHighlighted = (highlightKey == "Preload Next Song"),
                     icon = painterResource(R.drawable.skip_next),
                     title = { Text("Preload Next Song") },
                     description = { Text("Cache the next song for gapless playback") },
@@ -695,7 +769,7 @@ highlightKey: String? = null) {
                                     painter = painterResource(
                                         id = if (preloadNextSongEnabled) R.drawable.check else R.drawable.close
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                     modifier = Modifier.size(SwitchDefaults.IconSize)
                                 )
                             }
@@ -706,7 +780,7 @@ highlightKey: String? = null) {
 
                 if (preloadNextSongEnabled) {
                     add(Material3SettingsItem(
-    isHighlighted = (highlightKey == "Preload Limit"),
+isHighlighted = (highlightKey == "Preload Limit"),
                         icon = painterResource(R.drawable.library_music),
                         title = { Text("Preload Limit") },
                         description = {
@@ -723,7 +797,7 @@ highlightKey: String? = null) {
                     ))
                     
                     add(Material3SettingsItem(
-    isHighlighted = (highlightKey == "Preload Lyrics"),
+isHighlighted = (highlightKey == "Preload Lyrics"),
                         icon = painterResource(R.drawable.queue_music),
                         title = { Text("Preload Lyrics") },
                         description = { Text("Also cache lyrics for the preloaded songs") },
@@ -736,7 +810,7 @@ highlightKey: String? = null) {
                                         painter = painterResource(
                                             id = if (preloadLyricsEnabled) R.drawable.check else R.drawable.close
                                         ),
-                                        contentDescription = null,
+                                        contentDescription = "Lyrics",
                                         modifier = Modifier.size(SwitchDefaults.IconSize)
                                     )
                                 }
@@ -748,7 +822,7 @@ highlightKey: String? = null) {
                 
                 if (BuildConfig.CAST_AVAILABLE) {
                     add(Material3SettingsItem(
-    isHighlighted = (highlightKey == stringResource(R.string.google_cast)),
+isHighlighted = (highlightKey == stringResource(R.string.google_cast)),
                         icon = painterResource(R.drawable.cast),
                         title = { Text(stringResource(R.string.google_cast)) },
                         description = { Text(stringResource(R.string.google_cast_description)) },
@@ -761,7 +835,7 @@ highlightKey: String? = null) {
                                         painter = painterResource(
                                             id = if (enableGoogleCast) R.drawable.check else R.drawable.close
                                         ),
-                                        contentDescription = null,
+                                        contentDescription = "Cast",
                                         modifier = Modifier.size(SwitchDefaults.IconSize)
                                     )
                                 }
@@ -771,7 +845,7 @@ highlightKey: String? = null) {
                     ))
                 }
                 add(Material3SettingsItem(
-    isHighlighted = (highlightKey == stringResource(R.string.seek_seconds_addup)),
+isHighlighted = (highlightKey == stringResource(R.string.seek_seconds_addup)),
                     icon = painterResource(R.drawable.arrow_forward),
                     title = { Text(stringResource(R.string.seek_seconds_addup)) },
                     description = { Text(stringResource(R.string.seek_seconds_addup_description)) },
@@ -784,7 +858,7 @@ highlightKey: String? = null) {
                                     painter = painterResource(
                                         id = if (seekExtraSeconds) R.drawable.check else R.drawable.close
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                     modifier = Modifier.size(SwitchDefaults.IconSize)
                                 )
                             }
@@ -793,7 +867,7 @@ highlightKey: String? = null) {
                     onClick = { onSeekExtraSeconds(!seekExtraSeconds) }
                 ))
                 add(Material3SettingsItem(
-    isHighlighted = (highlightKey == stringResource(R.string.echo_equalizer)),
+isHighlighted = (highlightKey == stringResource(R.string.echo_equalizer)),
                     icon = painterResource(R.drawable.echoequlizer),
                     title = { Text(stringResource(R.string.echo_equalizer)) },
                     description = { Text(stringResource(R.string.echo_equalizer_desc)) },
@@ -808,7 +882,7 @@ highlightKey: String? = null) {
             title = stringResource(R.string.queue),
             items = listOf(
                 Material3SettingsItem(
-    isHighlighted = (highlightKey == stringResource(R.string.persistent_queue)),
+isHighlighted = (highlightKey == stringResource(R.string.persistent_queue)),
                     icon = painterResource(R.drawable.queue_music),
                     title = { Text(stringResource(R.string.persistent_queue)) },
                     description = { Text(stringResource(R.string.persistent_queue_desc)) },
@@ -821,7 +895,7 @@ highlightKey: String? = null) {
                                     painter = painterResource(
                                         id = if (persistentQueue) R.drawable.check else R.drawable.close
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                     modifier = Modifier.size(SwitchDefaults.IconSize)
                                 )
                             }
@@ -830,7 +904,7 @@ highlightKey: String? = null) {
                     onClick = { onPersistentQueueChange(!persistentQueue) }
                 ),
                 Material3SettingsItem(
-    isHighlighted = (highlightKey == stringResource(R.string.auto_load_more)),
+isHighlighted = (highlightKey == stringResource(R.string.auto_load_more)),
                     icon = painterResource(R.drawable.playlist_add),
                     title = { Text(stringResource(R.string.auto_load_more)) },
                     description = { Text(stringResource(R.string.auto_load_more_desc)) },
@@ -843,7 +917,7 @@ highlightKey: String? = null) {
                                     painter = painterResource(
                                         id = if (autoLoadMore) R.drawable.check else R.drawable.close
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                     modifier = Modifier.size(SwitchDefaults.IconSize)
                                 )
                             }
@@ -852,7 +926,7 @@ highlightKey: String? = null) {
                     onClick = { onAutoLoadMoreChange(!autoLoadMore) }
                 ),
                 Material3SettingsItem(
-    isHighlighted = (highlightKey == stringResource(R.string.disable_load_more_when_repeat_all)),
+isHighlighted = (highlightKey == stringResource(R.string.disable_load_more_when_repeat_all)),
                     icon = painterResource(R.drawable.repeat),
                     title = { Text(stringResource(R.string.disable_load_more_when_repeat_all)) },
                     description = { Text(stringResource(R.string.disable_load_more_when_repeat_all_desc)) },
@@ -865,7 +939,7 @@ highlightKey: String? = null) {
                                     painter = painterResource(
                                         id = if (disableLoadMoreWhenRepeatAll) R.drawable.check else R.drawable.close
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                     modifier = Modifier.size(SwitchDefaults.IconSize)
                                 )
                             }
@@ -874,7 +948,7 @@ highlightKey: String? = null) {
                     onClick = { onDisableLoadMoreWhenRepeatAllChange(!disableLoadMoreWhenRepeatAll) }
                 ),
                 Material3SettingsItem(
-    isHighlighted = (highlightKey == stringResource(R.string.auto_download_on_like)),
+isHighlighted = (highlightKey == stringResource(R.string.auto_download_on_like)),
                     icon = painterResource(R.drawable.download),
                     title = { Text(stringResource(R.string.auto_download_on_like)) },
                     description = { Text(stringResource(R.string.auto_download_on_like_desc)) },
@@ -887,7 +961,7 @@ highlightKey: String? = null) {
                                     painter = painterResource(
                                         id = if (autoDownloadOnLike) R.drawable.check else R.drawable.close
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                     modifier = Modifier.size(SwitchDefaults.IconSize)
                                 )
                             }
@@ -896,7 +970,7 @@ highlightKey: String? = null) {
                     onClick = { onAutoDownloadOnLikeChange(!autoDownloadOnLike) }
                 ),
                 Material3SettingsItem(
-    isHighlighted = (highlightKey == stringResource(R.string.enable_similar_content)),
+isHighlighted = (highlightKey == stringResource(R.string.enable_similar_content)),
                     icon = painterResource(R.drawable.similar),
                     title = { Text(stringResource(R.string.enable_similar_content)) },
                     description = { Text(stringResource(R.string.similar_content_desc)) },
@@ -909,7 +983,7 @@ highlightKey: String? = null) {
                                     painter = painterResource(
                                         id = if (similarContentEnabled) R.drawable.check else R.drawable.close
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                     modifier = Modifier.size(SwitchDefaults.IconSize)
                                 )
                             }
@@ -918,7 +992,7 @@ highlightKey: String? = null) {
                     onClick = { similarContentEnabledChange(!similarContentEnabled) }
                 ),
                 Material3SettingsItem(
-    isHighlighted = (highlightKey == stringResource(R.string.persistent_shuffle_title)),
+isHighlighted = (highlightKey == stringResource(R.string.persistent_shuffle_title)),
                     icon = painterResource(R.drawable.shuffle),
                     title = { Text(stringResource(R.string.persistent_shuffle_title)) },
                     description = { Text(stringResource(R.string.persistent_shuffle_desc)) },
@@ -931,7 +1005,7 @@ highlightKey: String? = null) {
                                     painter = painterResource(
                                         id = if (persistentShuffleAcrossQueues) R.drawable.check else R.drawable.close
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                     modifier = Modifier.size(SwitchDefaults.IconSize)
                                 )
                             }
@@ -940,7 +1014,7 @@ highlightKey: String? = null) {
                     onClick = { onPersistentShuffleAcrossQueuesChange(!persistentShuffleAcrossQueues) }
                 ),
                 Material3SettingsItem(
-    isHighlighted = (highlightKey == stringResource(R.string.remember_shuffle_and_repeat)),
+isHighlighted = (highlightKey == stringResource(R.string.remember_shuffle_and_repeat)),
                     icon = painterResource(R.drawable.shuffle),
                     title = { Text(stringResource(R.string.remember_shuffle_and_repeat)) },
                     description = { Text(stringResource(R.string.remember_shuffle_and_repeat_desc)) },
@@ -953,7 +1027,7 @@ highlightKey: String? = null) {
                                     painter = painterResource(
                                         id = if (rememberShuffleAndRepeat) R.drawable.check else R.drawable.close
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                     modifier = Modifier.size(SwitchDefaults.IconSize)
                                 )
                             }
@@ -962,7 +1036,7 @@ highlightKey: String? = null) {
                     onClick = { onRememberShuffleAndRepeatChange(!rememberShuffleAndRepeat) }
                 ),
                 Material3SettingsItem(
-    isHighlighted = (highlightKey == stringResource(R.string.shuffle_playlist_first)),
+isHighlighted = (highlightKey == stringResource(R.string.shuffle_playlist_first)),
                     icon = painterResource(R.drawable.shuffle),
                     title = { Text(stringResource(R.string.shuffle_playlist_first)) },
                     description = { Text(stringResource(R.string.shuffle_playlist_first_desc)) },
@@ -975,7 +1049,7 @@ highlightKey: String? = null) {
                                     painter = painterResource(
                                         id = if (shufflePlaylistFirst) R.drawable.check else R.drawable.close
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Play",
                                     modifier = Modifier.size(SwitchDefaults.IconSize)
                                 )
                             }
@@ -984,7 +1058,7 @@ highlightKey: String? = null) {
                     onClick = { onShufflePlaylistFirstChange(!shufflePlaylistFirst) }
                 ),
                 Material3SettingsItem(
-    isHighlighted = (highlightKey == stringResource(R.string.prevent_duplicate_tracks_in_queue)),
+isHighlighted = (highlightKey == stringResource(R.string.prevent_duplicate_tracks_in_queue)),
                     icon = painterResource(R.drawable.queue_music),
                     title = { Text(stringResource(R.string.prevent_duplicate_tracks_in_queue)) },
                     description = { Text(stringResource(R.string.prevent_duplicate_tracks_in_queue_desc)) },
@@ -997,7 +1071,7 @@ highlightKey: String? = null) {
                                     painter = painterResource(
                                         id = if (preventDuplicateTracksInQueue) R.drawable.check else R.drawable.close
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                     modifier = Modifier.size(SwitchDefaults.IconSize)
                                 )
                             }
@@ -1006,7 +1080,7 @@ highlightKey: String? = null) {
                     onClick = { onPreventDuplicateTracksInQueueChange(!preventDuplicateTracksInQueue) }
                 ),
                 Material3SettingsItem(
-    isHighlighted = (highlightKey == stringResource(R.string.auto_skip_next_on_error)),
+isHighlighted = (highlightKey == stringResource(R.string.auto_skip_next_on_error)),
                     icon = painterResource(R.drawable.skip_next),
                     title = { Text(stringResource(R.string.auto_skip_next_on_error)) },
                     description = { Text(stringResource(R.string.auto_skip_next_on_error_desc)) },
@@ -1019,7 +1093,7 @@ highlightKey: String? = null) {
                                     painter = painterResource(
                                         id = if (autoSkipNextOnError) R.drawable.check else R.drawable.close
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Skip Next",
                                     modifier = Modifier.size(SwitchDefaults.IconSize)
                                 )
                             }
@@ -1036,7 +1110,7 @@ highlightKey: String? = null) {
             title = stringResource(R.string.misc),
             items = listOf(
                 Material3SettingsItem(
-    isHighlighted = (highlightKey == stringResource(R.string.stop_music_on_task_clear)),
+isHighlighted = (highlightKey == stringResource(R.string.stop_music_on_task_clear)),
                     icon = painterResource(R.drawable.clear_all),
                     title = { Text(stringResource(R.string.stop_music_on_task_clear)) },
                     trailingContent = {
@@ -1048,7 +1122,7 @@ highlightKey: String? = null) {
                                     painter = painterResource(
                                         id = if (stopMusicOnTaskClear) R.drawable.check else R.drawable.close
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                     modifier = Modifier.size(SwitchDefaults.IconSize)
                                 )
                             }
@@ -1057,7 +1131,7 @@ highlightKey: String? = null) {
                     onClick = { onStopMusicOnTaskClearChange(!stopMusicOnTaskClear) }
                 ),
                 Material3SettingsItem(
-    isHighlighted = (highlightKey == stringResource(R.string.pause_music_when_media_is_muted)),
+isHighlighted = (highlightKey == stringResource(R.string.pause_music_when_media_is_muted)),
                     icon = painterResource(R.drawable.volume_off_pause),
                     title = { Text(stringResource(R.string.pause_music_when_media_is_muted)) },
                     trailingContent = {
@@ -1069,7 +1143,7 @@ highlightKey: String? = null) {
                                     painter = painterResource(
                                         id = if (pauseOnMute) R.drawable.check else R.drawable.close
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Pause",
                                     modifier = Modifier.size(SwitchDefaults.IconSize)
                                 )
                             }
@@ -1078,7 +1152,7 @@ highlightKey: String? = null) {
                     onClick = { onPauseOnMuteChange(!pauseOnMute) }
                 ),
                 Material3SettingsItem(
-    isHighlighted = (highlightKey == stringResource(R.string.resume_on_bluetooth_connect)),
+isHighlighted = (highlightKey == stringResource(R.string.resume_on_bluetooth_connect)),
                     icon = painterResource(R.drawable.bluetooth),
                     title = { Text(stringResource(R.string.resume_on_bluetooth_connect)) },
                     trailingContent = {
@@ -1090,7 +1164,7 @@ highlightKey: String? = null) {
                                     painter = painterResource(
                                         id = if (resumeOnBluetoothConnect) R.drawable.check else R.drawable.close
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Bluetooth Device",
                                     modifier = Modifier.size(SwitchDefaults.IconSize)
                                 )
                             }
@@ -1099,7 +1173,7 @@ highlightKey: String? = null) {
                     onClick = { onResumeOnBluetoothConnectChange(!resumeOnBluetoothConnect) }
                 ),
                 Material3SettingsItem(
-    isHighlighted = (highlightKey == stringResource(R.string.keep_screen_on_when_player_is_expanded)),
+isHighlighted = (highlightKey == stringResource(R.string.keep_screen_on_when_player_is_expanded)),
                     icon = painterResource(R.drawable.screenshot),
                     title = { Text(stringResource(R.string.keep_screen_on_when_player_is_expanded)) },
                     trailingContent = {
@@ -1111,7 +1185,7 @@ highlightKey: String? = null) {
                                     painter = painterResource(
                                         id = if (keepScreenOn) R.drawable.check else R.drawable.close
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                     modifier = Modifier.size(SwitchDefaults.IconSize)
                                 )
                             }
@@ -1120,7 +1194,7 @@ highlightKey: String? = null) {
                     onClick = { onKeepScreenOnChange(!keepScreenOn) }
                 ),
                 Material3SettingsItem(
-    isHighlighted = (highlightKey == stringResource(R.string.export_desc)),
+isHighlighted = (highlightKey == stringResource(R.string.export_desc)),
                     icon = painterResource(R.drawable.file_export),
                     title = { Text(stringResource(R.string.export_desc)) },
                     description = { Text("Show 'Export as MP3' in menus") },
@@ -1133,7 +1207,7 @@ highlightKey: String? = null) {
                                     painter = painterResource(
                                         id = if (enableExportAsMp3) R.drawable.check else R.drawable.close
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                     modifier = Modifier.size(SwitchDefaults.IconSize)
                                 )
                             }
@@ -1142,7 +1216,7 @@ highlightKey: String? = null) {
                     onClick = { onEnableExportAsMp3Change(!enableExportAsMp3) }
                 ),
                 Material3SettingsItem(
-                    isHighlighted = (highlightKey == stringResource(R.string.youtube_decryption_settings)),
+isHighlighted = (highlightKey == stringResource(R.string.youtube_decryption_settings)),
                     icon = painterResource(R.drawable.settings),
                     title = { Text(stringResource(R.string.youtube_decryption_settings)) },
                     description = { Text(stringResource(R.string.youtube_decryption_desc)) },
@@ -1164,7 +1238,7 @@ highlightKey: String? = null) {
             ) {
                 Icon(
                     painterResource(R.drawable.arrow_back),
-                    contentDescription = null
+                    contentDescription = "Icon"
                 )
             }
         }

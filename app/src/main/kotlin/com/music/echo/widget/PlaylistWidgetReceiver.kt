@@ -43,7 +43,13 @@ class PlaylistWidgetReceiver : AppWidgetProvider() {
 
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
+        // Custom actions like PLAY_TARGET are now handled securely by WidgetActionReceiver
+        when (intent.action) {
+            ACTION_UPDATE_WIDGET -> refreshIdleWidgets()
+        }
+    }
 
+    internal fun processCustomAction(context: Context, intent: Intent) {
         when (intent.action) {
             ACTION_PLAY_TARGET -> {
                 val serviceIntent = Intent(context, MusicService::class.java).apply {
@@ -59,8 +65,6 @@ class PlaylistWidgetReceiver : AppWidgetProvider() {
                     openTargetInApp(context, intent)
                 }
             }
-
-            ACTION_UPDATE_WIDGET -> refreshIdleWidgets()
         }
     }
 

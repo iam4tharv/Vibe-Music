@@ -169,7 +169,7 @@ fun CastButton(
             ) {
                 androidx.compose.material3.Icon(
                     painter = painterResource(if (isCasting) R.drawable.cast_connected else R.drawable.cast),
-                    contentDescription = null,
+                    contentDescription = "Cast",
                     modifier = Modifier.size(24.dp)
                 )
                 androidx.compose.foundation.layout.Spacer(modifier = Modifier.width(16.dp))

@@ -775,6 +775,7 @@ val SuggestionRegionSlugToName =
         "il" to "Israel"
     )
 
+val AdvancedResamplingKey = booleanPreferencesKey("advanced_resampling")
 val SpatialAudioEnabledKey = booleanPreferencesKey("spatial_audio_enabled")
 val SpatialAudioStrengthKey = floatPreferencesKey("spatial_audio_strength")
 val CrossfeedEnabledKey = booleanPreferencesKey("crossfeed_enabled")

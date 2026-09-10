@@ -94,6 +94,10 @@ constructor(
         customCommand: SessionCommand,
         args: Bundle,
     ): ListenableFuture<SessionResult> {
+        if (!CallerAuthUtils.isTrusted(context, controller.packageName)) {
+            return Futures.immediateFuture(SessionResult(SessionResult.RESULT_ERROR_PERMISSION_DENIED))
+        }
+
         when (customCommand.customAction) {
             MediaSessionConstants.ACTION_TOGGLE_LIKE -> toggleLike()
             MediaSessionConstants.ACTION_TOGGLE_START_RADIO -> toggleStartRadio()
@@ -118,13 +122,17 @@ constructor(
         session: MediaLibrarySession,
         browser: MediaSession.ControllerInfo,
         params: MediaLibraryService.LibraryParams?,
-    ): ListenableFuture<LibraryResult<MediaItem>> =
-        Futures.immediateFuture(
+    ): ListenableFuture<LibraryResult<MediaItem>> {
+        if (params?.isRecent == true || params?.isSuggested == true) {
+            return Futures.immediateFuture(LibraryResult.ofError(SessionError.ERROR_NOT_SUPPORTED))
+        }
+        return Futures.immediateFuture(
             LibraryResult.ofItem(
                 rootMediaItem(),
                 params.withContentStyleHints(),
-            ),
+            )
         )
+    }
 
     override fun onGetChildren(
         session: MediaLibrarySession,
@@ -184,7 +192,8 @@ constructor(
                         } catch (e: Exception) {
                             reportException(e)
                             emptyList()
-                        }
+                        
+}
 
                         listOf(
                             likedSongsMediaItem(likedSongCount),
@@ -259,7 +268,8 @@ constructor(
                                 } catch (e: Exception) {
                                     reportException(e)
                                     emptyList()
-                                }
+                                
+}
                             }
 
                             else -> emptyList()
@@ -361,20 +371,24 @@ constructor(
                         try {
                             database.query { insert(songItem.toMediaMetadata()) }
                         } catch (e: Exception) {
-                        }
+    com.music.echo.utils.ErrorNotifier.notifyError(e.message ?: "An unexpected error occurred")
+    e.printStackTrace()
+}
                         
                         searchResults.add(songItem.toMediaItem("${MusicService.SEARCH}/$query"))
                     }
                 } catch (e: Exception) {
                     reportException(e)
-                }
+                
+}
                 
                 LibraryResult.ofItemList(searchResults.paginate(page, pageSize), params.withContentStyleHints())
                 
             } catch (e: Exception) {
                 reportException(e)
                 LibraryResult.ofItemList(emptyList(), params.withContentStyleHints())
-            }
+            
+}
         }
     }
 
@@ -387,8 +401,72 @@ constructor(
     ): ListenableFuture<MediaItemsWithStartPosition> =
         scope.future(Dispatchers.IO) {
             val defaultResult = MediaItemsWithStartPosition(emptyList(), startIndex, startPositionMs)
-            val path = mediaItems.firstOrNull()?.mediaId?.split("/")
-                ?: return@future defaultResult
+            val firstItem = mediaItems.firstOrNull() ?: return@future defaultResult
+            val voiceSearchQuery = firstItem.requestMetadata.searchQuery
+
+            if (!voiceSearchQuery.isNullOrBlank()) {
+                val searchQuery = voiceSearchQuery.toString()
+                val searchResults = mutableListOf<Song>()
+                val localSongs = database.allSongs().first().filter { song ->
+                    song.song.title.contains(searchQuery, ignoreCase = true) ||
+                    song.artists.any { it.name.contains(searchQuery, ignoreCase = true) } ||
+                    song.album?.title?.contains(searchQuery, ignoreCase = true) == true
+                }
+                
+                val artistSongs = database.searchArtists(searchQuery).first().flatMap { artist ->
+                    database.artistSongsByCreateDateAsc(artist.id).first()
+                }
+                
+                val albumSongs = database.searchAlbums(searchQuery).first().flatMap { album ->
+                    database.albumSongs(album.id).first()
+                }
+                
+                val playlistSongs = database.searchPlaylists(searchQuery).first().flatMap { playlist ->
+                    database.playlistSongs(playlist.id).first().map { it.song }
+                }
+
+                val allLocalSongs = (localSongs + artistSongs + albumSongs + playlistSongs)
+                    .distinctBy { it.id }
+                
+                searchResults.addAll(allLocalSongs)
+                
+                try {
+                    val onlineResults = YouTube.search(searchQuery, YouTube.SearchFilter.FILTER_SONG)
+                        .getOrNull()
+                        ?.items
+                        ?.filterIsInstance<SongItem>()
+                        ?.filterExplicit(context.dataStore.get(HideExplicitKey, false))
+                        ?.filterVideoSongs(context.dataStore.get(HideVideoSongsKey, false))
+                        ?.filter { onlineSong -> 
+                            !searchResults.any { it.id == onlineSong.id }
+                        } ?: emptyList()
+                        
+                    onlineResults.forEach { songItem ->
+                        try {
+                            database.query { insert(songItem.toMediaMetadata()) }
+                        } catch (e: Exception) {
+                            reportException(e)
+                        
+}
+                    }
+                    
+                    searchResults.addAll(onlineResults.mapNotNull { database.song(it.id).first() })
+                } catch (e: Exception) {
+                    reportException(e)
+                
+}
+
+                if (searchResults.isNotEmpty()) {
+                    return@future MediaItemsWithStartPosition(
+                        searchResults.map { it.toMediaItem() },
+                        0,
+                        startPositionMs
+                    )
+                }
+                return@future defaultResult
+            }
+
+            val path = firstItem.mediaId.split("/")
 
             when (path.firstOrNull()) {
                 MusicService.SONG -> {
@@ -559,11 +637,14 @@ constructor(
                                     searchResults.add(newSong)
                                 }
                             } catch (e: Exception) {
-                            }
+    com.music.echo.utils.ErrorNotifier.notifyError(e.message ?: "An unexpected error occurred")
+    e.printStackTrace()
+}
                         }
                     } catch (e: Exception) {
                         reportException(e)
-                    }
+                    
+}
                     
                     if (searchResults.isEmpty()) {
                         return@future defaultResult
@@ -751,7 +832,8 @@ constructor(
         } catch (e: Exception) {
             reportException(e)
             null
-        } ?: browsableMediaItem(
+        
+} ?: browsableMediaItem(
             "${MusicService.YOUTUBE_PLAYLIST}/$playlistId",
             playlistId,
             "YouTube Music",
@@ -771,7 +853,8 @@ constructor(
         } catch (e: Exception) {
             reportException(e)
             null
-        }
+        
+}
 
     private fun likedSongsMediaItem(songCount: Int) = browsableMediaItem(
         "${MusicService.PLAYLIST}/${PlaylistEntity.LIKED_PLAYLIST_ID}",

@@ -148,28 +148,32 @@ object Spotify {
             this[key]?.takeIf { it !is JsonNull }?.jsonObject
         } catch (_: Exception) {
             null
-        }
+        
+}
 
     private fun JsonObject.str(key: String): String? =
         try {
             this[key]?.takeIf { it !is JsonNull }?.jsonPrimitive?.contentOrNull
         } catch (_: Exception) {
             null
-        }
+        
+}
 
     private fun JsonObject.int(key: String): Int? =
         try {
             this[key]?.takeIf { it !is JsonNull }?.jsonPrimitive?.intOrNull
         } catch (_: Exception) {
             null
-        }
+        
+}
 
     private fun JsonObject.arr(key: String): JsonArray? =
         try {
             this[key]?.takeIf { it !is JsonNull }?.jsonArray
         } catch (_: Exception) {
             null
-        }
+        
+}
 
     // ── GraphQL core ─────────────────────────────────────────────────────
 

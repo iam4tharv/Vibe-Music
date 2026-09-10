@@ -77,7 +77,7 @@ object LocalFileDownloader {
             }
             requestBuilder.header("Range", "bytes=0-")
             val request = requestBuilder.build()
-            val response = client.newCall(request).execute()
+            client.newCall(request).execute().use { response ->
 
             if (!response.isSuccessful) {
                 withContext(Dispatchers.Main) {
@@ -120,6 +120,7 @@ object LocalFileDownloader {
                 .setOngoing(false)
                 .setSmallIcon(android.R.drawable.stat_sys_download_done)
             notificationManager.notify(notificationId, notificationBuilder.build())
+            }
         } catch (e: Exception) {
             Timber.e(e, "Error downloading local file")
             withContext(Dispatchers.Main) {

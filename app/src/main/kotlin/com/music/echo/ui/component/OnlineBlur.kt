@@ -25,7 +25,7 @@ fun OnlineBlur(
         if (thumbnailUrl != null) {
             AsyncImage(
                 model = thumbnailUrl,
-                contentDescription = null,
+                contentDescription = "Album Art",
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
                     .fillMaxSize()

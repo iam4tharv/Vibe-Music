@@ -101,6 +101,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.music.echo.extensions.bounceClick
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
@@ -147,6 +148,7 @@ import androidx.media3.exoplayer.offline.DownloadService
 import androidx.navigation.NavController
 import androidx.palette.graphics.Palette
 import coil3.compose.AsyncImage
+import com.music.echo.ui.component.shimmer.ShimmeringAsyncImage
 import coil3.imageLoader
 import coil3.request.ImageRequest
 import coil3.request.allowHardware
@@ -426,7 +428,8 @@ fun BottomSheetPlayer(
             playerConnection.service.castConnectionHandler
         } catch (e: Exception) {
             null
-        }
+        
+}
     }
     val isCasting by castHandler?.isCasting?.collectAsState() ?: remember { mutableStateOf(false) }
     val castPosition by castHandler?.castPosition?.collectAsState() ?: remember { mutableLongStateOf(0L) }
@@ -752,8 +755,7 @@ fun BottomSheetPlayer(
             onDismissRequest = { showSleepTimerDialog = false },
             icon = {
                 Icon(
-                    painter = painterResource(R.drawable.bedtime),
-                    contentDescription = null
+                    painter = painterResource(R.drawable.bedtime), contentDescription = "Sleep Timer"
                 )
             },
             title = { Text(stringResource(R.string.sleep_timer)) },
@@ -790,6 +792,7 @@ fun BottomSheetPlayer(
                         onValueChange = { sleepTimerValue = it },
                         valueRange = 5f..120f,
                         steps = (120 - 5) / 5 - 1,
+                        enabled = !waitEndTrack
                     )
 
                     Row(
@@ -918,20 +921,20 @@ fun BottomSheetPlayer(
                         AnimatedContent(
                             targetState = backgroundThumbnailUrl,
                             transitionSpec = {
-                                fadeIn(tween(800)).togetherWith(fadeOut(tween(800)))
+                                fadeIn(spring(dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy, stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow)).togetherWith(fadeOut(spring(dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy, stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow)))
                             },
                             label = "blurBackground"
                         ) { thumbnailUrl ->
                             if (thumbnailUrl != null) {
                                 Box(modifier = Modifier.alpha(backgroundAlpha)) {
-                                    AsyncImage(
+                                    ShimmeringAsyncImage(
                                         model = ImageRequest.Builder(context)
                                             .data(thumbnailUrl)
                                             .size(100, 100)
                                             .allowHardware(false)
                                             .crossfade(800)
                                             .build(),
-                                        contentDescription = null,
+                                        contentDescription = "Album Art",
                                         contentScale = ContentScale.Crop,
                                         modifier = Modifier
                                             .fillMaxSize()
@@ -950,7 +953,7 @@ fun BottomSheetPlayer(
                         AnimatedContent(
                             targetState = gradientColors,
                             transitionSpec = {
-                                fadeIn(tween(800)).togetherWith(fadeOut(tween(800)))
+                                fadeIn(spring(dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy, stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow)).togetherWith(fadeOut(spring(dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy, stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow)))
                             },
                             label = "gradientBackground"
                         ) { colors ->
@@ -982,7 +985,7 @@ fun BottomSheetPlayer(
                         AnimatedContent(
                             targetState = gradientColors,
                             transitionSpec = {
-                                fadeIn(tween(1200)) togetherWith fadeOut(tween(1200))
+                                fadeIn(spring(dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy, stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow)) togetherWith fadeOut(spring(dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy, stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow))
                             },
                             label = "GlowAnimatedContent"
                         ) { colors ->
@@ -1138,7 +1141,7 @@ fun BottomSheetPlayer(
                         AnimatedContent(
                             targetState = backgroundThumbnailUrl,
                             transitionSpec = {
-                                fadeIn(tween(1200)).togetherWith(fadeOut(tween(1200)))
+                                fadeIn(spring(dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy, stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow)).togetherWith(fadeOut(spring(dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy, stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow)))
                             },
                             label = "appleMusicBackground"
                         ) { thumbnailUrl ->
@@ -1149,14 +1152,14 @@ fun BottomSheetPlayer(
                                         .alpha(backgroundAlpha)
                                 ) {
                                     
-                                    AsyncImage(
+                                    ShimmeringAsyncImage(
                                         model = ImageRequest.Builder(context)
                                             .data(thumbnailUrl)
                                             .size(128, 128) 
                                             .allowHardware(false)
                                             .crossfade(800)
                                             .build(),
-                                        contentDescription = null,
+                                        contentDescription = "Album Art",
                                         contentScale = ContentScale.Crop,
                                         modifier = Modifier
                                             .fillMaxSize()
@@ -1167,7 +1170,7 @@ fun BottomSheetPlayer(
                                     
                                     val clearArtworkAlpha by animateFloatAsState(
                                         targetValue = if (showInlineLyrics) 0f else 1f,
-                                        animationSpec = tween(500),
+                                        animationSpec = spring(dampingRatio = 0.8f, stiffness = 300f),
                                         label = "clearArtworkAlpha"
                                     )
                                     
@@ -1193,12 +1196,12 @@ fun BottomSheetPlayer(
                                                 )
                                             }
                                     ) {
-                                        AsyncImage(
+                                        ShimmeringAsyncImage(
                                             model = ImageRequest.Builder(context)
                                                 .data(thumbnailUrl)
                                                 .size(CoilSize.ORIGINAL)
                                                 .build(),
-                                            contentDescription = null,
+                                            contentDescription = "Album Art",
                                             contentScale = ContentScale.Crop,
                                             modifier = Modifier.fillMaxSize()
                                         )
@@ -1233,7 +1236,7 @@ fun BottomSheetPlayer(
                         AnimatedContent(
                             targetState = backgroundThumbnailUrl,
                             transitionSpec = {
-                                fadeIn(tween(1500)).togetherWith(fadeOut(tween(1500)))
+                                fadeIn(spring(dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy, stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow)).togetherWith(fadeOut(spring(dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy, stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow)))
                             },
                             label = "liquidGlassBackground"
                         ) { thumbnailUrl ->
@@ -1244,14 +1247,14 @@ fun BottomSheetPlayer(
                                         .alpha(backgroundAlpha)
                                 ) {
                                     // Deep blurred background for glassmorphism
-                                    AsyncImage(
+                                    ShimmeringAsyncImage(
                                         model = ImageRequest.Builder(context)
                                             .data(thumbnailUrl)
                                             .size(200, 200)
                                             .allowHardware(false)
                                             .crossfade(800)
                                             .build(),
-                                        contentDescription = null,
+                                        contentDescription = "Album Art",
                                         contentScale = ContentScale.Crop,
                                         modifier = Modifier
                                             .fillMaxSize()
@@ -1324,7 +1327,7 @@ fun BottomSheetPlayer(
                         AnimatedContent(
                             targetState = backgroundThumbnailUrl,
                             transitionSpec = {
-                                fadeIn(tween(1500)).togetherWith(fadeOut(tween(1500)))
+                                fadeIn(spring(dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy, stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow)).togetherWith(fadeOut(spring(dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy, stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow)))
                             },
                             label = "liveMeshBackground"
                         ) { thumbnailUrl ->
@@ -1347,37 +1350,37 @@ fun BottomSheetPlayer(
                                     val colorFilter = ColorFilter.colorMatrix(matrix)
 
                                     
-                                    AsyncImage(
+                                    ShimmeringAsyncImage(
                                         model = ImageRequest.Builder(context)
                                             .data(thumbnailUrl)
                                             .size(128, 128) 
                                             .allowHardware(false)
                                             .crossfade(800)
                                             .build(),
-                                        contentDescription = null,
+                                        contentDescription = "Album Art",
                                         contentScale = ContentScale.Crop,
                                         colorFilter = colorFilter,
                                         modifier = Modifier
                                             .fillMaxSize()
-                                            .blur(40.dp)
+                                            .blur(16.dp)
                                             .graphicsLayer { rotationZ = anchorRotation }
                                     )
 
                                     
-                                    AsyncImage(
+                                    ShimmeringAsyncImage(
                                         model = ImageRequest.Builder(context)
                                             .data(thumbnailUrl)
                                             .size(128, 128) 
                                             .allowHardware(false)
                                             .crossfade(800)
                                             .build(),
-                                        contentDescription = null,
+                                        contentDescription = "Album Art",
                                         contentScale = ContentScale.Crop,
                                         colorFilter = colorFilter,
                                         alignment = Alignment.TopStart,
                                         modifier = Modifier
                                             .fillMaxSize()
-                                            .blur(50.dp)
+                                            .blur(20.dp)
                                             .graphicsLayer { 
                                                 rotationZ = fastRotation
                                                 alpha = 0.6f
@@ -1385,20 +1388,20 @@ fun BottomSheetPlayer(
                                     )
 
                                     
-                                    AsyncImage(
+                                    ShimmeringAsyncImage(
                                         model = ImageRequest.Builder(context)
                                             .data(thumbnailUrl)
                                             .size(128, 128) 
                                             .allowHardware(false)
                                             .crossfade(800)
                                             .build(),
-                                        contentDescription = null,
+                                        contentDescription = "Album Art",
                                         contentScale = ContentScale.Crop,
                                         colorFilter = colorFilter,
                                         alignment = Alignment.BottomEnd,
                                         modifier = Modifier
                                             .fillMaxSize()
-                                            .blur(50.dp)
+                                            .blur(20.dp)
                                             .graphicsLayer { 
                                                 rotationZ = slowRotation
                                                 alpha = 0.5f
@@ -1448,7 +1451,7 @@ fun BottomSheetPlayer(
         val controlsContent: @Composable ColumnScope.(MediaMetadata) -> Unit = { mediaMetadata ->
             val playPauseRoundness by animateDpAsState(
                 targetValue = if (isPlaying) 24.dp else 36.dp,
-                animationSpec = tween(durationMillis = 90, easing = LinearEasing),
+                animationSpec = spring(dampingRatio = 0.6f, stiffness = 500f),
                 label = "playPauseRoundness",
             )
 
@@ -1475,8 +1478,7 @@ fun BottomSheetPlayer(
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Icon(
-                                        painter = painterResource(R.drawable.music_note),
-                                        contentDescription = null,
+                                        painter = painterResource(R.drawable.music_note), contentDescription = "Music Note",
                                         modifier = Modifier
                                             .size(32.dp),
                                         tint = textButtonColor.copy(alpha = 0.7f)
@@ -1488,13 +1490,13 @@ fun BottomSheetPlayer(
                                     modifier = Modifier
                                         .size(56.dp)
                                         .clip(RoundedCornerShape(ThumbnailCornerRadius))
-                                        .clickable(enabled = isFullScreen && enableLyricsThumbnailPlayPause) {
+                                        .bounceClick().clickable(enabled = isFullScreen && enableLyricsThumbnailPlayPause) {
                                             playerConnection.togglePlayPause()
                                         }
                                 ) {
-                                    AsyncImage(
+                                    ShimmeringAsyncImage(
                                         model = mediaMetadata.thumbnailUrl,
-                                        contentDescription = null,
+                                        contentDescription = "Album Art",
                                         contentScale = if (cropAlbumArt) ContentScale.Crop else ContentScale.Fit,
                                         modifier = Modifier.fillMaxSize()
                                     )
@@ -1516,7 +1518,7 @@ fun BottomSheetPlayer(
                                                     if (playbackState == Player.STATE_ENDED) R.drawable.replay
                                                     else R.drawable.play
                                                 ),
-                                                contentDescription = null,
+                                                contentDescription = "Play",
                                                 tint = Color.White,
                                                 modifier = Modifier.size(24.dp)
                                             )
@@ -1554,6 +1556,7 @@ fun BottomSheetPlayer(
                             modifier =
                             Modifier
                                 .basicMarquee(iterations = 1, initialDelayMillis = 3000, velocity = 30.dp)
+                                .bounceClick()
                                 .combinedClickable(
                                     enabled = true,
                                     indication = null,
@@ -1623,6 +1626,7 @@ fun BottomSheetPlayer(
                                                 }
                                             }
                                         }
+                                        .bounceClick()
                                         .combinedClickable(
                                             enabled = true,
                                             indication = null,
@@ -1698,7 +1702,7 @@ fun BottomSheetPlayer(
                                 ) {
                                     Icon(
                                         painter = painterResource(R.drawable.fullscreen),
-                                        contentDescription = null,
+                                        contentDescription = "Icon",
                                         modifier = Modifier.size(24.dp)
                                     )
                                 }
@@ -1746,7 +1750,7 @@ fun BottomSheetPlayer(
                                         Download.STATE_COMPLETED -> {
                                             Icon(
                                                 painter = painterResource(R.drawable.offline),
-                                                contentDescription = null,
+                                                contentDescription = "Icon",
                                                 modifier = Modifier.size(24.dp)
                                             )
                                         }
@@ -1757,8 +1761,7 @@ fun BottomSheetPlayer(
                                         }
                                         else -> {
                                             Icon(
-                                                painter = painterResource(R.drawable.download),
-                                                contentDescription = null,
+                                                painter = painterResource(R.drawable.download), contentDescription = "Download",
                                                 modifier = Modifier.size(24.dp)
                                             )
                                         }
@@ -1797,7 +1800,7 @@ fun BottomSheetPlayer(
                                 ) {
                                     Icon(
                                         painter = painterResource(R.drawable.more_horiz),
-                                        contentDescription = null,
+                                        contentDescription = "Icon",
                                         modifier = Modifier.size(24.dp)
                                     )
                                 }
@@ -1817,7 +1820,7 @@ fun BottomSheetPlayer(
                                                 R.drawable.favorite
                                             else R.drawable.favorite_border
                                         ),
-                                        contentDescription = null,
+                                        contentDescription = "Icon",
                                         modifier = Modifier.size(24.dp)
                                     )
                                 }
@@ -1836,7 +1839,7 @@ fun BottomSheetPlayer(
                             ) {
                                 Icon(
                                     painter = painterResource(R.drawable.fullscreen),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                     tint = textButtonColor,
                                     modifier = Modifier
                                         .align(Alignment.Center)
@@ -1868,8 +1871,7 @@ fun BottomSheetPlayer(
                                     },
                             ) {
                                 Icon(
-                                    painter = painterResource(R.drawable.more_vert),
-                                    contentDescription = null,
+                                    painter = painterResource(R.drawable.more_vert), contentDescription = "Options",
                                     tint = textButtonColor,
                                     modifier = Modifier
                                         .align(Alignment.Center)
@@ -1909,7 +1911,7 @@ fun BottomSheetPlayer(
                             ) {
                                 Icon(
                                     painter = painterResource(R.drawable.more_horiz),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                     tint = textButtonColor,
                                     modifier = Modifier
                                         .align(Alignment.Center)
@@ -1930,7 +1932,7 @@ fun BottomSheetPlayer(
                                             R.drawable.favorite
                                         else R.drawable.favorite_border
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                     tint = textButtonColor,
                                     modifier = Modifier
                                         .align(Alignment.Center)
@@ -2164,7 +2166,7 @@ fun BottomSheetPlayer(
                             AnimatedContent(
                                 targetState = codecBoxState,
                                 transitionSpec = {
-                                    fadeIn(animationSpec = tween(300)) togetherWith fadeOut(animationSpec = tween(300))
+                                    fadeIn(animationSpec = spring(stiffness = 300f)) togetherWith fadeOut(animationSpec = spring(stiffness = 300f))
                                 },
                                 label = "QualityTimerSwitcher"
                             ) { state ->
@@ -2176,7 +2178,7 @@ fun BottomSheetPlayer(
                                         ) {
                                             Icon(
                                                 painter = painterResource(R.drawable.sleep_timer),
-                                                contentDescription = null,
+                                                contentDescription = "Icon",
                                                 tint = TextBackgroundColor.copy(alpha = 0.8f),
                                                 modifier = Modifier.size(12.dp)
                                             )
@@ -2276,7 +2278,7 @@ fun BottomSheetPlayer(
                                         ) {
                                             Icon(
                                                 painter = painterResource(R.drawable.graphic_eq),
-                                                contentDescription = null,
+                                                contentDescription = "Icon",
                                                 tint = TextBackgroundColor.copy(alpha = beatAlpha),
                                                 modifier = Modifier.size(12.dp)
                                             )
@@ -2406,8 +2408,7 @@ fun BottomSheetPlayer(
                                     .graphicsLayer { scaleX = backButtonScale; scaleY = backButtonScale }
                             ) {
                                 Icon(
-                                    painter = painterResource(R.drawable.skip_previous),
-                                    contentDescription = null,
+                                    painter = painterResource(R.drawable.skip_previous), contentDescription = "Skip Previous",
                                     modifier = Modifier.size(32.dp)
                                 )
                             }
@@ -2416,7 +2417,7 @@ fun BottomSheetPlayer(
 
                             val cookieIndent by animateFloatAsState(
                                 targetValue = if (effectiveIsPlaying) 0.08f else 0f,
-                                animationSpec = tween(durationMillis = 300, easing = LinearEasing),
+                                animationSpec = spring(dampingRatio = 0.78f, stiffness = 400f),
                                 label = "cookieIndent",
                             )
 
@@ -2464,21 +2465,32 @@ fun BottomSheetPlayer(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.Center
                                 ) {
-                                    Icon(
-                                        painter = painterResource(
-                                            if (isListenTogetherGuest) {
-                                                if (isMuted) R.drawable.volume_off else R.drawable.volume_up
-                                            } else {
-                                                if (effectiveIsPlaying) R.drawable.pause else R.drawable.play
-                                            }
-                                        ),
-                                        contentDescription = if (isListenTogetherGuest) {
-                                            if (isMuted) stringResource(R.string.unmute) else stringResource(R.string.mute)
-                                        } else {
-                                            if (effectiveIsPlaying) stringResource(R.string.pause) else stringResource(R.string.play)
+                                    androidx.compose.animation.AnimatedContent(
+                                        targetState = effectiveIsPlaying to isMuted,
+                                        transitionSpec = {
+                                            (androidx.compose.animation.scaleIn(initialScale = 0.72f, animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.75f, stiffness = 450f)) + 
+                                             androidx.compose.animation.fadeIn(animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.9f, stiffness = 450f))) togetherWith 
+                                            (androidx.compose.animation.scaleOut(targetScale = 0.72f, animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.9f, stiffness = 450f)) + 
+                                             androidx.compose.animation.fadeOut(animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.9f, stiffness = 450f)))
                                         },
-                                        modifier = Modifier.size(36.dp)
-                                    )
+                                        label = "playPauseAnimation"
+                                    ) { (isPlayingState, isMutedState) ->
+                                        Icon(
+                                            painter = painterResource(
+                                                if (isListenTogetherGuest) {
+                                                    if (isMutedState) R.drawable.volume_off else R.drawable.volume_up
+                                                } else {
+                                                    if (isPlayingState) R.drawable.pause else R.drawable.play
+                                                }
+                                            ),
+                                            contentDescription = if (isListenTogetherGuest) {
+                                                if (isMutedState) stringResource(R.string.unmute) else stringResource(R.string.mute)
+                                            } else {
+                                                if (isPlayingState) stringResource(R.string.pause) else stringResource(R.string.play)
+                                            },
+                                            modifier = Modifier.size(36.dp)
+                                        )
+                                    }
                                 }
                             }
 
@@ -2498,8 +2510,7 @@ fun BottomSheetPlayer(
                                     .graphicsLayer { scaleX = nextButtonScale; scaleY = nextButtonScale }
                             ) {
                                 Icon(
-                                    painter = painterResource(R.drawable.skip_next),
-                                    contentDescription = null,
+                                    painter = painterResource(R.drawable.skip_next), contentDescription = "Skip Next",
                                     modifier = Modifier.size(32.dp)
                                 )
                             }
@@ -2575,28 +2586,35 @@ fun BottomSheetPlayer(
                                         }
                                     },
                             ) {
-                                Image(
-                                    painter =
-                                    painterResource(
-                                        if (isListenTogetherGuest) {
-                                            if (isMuted) R.drawable.volume_off else R.drawable.volume_up
-                                        } else if (playbackState ==
-                                            STATE_ENDED
-                                        ) {
-                                            R.drawable.replay
-                                        } else if (effectiveIsPlaying) {
-                                            R.drawable.pause_applemusic
-                                        } else {
-                                            R.drawable.play_applemusic
-                                        },
-                                    ),
-                                    contentDescription = null,
-                                    colorFilter = ColorFilter.tint(TextBackgroundColor),
-                                    modifier =
-                                    Modifier
-                                        .align(Alignment.Center)
-                                        .size(72.dp),
-                                )
+                                androidx.compose.animation.AnimatedContent(
+                                    targetState = Triple(effectiveIsPlaying, isMuted, playbackState == STATE_ENDED),
+                                    transitionSpec = {
+                                        (androidx.compose.animation.scaleIn(initialScale = 0.72f, animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.75f, stiffness = 450f)) + 
+                                         androidx.compose.animation.fadeIn(animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.9f, stiffness = 450f))) togetherWith 
+                                        (androidx.compose.animation.scaleOut(targetScale = 0.72f, animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.9f, stiffness = 450f)) + 
+                                         androidx.compose.animation.fadeOut(animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.9f, stiffness = 450f)))
+                                    },
+                                    label = "playPauseAnimationAppleMusic",
+                                    modifier = Modifier.align(Alignment.Center)
+                                ) { (isPlayingState, isMutedState, isEndedState) ->
+                                    Image(
+                                        painter =
+                                        painterResource(
+                                            if (isListenTogetherGuest) {
+                                                if (isMutedState) R.drawable.volume_off else R.drawable.volume_up
+                                            } else if (isEndedState) {
+                                                R.drawable.replay
+                                            } else if (isPlayingState) {
+                                                R.drawable.pause_applemusic
+                                            } else {
+                                                R.drawable.play_applemusic
+                                            },
+                                        ),
+                                        contentDescription = "Play",
+                                        colorFilter = ColorFilter.tint(TextBackgroundColor),
+                                        modifier = Modifier.size(72.dp),
+                                    )
+                                }
                             }
 
                             Spacer(Modifier.width(8.dp))
@@ -2656,7 +2674,7 @@ fun BottomSheetPlayer(
                                 
                                 val animatedSystemVolume by animateFloatAsState(
                                     targetValue = systemVolume,
-                                    animationSpec = tween(150, easing = LinearOutSlowInEasing),
+                                    animationSpec = spring(dampingRatio = 0.7f, stiffness = 600f),
                                     label = "animatedSystemVolume"
                                 )
                                 
@@ -2684,7 +2702,7 @@ fun BottomSheetPlayer(
 
                                 Icon(
                                     painter = painterResource(R.drawable.volume_mute),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                     tint = textButtonColor,
                                     modifier = Modifier
                                         .size(20.dp)
@@ -2725,8 +2743,7 @@ fun BottomSheetPlayer(
                                 Spacer(Modifier.width(12.dp))
 
                                 Icon(
-                                    painter = painterResource(R.drawable.volume_up),
-                                    contentDescription = null,
+                                    painter = painterResource(R.drawable.volume_up), contentDescription = "Volume Up",
                                     tint = textButtonColor,
                                     modifier = Modifier
                                         .size(20.dp)
@@ -2746,8 +2763,8 @@ fun BottomSheetPlayer(
 
                         AnimatedVisibility(
                             visible = !useNewPlayerDesign && bluetoothDeviceName != null,
-                            enter = fadeIn(tween(400)) + expandVertically(tween(400)),
-                            exit = fadeOut(tween(400)) + shrinkVertically(tween(400)),
+                            enter = fadeIn(spring(stiffness = 300f)) + expandVertically(spring(stiffness = 300f)),
+                            exit = fadeOut(spring(stiffness = 300f)) + shrinkVertically(spring(stiffness = 300f)),
                             label = "BluetoothInfoVisibility"
                         ) {
                             val nameToShow = bluetoothDeviceName ?: lastNonNullName
@@ -2766,7 +2783,7 @@ fun BottomSheetPlayer(
                                                 else -> R.drawable.apple_headset
                                             }
                                         ),
-                                        contentDescription = null,
+                                        contentDescription = "Icon",
                                         tint = textButtonColor.copy(alpha = 0.7f),
                                         modifier = Modifier.size(
                                             when {
@@ -2858,6 +2875,7 @@ fun BottomSheetPlayer(
                         }
 
                         Spacer(Modifier.weight(1f))
+                        com.music.echo.ui.component.AdMobBanner(adUnitId = "ca-app-pub-9242237070638716/4688635689")
                     }
                 }
             }
@@ -2913,6 +2931,8 @@ fun BottomSheetPlayer(
                         controlsContent(it)
                     }
 
+                    Spacer(Modifier.height(8.dp))
+                    com.music.echo.ui.component.AdMobBanner(adUnitId = "ca-app-pub-9242237070638716/4688635689")
                     Spacer(Modifier.height(if (useNewPlayerDesign) 30.dp else 8.dp))
                 }
             }
@@ -2979,8 +2999,9 @@ fun InlineLyricsView(
                         upsert(LyricsEntity(mediaMetadata.id, fetchedLyricsWithProvider.lyrics, fetchedLyricsWithProvider.provider))
                     }
                 } catch (e: Exception) {
-                    
-                }
+    com.music.echo.utils.ErrorNotifier.notifyError(e.message ?: "An unexpected error occurred")
+    e.printStackTrace()
+}
             }
         }
     }
@@ -3060,8 +3081,7 @@ fun MoreActionsButton(
             }
     ) {
         Image(
-            painter = painterResource(R.drawable.more_vert),
-            contentDescription = null,
+            painter = painterResource(R.drawable.more_vert), contentDescription = "Options",
             colorFilter = ColorFilter.tint(iconButtonColor)
         )
     }
@@ -3105,7 +3125,7 @@ private fun PlayerMoreMenuButton(
     ) {
         Image(
             painter = painterResource(R.drawable.more_horiz),
-            contentDescription = null,
+            contentDescription = "Icon",
             colorFilter = ColorFilter.tint(iconButtonColor),
         )
     }
@@ -3195,7 +3215,7 @@ private fun BackgroundVideoView(
 
     val alpha by animateFloatAsState(
         targetValue = if (isVideoReady) 1f else 0f,
-        animationSpec = tween(800),
+        animationSpec = spring(dampingRatio = 0.8f, stiffness = 300f),
         label = "videoAlpha"
     )
 

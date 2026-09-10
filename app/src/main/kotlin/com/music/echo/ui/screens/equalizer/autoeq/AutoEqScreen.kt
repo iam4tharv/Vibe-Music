@@ -75,7 +75,7 @@ fun AutoEqScreen(
                     .fillMaxWidth()
                     .padding(16.dp),
                 placeholder = { Text("Search headphone model...") },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Icon") },
                 trailingIcon = {
                     if (state.searchQuery.isNotEmpty()) {
                         IconButton(onClick = { viewModel.search("") }) {

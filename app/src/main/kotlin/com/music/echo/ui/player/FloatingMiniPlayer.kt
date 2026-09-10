@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
+import com.music.echo.ui.component.shimmer.ShimmeringAsyncImage
 import com.music.echo.LocalListenTogetherManager
 import com.music.echo.LocalPlayerConnection
 import com.music.echo.R
@@ -95,7 +96,7 @@ fun FloatingMiniPlayer(
     var dragStartTime by remember { mutableLongStateOf(0L) }
     var totalDragDistance by remember { mutableFloatStateOf(0f) }
     val animationSpec = remember {
-        spring<Float>(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow)
+        spring<Float>(dampingRatio = 0.8f, stiffness = 350f)
     }
     val autoSwipeThreshold = remember(swipeSensitivity) {
         (600 / (1f + exp(-(-11.44748 * swipeSensitivity + 9.04945)))).roundToInt()
@@ -109,8 +110,8 @@ fun FloatingMiniPlayer(
     val pressInteractionSource = remember { MutableInteractionSource() }
     val isPressed by pressInteractionSource.collectIsPressedAsState()
     val pressScale by animateFloatAsState(
-        targetValue = if (isPressed) 1.04f else 1f,
-        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        targetValue = if (isPressed) 0.96f else 1f,
+        animationSpec = spring(dampingRatio = 0.7f, stiffness = 400f),
         label = "accessoryPressScale",
     )
 
@@ -206,9 +207,9 @@ fun FloatingMiniPlayer(
                     vertical = if (isInline) 4.dp else 8.dp,
                 ),
         ) {
-            AsyncImage(
+            ShimmeringAsyncImage(
                 model = mediaMetadata?.thumbnailUrl,
-                contentDescription = null,
+                contentDescription = "Album Art",
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
                     .size(artSize)
@@ -251,7 +252,7 @@ fun FloatingMiniPlayer(
             ) {
                 Icon(
                     painter = painterResource(if (isPlaying) R.drawable.pause else R.drawable.play),
-                    contentDescription = null,
+                    contentDescription = "Play",
                     tint = contentColor,
                 )
             }
@@ -262,8 +263,7 @@ fun FloatingMiniPlayer(
                     modifier = Modifier.size(controlSize),
                 ) {
                     Icon(
-                        painter = painterResource(R.drawable.skip_next),
-                        contentDescription = null,
+                        painter = painterResource(R.drawable.skip_next), contentDescription = "Skip Next",
                         tint = contentColor,
                     )
                 }

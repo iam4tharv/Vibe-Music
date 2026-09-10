@@ -45,6 +45,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
+import com.music.echo.extensions.bounceClick
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -135,7 +136,7 @@ fun OnlineSearchResult(
         try {
             URLDecoder.decode(encodedQuery, "UTF-8")
         } catch (e: Exception) {
-            encodedQuery
+            encodedQuery.toString()
         }
     }
 
@@ -249,6 +250,7 @@ fun OnlineSearchResult(
             },
             modifier =
             Modifier
+                .bounceClick()
                 .combinedClickable(
                     onClick = {
                         when (item) {

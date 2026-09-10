@@ -7,6 +7,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.DocumentsContract
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
@@ -48,6 +49,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularWavyProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -64,18 +66,23 @@ import androidx.compose.material3.SheetState
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.music.echo.extensions.bounceClick
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -108,6 +115,7 @@ import com.music.echo.playback.queues.ListQueue
 import com.music.echo.ui.component.LocalMenuState
 import com.music.echo.ui.component.SongListItem
 import com.music.echo.ui.component.SortHeader
+import com.music.echo.ui.menu.SelectionSongMenu
 import com.music.echo.ui.menu.SongMenu
 import com.music.echo.utils.rememberPreference
 import com.music.echo.viewmodels.LocalSongsScanState
@@ -141,8 +149,29 @@ fun LocalSongScreen(
     val scanSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showScanSheet by rememberSaveable { mutableStateOf(false) }
     var isSearchActive by rememberSaveable { mutableStateOf(false) }
-    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+    var inSelectMode by rememberSaveable { mutableStateOf(false) }
+    val selection = rememberSaveable(
+        saver = listSaver<MutableList<String>, String>(
+            save = { it.toList() },
+            restore = { it.toMutableStateList() },
+        ),
+    ) { mutableStateListOf() }
+    val onExitSelectionMode = {
+        inSelectMode = false
+        selection.clear()
+    }
+
     var query by rememberSaveable { mutableStateOf("") }
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+
+    if (isSearchActive) {
+        BackHandler {
+            isSearchActive = false
+            query = ""
+        }
+    } else if (inSelectMode) {
+        BackHandler(onBack = onExitSelectionMode)
+    }
     val (sortDescending, onSortDescendingChange) = rememberPreference(LocalSongsSortDescendingKey, true)
     val (sortTypeName, onSortTypeNameChange) = rememberPreference(LocalSongsSortTypeKey, LocalSongSortType.MODIFIED.name)
     val (minimumDurationSeconds, onMinimumDurationSecondsChange) = rememberPreference(
@@ -271,99 +300,161 @@ fun LocalSongScreen(
         containerColor = MaterialTheme.colorScheme.surface,
         topBar = {
             AnimatedContent(
-                targetState = isSearchActive,
+                targetState = when {
+                    inSelectMode -> 2
+                    isSearchActive -> 1
+                    else -> 0
+                },
                 transitionSpec = {
                     fadeIn(spring(stiffness = Spring.StiffnessMediumLow)) togetherWith
                         fadeOut(spring(stiffness = Spring.StiffnessMediumLow))
                 },
                 label = "localSongTopBar",
-            ) { searching ->
-                if (searching) {
-                    SearchBar(
-                        inputField = {
-                            SearchBarDefaults.InputField(
-                                query = query,
-                                onQueryChange = { query = it },
-                                onSearch = { isSearchActive = false },
-                                expanded = false,
-                                onExpandedChange = {},
-                                placeholder = {
-                                    Text(text = stringResource(R.string.search_library))
-                                },
-                                leadingIcon = {
-                                    IconButton(
-                                        onClick = {
-                                            query = ""
-                                            isSearchActive = false
-                                        },
-                                    ) {
-                                        Icon(
-                                            painter = painterResource(R.drawable.arrow_back),
-                                            contentDescription = stringResource(R.string.back_button_desc),
-                                        )
-                                    }
-                                },
-                                trailingIcon = if (query.isNotEmpty()) {
-                                    {
-                                        IconButton(onClick = { query = "" }) {
-                                            Icon(
-                                                painter = painterResource(R.drawable.close),
-                                                contentDescription = stringResource(R.string.close),
+            ) { topBarState ->
+                when (topBarState) {
+                    2 -> {
+                        TopAppBar(
+                            title = {
+                                Text(
+                                    text = pluralStringResource(R.plurals.n_selected, selection.size, selection.size),
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            },
+                            navigationIcon = {
+                                IconButton(onClick = onExitSelectionMode) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.close),
+                                        contentDescription = stringResource(R.string.close),
+                                    )
+                                }
+                            },
+                            actions = {
+                                Checkbox(
+                                    checked = selection.size == visibleSongs.size && selection.isNotEmpty(),
+                                    onCheckedChange = {
+                                        if (selection.size == visibleSongs.size) {
+                                            selection.clear()
+                                        } else {
+                                            selection.clear()
+                                            selection.addAll(visibleSongs.map { it.id })
+                                        }
+                                    },
+                                )
+                                IconButton(
+                                    enabled = selection.isNotEmpty(),
+                                    onClick = {
+                                        menuState.show {
+                                            SelectionSongMenu(
+                                                songSelection = songs.filter { it.id in selection },
+                                                onDismiss = menuState::dismiss,
+                                                clearAction = onExitSelectionMode,
                                             )
                                         }
-                                    }
-                                } else {
-                                    null
-                                },
-                            )
-                        },
-                        expanded = false,
-                        onExpandedChange = {},
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp)
-                            .padding(top = 8.dp, bottom = 4.dp),
-                        windowInsets = if (isEmbedded) WindowInsets(0.dp) else SearchBarDefaults.windowInsets,
-                    ) {}
-                } else {
-                    LargeTopAppBar(
-                        title = {
-                            Text(
-                                text = stringResource(R.string.local_history),
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        },
-                        navigationIcon = {
-                            IconButton(onClick = onBack) {
-                                Icon(
-                                    painter = painterResource(R.drawable.arrow_back),
-                                    contentDescription = null,
+                                    },
+                                ) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.more_vert),
+                                        contentDescription = "Options",
+                                    )
+                                }
+                            },
+                            colors = TopAppBarDefaults.topAppBarColors(
+                                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.88f),
+                                scrolledContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
+                            ),
+                            windowInsets = if (isEmbedded) WindowInsets(0.dp) else TopAppBarDefaults.windowInsets,
+                        )
+                    }
+                    1 -> {
+                        SearchBar(
+                            inputField = {
+                                SearchBarDefaults.InputField(
+                                    query = query,
+                                    onQueryChange = { query = it },
+                                    onSearch = { isSearchActive = false },
+                                    expanded = false,
+                                    onExpandedChange = {},
+                                    placeholder = {
+                                        Text(text = stringResource(R.string.search_library))
+                                    },
+                                    leadingIcon = {
+                                        IconButton(
+                                            onClick = {
+                                                query = ""
+                                                isSearchActive = false
+                                            },
+                                        ) {
+                                            Icon(
+                                                painter = painterResource(R.drawable.arrow_back),
+                                                contentDescription = stringResource(R.string.back_button_desc),
+                                            )
+                                        }
+                                    },
+                                    trailingIcon = if (query.isNotEmpty()) {
+                                        {
+                                            IconButton(onClick = { query = "" }) {
+                                                Icon(
+                                                    painter = painterResource(R.drawable.close),
+                                                    contentDescription = stringResource(R.string.close),
+                                                )
+                                            }
+                                        }
+                                    } else {
+                                        null
+                                    },
                                 )
-                            }
-                        },
-                        actions = {
-                            IconButton(onClick = { isSearchActive = true }) {
-                                Icon(
-                                    painter = painterResource(R.drawable.search),
-                                    contentDescription = stringResource(R.string.search),
+                            },
+                            expanded = false,
+                            onExpandedChange = {},
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp)
+                                .padding(top = 8.dp, bottom = 4.dp),
+                            windowInsets = if (isEmbedded) WindowInsets(0.dp) else SearchBarDefaults.windowInsets,
+                        ) {}
+                    }
+                    else -> {
+                        LargeTopAppBar(
+                            title = {
+                                Text(
+                                    text = stringResource(R.string.local_history),
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
                                 )
-                            }
-                            IconButton(onClick = { showScanSheet = true }) {
-                                Icon(
-                                    painter = painterResource(R.drawable.settings),
-                                    contentDescription = stringResource(R.string.settings),
-                                )
-                            }
-                        },
-                        colors = TopAppBarDefaults.largeTopAppBarColors(
-                            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.88f),
-                            scrolledContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
-                        ),
-                        scrollBehavior = scrollBehavior,
-                        windowInsets = if (isEmbedded) WindowInsets(0.dp) else TopAppBarDefaults.windowInsets,
-                    )
+                            },
+                            navigationIcon = {
+                                IconButton(onClick = onBack) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.arrow_back),
+                                        contentDescription = "Icon",
+                                    )
+                                }
+                            },
+                            actions = {
+                                IconButton(onClick = { isSearchActive = true }) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.search),
+                                        contentDescription = stringResource(R.string.search),
+                                    )
+                                }
+                                IconButton(onClick = { showScanSheet = true }) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.settings),
+                                        contentDescription = stringResource(R.string.settings),
+                                    )
+                                }
+                            },
+                            colors = TopAppBarDefaults.largeTopAppBarColors(
+                                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.88f),
+                                scrolledContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
+                            ),
+                            scrollBehavior = scrollBehavior,
+                            windowInsets = if (isEmbedded) WindowInsets(0.dp) else TopAppBarDefaults.windowInsets,
+                        )
+                    }
                 }
             }
         },
@@ -412,6 +503,16 @@ fun LocalSongScreen(
                     key = { _, item -> item.id },
                     contentType = { _, _ -> CONTENT_TYPE_SONG },
                 ) { index, song ->
+                    val onCheckedChange: (Boolean) -> Unit = { checked ->
+                        if (checked) {
+                            if (!selection.contains(song.id)) {
+                                selection.add(song.id)
+                            }
+                        } else {
+                            selection.remove(song.id)
+                        }
+                    }
+
                     SongListItem(
                         song = song,
                         showInLibraryIcon = false,
@@ -419,28 +520,37 @@ fun LocalSongScreen(
                         isActive = song.id == mediaMetadata?.id,
                         isPlaying = isPlaying,
                         trailingContent = {
-                            IconButton(
-                                onClick = {
-                                    menuState.show {
-                                        SongMenu(
-                                            originalSong = song,
-                                            navController = navController,
-                                            onDismiss = menuState::dismiss,
-                                        )
-                                    }
-                                },
-                            ) {
-                                Icon(
-                                    painter = painterResource(R.drawable.more_vert),
-                                    contentDescription = null,
+                            if (inSelectMode) {
+                                Checkbox(
+                                    checked = song.id in selection,
+                                    onCheckedChange = onCheckedChange,
                                 )
+                            } else {
+                                IconButton(
+                                    onClick = {
+                                        menuState.show {
+                                            SongMenu(
+                                                originalSong = song,
+                                                navController = navController,
+                                                onDismiss = menuState::dismiss,
+                                            )
+                                        }
+                                    },
+                                ) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.more_vert), contentDescription = "Options",
+                                    )
+                                }
                             }
                         },
                         modifier = Modifier
                             .fillMaxWidth()
+                            .bounceClick()
                             .combinedClickable(
                                 onClick = {
-                                    if (song.id == mediaMetadata?.id) {
+                                    if (inSelectMode) {
+                                        onCheckedChange(song.id !in selection)
+                                    } else if (song.id == mediaMetadata?.id) {
                                         playerConnection.player.togglePlayPause()
                                     } else {
                                         playerConnection.playQueue(
@@ -457,13 +567,18 @@ fun LocalSongScreen(
                                     }
                                 },
                                 onLongClick = {
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    menuState.show {
-                                        SongMenu(
-                                            originalSong = song,
-                                            navController = navController,
-                                            onDismiss = menuState::dismiss,
-                                        )
+                                    if (!inSelectMode) {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        inSelectMode = true
+                                        onCheckedChange(true)
+                                    } else {
+                                        menuState.show {
+                                            SongMenu(
+                                                originalSong = song,
+                                                navController = navController,
+                                                onDismiss = menuState::dismiss,
+                                            )
+                                        }
                                     }
                                 },
                             )
@@ -492,7 +607,7 @@ private fun LocalSongBadge(
         ) {
             Icon(
                 painter = painterResource(iconRes),
-                contentDescription = null,
+                contentDescription = "Icon",
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(18.dp),
             )
@@ -564,7 +679,7 @@ private fun LocalSongEmptyState(
         ) {
             Icon(
                 painter = painterResource(if (query.isBlank()) R.drawable.music_note else R.drawable.search),
-                contentDescription = null,
+                contentDescription = "Icon",
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(28.dp),
             )
@@ -695,7 +810,7 @@ private fun LocalSongScanSheet(
                     ) { icon ->
                         Icon(
                             painter = painterResource(icon),
-                            contentDescription = null,
+                            contentDescription = "Icon",
                             tint = heroTint,
                             modifier = Modifier.size(36.dp),
                         )
@@ -785,7 +900,7 @@ private fun LocalSongScanSheet(
                                         painter = painterResource(
                                             if (hasStoragePermission) R.drawable.done else R.drawable.close,
                                         ),
-                                        contentDescription = null,
+                                        contentDescription = "Icon",
                                         tint = if (hasStoragePermission) {
                                             MaterialTheme.colorScheme.onPrimaryContainer
                                         } else {
@@ -960,7 +1075,7 @@ private fun LocalSongScanSheet(
                                 painter = painterResource(
                                     if (hasStoragePermission) R.drawable.sync else R.drawable.security,
                                 ),
-                                contentDescription = null,
+                                contentDescription = "Icon",
                                 modifier = Modifier.size(20.dp),
                             )
                         }
@@ -997,7 +1112,7 @@ private fun LocalSongScanSheet(
                     ) {
                         Icon(
                             painter = painterResource(R.drawable.error),
-                            contentDescription = null,
+                            contentDescription = "Icon",
                             tint = MaterialTheme.colorScheme.onErrorContainer,
                             modifier = Modifier.size(20.dp),
                         )
@@ -1045,7 +1160,7 @@ private fun LocalSongScanSettingCard(
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
                             painter = painterResource(iconRes),
-                            contentDescription = null,
+                            contentDescription = "Icon",
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(22.dp),
                         )
@@ -1079,11 +1194,11 @@ private fun LocalSongScanSettingCard(
                                 modifier = Modifier
                                     .heightIn(min = 48.dp)
                                     .padding(horizontal = 12.dp, vertical = 8.dp)
+                                    .bounceClick()
                                     .combinedClickable(onClick = onActionClick),
                             ) {
                                 Icon(
-                                    painter = painterResource(R.drawable.add),
-                                    contentDescription = null,
+                                    painter = painterResource(R.drawable.add), contentDescription = "Add",
                                     tint = MaterialTheme.colorScheme.onSecondaryContainer,
                                     modifier = Modifier.size(16.dp),
                                 )
@@ -1121,7 +1236,7 @@ private fun LocalSongFolderChip(
         ) {
             Icon(
                 painter = painterResource(R.drawable.snippet_folder),
-                contentDescription = null,
+                contentDescription = "Icon",
                 tint = MaterialTheme.colorScheme.onSecondaryContainer,
                 modifier = Modifier.size(16.dp),
             )
@@ -1139,11 +1254,11 @@ private fun LocalSongFolderChip(
                     contentAlignment = Alignment.Center,
                     modifier = Modifier
                         .size(24.dp)
+                        .bounceClick()
                         .combinedClickable(enabled = enabled, onClick = onRemove),
                 ) {
                     Icon(
-                        painter = painterResource(R.drawable.close),
-                        contentDescription = null,
+                        painter = painterResource(R.drawable.close), contentDescription = "Close",
                         tint = MaterialTheme.colorScheme.onSecondaryContainer,
                         modifier = Modifier.size(14.dp),
                     )
@@ -1175,7 +1290,7 @@ private fun ScanSheetInfoRow(
             Box(contentAlignment = Alignment.Center) {
                 Icon(
                     painter = painterResource(iconRes),
-                    contentDescription = null,
+                    contentDescription = "Icon",
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(22.dp),
                 )

@@ -144,7 +144,8 @@ fun PlayerMenu(
             playerConnection.service.castConnectionHandler
         } catch (e: Exception) {
             null
-        }
+        
+}
     }
     val isCasting by castHandler?.isCasting?.collectAsState() ?: remember { mutableStateOf(false) }
     val castVolume by castHandler?.castVolume?.collectAsState() ?: remember { mutableFloatStateOf(1f) }
@@ -267,8 +268,7 @@ fun PlayerMenu(
                         .padding(bottom = 16.dp)
                 ) {
                     Icon(
-                        painter = painterResource(R.drawable.cast),
-                        contentDescription = null,
+                        painter = painterResource(R.drawable.cast), contentDescription = "Cast",
                         modifier = Modifier.size(24.dp),
                         tint = MaterialTheme.colorScheme.primary
                     )
@@ -304,7 +304,7 @@ fun PlayerMenu(
                             icon = {
                                 Icon(
                                     painter = painterResource(R.drawable.radio),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                     modifier = Modifier.size(32.dp),
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -321,7 +321,7 @@ fun PlayerMenu(
                         icon = {
                             Icon(
                                 painter = painterResource(R.drawable.playlist_add),
-                                contentDescription = null,
+                                contentDescription = "Play",
                                 modifier = Modifier.size(32.dp),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -332,8 +332,7 @@ fun PlayerMenu(
                     NewAction(
                         icon = {
                             Icon(
-                                painter = painterResource(R.drawable.share),
-                                contentDescription = null,
+                                painter = painterResource(R.drawable.share), contentDescription = "Share",
                                 modifier = Modifier.size(32.dp),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -375,7 +374,7 @@ fun PlayerMenu(
                                 icon = {
                                     Icon(
                                         painter = painterResource(R.drawable.artist),
-                                        contentDescription = null,
+                                        contentDescription = "Icon",
                                         modifier = Modifier.size(24.dp)
                                     )
                                 },
@@ -405,7 +404,7 @@ fun PlayerMenu(
                                 icon = {
                                     Icon(
                                         painter = painterResource(R.drawable.album),
-                                        contentDescription = null,
+                                        contentDescription = "Icon",
                                         modifier = Modifier.size(24.dp)
                                     )
                                 },
@@ -435,7 +434,7 @@ fun PlayerMenu(
                                         if (isInLibrary) R.drawable.library_add_check
                                         else R.drawable.library_add
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                     modifier = Modifier.size(24.dp)
                                 )
                             },
@@ -459,7 +458,7 @@ fun PlayerMenu(
                             icon = {
                                 Icon(
                                     painter = painterResource(R.drawable.fullscreen),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                     modifier = Modifier.size(24.dp)
                                 )
                             },
@@ -490,7 +489,7 @@ fun PlayerMenu(
                                 icon = {
                                     Icon(
                                         painter = painterResource(R.drawable.offline),
-                                        contentDescription = null,
+                                        contentDescription = "Icon",
                                         modifier = Modifier.size(24.dp)
                                     )
                                 },
@@ -530,8 +529,7 @@ fun PlayerMenu(
                                 title = { Text(text = stringResource(R.string.action_download)) },
                                 icon = {
                                     Icon(
-                                        painter = painterResource(R.drawable.download),
-                                        contentDescription = null,
+                                        painter = painterResource(R.drawable.download), contentDescription = "Download",
                                         modifier = Modifier.size(24.dp)
                                     )
                                 },
@@ -580,7 +578,7 @@ fun PlayerMenu(
                                 icon = {
                                     Icon(
                                         painter = painterResource(R.drawable.folder_managed),
-                                        contentDescription = null
+                                        contentDescription = "Icon"
                                     )
                                 },
                                 onClick = {}
@@ -591,7 +589,7 @@ fun PlayerMenu(
                                 icon = {
                                     Icon(
                                         painter = painterResource(R.drawable.file_export),
-                                        contentDescription = null,
+                                        contentDescription = "Icon",
                                     )
                                 },
                                 onClick = {
@@ -628,7 +626,7 @@ fun PlayerMenu(
                         icon = {
                             Icon(
                                 painter = painterResource(R.drawable.notification),
-                                contentDescription = null,
+                                contentDescription = "Icon",
                                 modifier = Modifier.size(24.dp)
                             )
                         },
@@ -663,7 +661,7 @@ fun PlayerMenu(
                                 Box {
                                     Icon(
                                         painter = painterResource(R.drawable.group),
-                                        contentDescription = null,
+                                        contentDescription = "Icon",
                                         modifier = Modifier.size(24.dp)
                                     )
                                     if (pendingSuggestions.isNotEmpty()) {
@@ -694,7 +692,7 @@ fun PlayerMenu(
                                 icon = {
                                     Icon(
                                         painter = painterResource(R.drawable.replay),
-                                        contentDescription = null,
+                                        contentDescription = "Play",
                                         modifier = Modifier.size(24.dp)
                                     )
                                 },
@@ -720,8 +718,7 @@ fun PlayerMenu(
                             description = { Text(text = stringResource(R.string.details_desc)) },
                             icon = {
                                 Icon(
-                                    painter = painterResource(R.drawable.info),
-                                    contentDescription = null,
+                                    painter = painterResource(R.drawable.info), contentDescription = "Info",
                                     modifier = Modifier.size(24.dp)
                                 )
                             },
@@ -740,7 +737,7 @@ fun PlayerMenu(
                                 icon = {
                                     Icon(
                                         painter = painterResource(R.drawable.equalizer),
-                                        contentDescription = null,
+                                        contentDescription = "Icon",
                                         modifier = Modifier.size(24.dp)
                                     )
                                 },
@@ -757,7 +754,7 @@ fun PlayerMenu(
                                 icon = {
                                     Icon(
                                         painter = painterResource(R.drawable.tune),
-                                        contentDescription = null,
+                                        contentDescription = "Icon",
                                         modifier = Modifier.size(24.dp)
                                     )
                                 },
@@ -859,7 +856,7 @@ fun <T> ValueAdjuster(
     ) {
         Icon(
             painter = painterResource(icon),
-            contentDescription = null,
+            contentDescription = "Icon",
             modifier = Modifier.size(28.dp),
         )
 
@@ -871,7 +868,7 @@ fun <T> ValueAdjuster(
         ) {
             Icon(
                 painter = painterResource(R.drawable.remove),
-                contentDescription = null,
+                contentDescription = "Icon",
             )
         }
 
@@ -889,8 +886,7 @@ fun <T> ValueAdjuster(
             },
         ) {
             Icon(
-                painter = painterResource(R.drawable.add),
-                contentDescription = null,
+                painter = painterResource(R.drawable.add), contentDescription = "Add",
             )
         }
     }
@@ -919,7 +915,7 @@ fun ListenTogetherDialog(
                 ) {
                     Icon(
                         painter = painterResource(R.drawable.group),
-                        contentDescription = null,
+                        contentDescription = "Icon",
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(48.dp)
                     )
@@ -995,7 +991,7 @@ fun ListenTogetherDialog(
                 ) {
                     Icon(
                         painter = painterResource(R.drawable.group),
-                        contentDescription = null,
+                        contentDescription = "Icon",
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(40.dp)
                     )
@@ -1039,8 +1035,7 @@ fun ListenTogetherDialog(
                         modifier = Modifier.padding(16.dp)
                     ) {
                         Icon(
-                            painter = painterResource(R.drawable.close),
-                            contentDescription = null,
+                            painter = painterResource(R.drawable.close), contentDescription = "Close",
                             tint = MaterialTheme.colorScheme.error,
                             modifier = Modifier.size(24.dp)
                         )
@@ -1088,8 +1083,7 @@ fun ListenTogetherDialog(
                         modifier = Modifier.padding(16.dp)
                     ) {
                         Icon(
-                            painter = painterResource(R.drawable.close),
-                            contentDescription = null,
+                            painter = painterResource(R.drawable.close), contentDescription = "Close",
                             tint = MaterialTheme.colorScheme.error,
                             modifier = Modifier.size(24.dp)
                         )
@@ -1135,7 +1129,7 @@ fun ListenTogetherDialog(
                     ) {
                         Icon(
                             painter = painterResource(R.drawable.crown),
-                            contentDescription = null,
+                            contentDescription = "Icon",
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(24.dp)
                         )
@@ -1218,7 +1212,7 @@ fun ListenTogetherDialog(
             ) {
                 Icon(
                     painter = painterResource(R.drawable.group),
-                    contentDescription = null,
+                    contentDescription = "Icon",
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(40.dp)
                 )
@@ -1525,7 +1519,7 @@ fun ListenTogetherDialog(
                                                         painter = painterResource(
                                                             if (user.isHost) R.drawable.crown else R.drawable.person
                                                         ),
-                                                        contentDescription = null,
+                                                        contentDescription = "Icon",
                                                         tint = MaterialTheme.colorScheme.onPrimary,
                                                         modifier = Modifier.size(12.dp)
                                                     )
@@ -1692,8 +1686,7 @@ fun ListenTogetherDialog(
                                     modifier = Modifier.weight(1f)
                                 ) {
                                     Icon(
-                                        painter = painterResource(R.drawable.queue_music),
-                                        contentDescription = null,
+                                        painter = painterResource(R.drawable.queue_music), contentDescription = "Queue",
                                         tint = MaterialTheme.colorScheme.primary,
                                         modifier = Modifier.size(24.dp)
                                     )
@@ -1773,7 +1766,7 @@ fun ListenTogetherDialog(
                         ) {
                             Icon(
                                 painter = painterResource(R.drawable.logout),
-                                contentDescription = null,
+                                contentDescription = "Icon",
                                 modifier = Modifier.size(18.dp)
                             )
                             Spacer(Modifier.width(8.dp))
@@ -1906,7 +1899,7 @@ fun ListenTogetherDialog(
                                 ) {
                                     Icon(
                                         painterResource(R.drawable.error),
-                                        contentDescription = null,
+                                        contentDescription = "Icon",
                                         modifier = Modifier.size(18.dp),
                                         tint = MaterialTheme.colorScheme.error
                                     )
@@ -1961,8 +1954,7 @@ fun ListenTogetherDialog(
                             )
                         ) {
                             Icon(
-                                painter = painterResource(R.drawable.add),
-                                contentDescription = null,
+                                painter = painterResource(R.drawable.add), contentDescription = "Add",
                                 modifier = Modifier.size(18.dp)
                             )
                             Spacer(Modifier.width(8.dp))
@@ -1999,7 +1991,7 @@ fun ListenTogetherDialog(
                             ) {
                                 Icon(
                                     painter = painterResource(R.drawable.login),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                     modifier = Modifier.size(18.dp)
                                 )
                                 Spacer(Modifier.width(8.dp))

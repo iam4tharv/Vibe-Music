@@ -35,6 +35,7 @@ import com.music.echo.db.entities.BeatInfoEntity
 import com.music.echo.db.entities.FormatEntity
 import com.music.echo.db.entities.LyricsEntity
 import com.music.echo.db.entities.PlayCountEntity
+import com.music.echo.db.entities.PlayHistoryEntity
 import com.music.echo.db.entities.Playlist
 import com.music.echo.db.entities.PlaylistEntity
 import com.music.echo.db.entities.PlaylistSong
@@ -987,9 +988,11 @@ interface DatabaseDao {
     @Transaction
     @Query("SELECT *, (SELECT COUNT(*) FROM playlist_song_map WHERE playlistId = playlist.id) AS songCount FROM playlist WHERE id = :playlistId")
     fun playlist(playlistId: String): Flow<Playlist?>
+    @Transaction
     @Query("SELECT *, (SELECT COUNT(*) FROM playlist_song_map WHERE playlistId = playlist.id) AS songCount FROM playlist WHERE id = :playlistId")
     suspend fun getPlaylistById(playlistId: String): Playlist?
 
+    @Transaction
     @Query("SELECT *, (SELECT COUNT(*) FROM playlist_song_map WHERE playlistId = playlist.id) AS songCount FROM playlist WHERE id = :playlistId")
     fun getPlaylistByIdBlocking(playlistId: String): Playlist?
 
@@ -1703,4 +1706,21 @@ interface DatabaseDao {
     @Query("DELETE FROM song_album_map") fun deleteAllSongAlbumMaps()
     @Query("DELETE FROM song_artist_map") fun deleteAllSongArtistMaps()
     @Query("DELETE FROM album_artist_map") fun deleteAllAlbumArtistMaps()
+
+    @Insert
+    fun insertPlayHistory(entry: PlayHistoryEntity)
+
+    @Query("SELECT * FROM play_history ORDER BY playedAt DESC LIMIT 99")
+    fun getRecentPlayHistory(): List<PlayHistoryEntity>
+
+    @Query("""
+        DELETE FROM play_history WHERE id NOT IN (
+            SELECT id FROM play_history ORDER BY playedAt DESC LIMIT 99
+        )
+    """)
+    fun trimPlayHistoryToCap()
+
+    @Query("SELECT * FROM play_history") fun getAllPlayHistory(): List<PlayHistoryEntity>
+    @Insert(onConflict = OnConflictStrategy.REPLACE) fun insertPlayHistoryList(items: List<PlayHistoryEntity>)
+    @Query("DELETE FROM play_history") fun deleteAllPlayHistory()
 }

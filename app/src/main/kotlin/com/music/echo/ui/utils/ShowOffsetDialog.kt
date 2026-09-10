@@ -75,7 +75,7 @@ fun ShowOffsetDialog(songProvider: () -> SongEntity?) {
     ) {
         Icon(
             painter = painterResource(R.drawable.fast_forward),
-            contentDescription = null,
+            contentDescription = "Icon",
             modifier = Modifier.size(40.dp),
             tint = MaterialTheme.colorScheme.primary
         )

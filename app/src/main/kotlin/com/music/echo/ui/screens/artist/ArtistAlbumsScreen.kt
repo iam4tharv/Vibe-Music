@@ -146,7 +146,7 @@ fun ArtistAlbumsScreen(
                 ) {
                     Icon(
                         painter = painterResource(id = R.drawable.arrow_back),
-                        contentDescription = null
+                        contentDescription = "Icon"
                     )
                 }
             },

@@ -123,7 +123,8 @@ object BeatAnalyzer {
                 try {
                     source.close()
                 } catch (_: Exception) {
-                }
+    com.music.echo.utils.ErrorNotifier.notifyError("An unexpected error occurred")
+}
             }
 
             Timber.tag(TAG).d("Stream fetch for %s: %d bytes, complete=%s", mediaId, copied, reachedEnd)
@@ -305,7 +306,8 @@ object BeatAnalyzer {
             try {
                 codec.stop()
             } catch (_: Exception) {
-            }
+    com.music.echo.utils.ErrorNotifier.notifyError("An unexpected error occurred")
+}
             codec.release()
         }
         if (sampleRate == 0 || out.isEmpty()) return null

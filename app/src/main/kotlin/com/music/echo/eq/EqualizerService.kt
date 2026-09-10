@@ -69,7 +69,8 @@ class EqualizerService @Inject constructor() {
             } catch (e: Exception) {
                 success = false
                 lastError = e
-            }
+            
+}
         }
 
         return if (success) Result.success(Unit) else Result.failure(lastError ?: Exception("Unknown error"))

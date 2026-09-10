@@ -49,7 +49,7 @@ object LosslessAPI {
                 .get()
                 .build()
 
-            val response = httpClient.newCall(request).execute()
+            httpClient.newCall(request).execute().use { response ->
             if (response.isSuccessful) {
                 val responseBody = response.body?.string()
                 if (responseBody != null) {
@@ -58,6 +58,7 @@ object LosslessAPI {
                     lastFetchTime = now
                     return@withContext index.items
                 }
+            }
             }
         } catch (e: Exception) {
             Timber.e(e, "Failed to fetch lossless music index")
@@ -119,12 +120,13 @@ object LosslessAPI {
                 .get()
                 .build()
 
-            val response = httpClient.newCall(request).execute()
+            httpClient.newCall(request).execute().use { response ->
             if (response.isSuccessful) {
                 val responseBody = response.body?.string()
                 if (responseBody != null) {
                     return@withContext json.decodeFromString<DonationGoal>(responseBody)
                 }
+            }
             }
         } catch (e: Exception) {
             Timber.e(e, "Failed to fetch donation goal")

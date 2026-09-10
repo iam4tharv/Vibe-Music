@@ -44,8 +44,7 @@ fun CastPickerSheet(
             modifier = Modifier.padding(bottom = 16.dp)
         ) {
             Icon(
-                painter = painterResource(R.drawable.cast),
-                contentDescription = null,
+                painter = painterResource(R.drawable.cast), contentDescription = "Cast",
                 modifier = Modifier.size(28.dp),
                 tint = MaterialTheme.colorScheme.primary
             )
@@ -85,7 +84,7 @@ fun CastPickerSheet(
             ) {
                 Icon(
                     painter = painterResource(R.drawable.cast_connected),
-                    contentDescription = null,
+                    contentDescription = "Cast",
                     modifier = Modifier.size(24.dp),
                     tint = MaterialTheme.colorScheme.primary
                 )
@@ -117,8 +116,7 @@ fun CastPickerSheet(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Icon(
-                    painter = painterResource(R.drawable.cast),
-                    contentDescription = null,
+                    painter = painterResource(R.drawable.cast), contentDescription = "Cast",
                     modifier = Modifier.size(48.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                 )
@@ -147,8 +145,7 @@ fun CastPickerSheet(
                             .padding(vertical = 12.dp)
                     ) {
                         Icon(
-                            painter = painterResource(R.drawable.cast),
-                            contentDescription = null,
+                            painter = painterResource(R.drawable.cast), contentDescription = "Cast",
                             modifier = Modifier.size(24.dp),
                             tint = MaterialTheme.colorScheme.onSurface
                         )

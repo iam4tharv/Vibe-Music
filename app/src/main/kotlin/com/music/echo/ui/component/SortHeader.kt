@@ -106,7 +106,7 @@ inline fun <reified T : Enum<T>> SortHeader(
                                 .graphicsLayer {
                                     this.rotationZ = rotation
                                 },
-                            contentDescription = null,
+                            contentDescription = "Icon",
                         )
                     }
                 }
@@ -134,7 +134,7 @@ inline fun <reified T : Enum<T>> SortHeader(
                             .graphicsLayer {
                                 this.rotationZ = rotation
                             },
-                        contentDescription = null,
+                        contentDescription = "Icon",
                     )
                 }
             }
@@ -162,7 +162,7 @@ inline fun <reified T : Enum<T>> SortHeader(
                             if (sortType == type) R.drawable.radio_button_checked
                             else R.drawable.radio_button_unchecked
                         ),
-                        contentDescription = null,
+                        contentDescription = "Icon",
                     )
                 },
                 onClick = {

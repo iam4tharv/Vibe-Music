@@ -102,7 +102,8 @@ fun OldPlayerMenu(
             playerConnection.service.castConnectionHandler
         } catch (e: Exception) {
             null
-        }
+        
+}
     }
     val isCasting by castHandler?.isCasting?.collectAsState() ?: remember { mutableStateOf(false) }
     val castVolume by castHandler?.castVolume?.collectAsState() ?: remember { mutableFloatStateOf(1f) }
@@ -210,8 +211,7 @@ fun OldPlayerMenu(
                     .padding(bottom = 16.dp)
             ) {
                 Icon(
-                    painter = painterResource(R.drawable.cast),
-                    contentDescription = null,
+                    painter = painterResource(R.drawable.cast), contentDescription = "Cast",
                     modifier = Modifier.size(24.dp),
                     tint = MaterialTheme.colorScheme.primary
                 )
@@ -244,7 +244,7 @@ fun OldPlayerMenu(
                             icon = {
                                 Icon(
                                     painter = painterResource(R.drawable.radio),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                     modifier = Modifier.size(32.dp),
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -261,7 +261,7 @@ fun OldPlayerMenu(
                         icon = {
                             Icon(
                                 painter = painterResource(R.drawable.playlist_add),
-                                contentDescription = null,
+                                contentDescription = "Play",
                                 modifier = Modifier.size(32.dp),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -272,8 +272,7 @@ fun OldPlayerMenu(
                     NewAction(
                         icon = {
                             Icon(
-                                painter = painterResource(R.drawable.share),
-                                contentDescription = null,
+                                painter = painterResource(R.drawable.share), contentDescription = "Share",
                                 modifier = Modifier.size(32.dp),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -318,7 +317,7 @@ fun OldPlayerMenu(
                             icon = {
                                 Icon(
                                     painter = painterResource(R.drawable.fullscreen),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                     modifier = Modifier.size(24.dp)
                                 )
                             },
@@ -336,8 +335,7 @@ fun OldPlayerMenu(
                                 title = { Text(stringResource(R.string.shuffle)) },
                                 icon = {
                                     Icon(
-                                        painter = painterResource(R.drawable.shuffle),
-                                        contentDescription = null,
+                                        painter = painterResource(R.drawable.shuffle), contentDescription = "Shuffle",
                                         modifier = Modifier.size(24.dp),
                                         tint = if (shuffleModeEnabled) MaterialTheme.colorScheme.primary else androidx.compose.material3.LocalContentColor.current
                                     )
@@ -359,7 +357,7 @@ fun OldPlayerMenu(
                                     icon = {
                                         Icon(
                                             painter = painterResource(R.drawable.offline),
-                                            contentDescription = null,
+                                            contentDescription = "Icon",
                                             modifier = Modifier.size(24.dp)
                                         )
                                     },
@@ -390,8 +388,7 @@ fun OldPlayerMenu(
                                     title = { Text(stringResource(R.string.action_download)) },
                                     icon = {
                                         Icon(
-                                            painter = painterResource(R.drawable.download),
-                                            contentDescription = null,
+                                            painter = painterResource(R.drawable.download), contentDescription = "Download",
                                             modifier = Modifier.size(24.dp)
                                         )
                                     },
@@ -429,7 +426,7 @@ fun OldPlayerMenu(
                                     icon = {
                                         Icon(
                                             painter = painterResource(R.drawable.folder_managed),
-                                            contentDescription = null,
+                                            contentDescription = "Icon",
                                             modifier = Modifier.size(24.dp)
                                         )
                                     },
@@ -442,7 +439,7 @@ fun OldPlayerMenu(
                                     icon = {
                                         Icon(
                                             painter = painterResource(R.drawable.file_export),
-                                            contentDescription = null,
+                                            contentDescription = "Icon",
                                             modifier = Modifier.size(24.dp)
                                         )
                                     },
@@ -476,7 +473,7 @@ fun OldPlayerMenu(
                             icon = {
                                 Icon(
                                     painter = painterResource(if (isLiked) R.drawable.favorite else R.drawable.favorite_border),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                     modifier = Modifier.size(24.dp),
                                     tint = if (isLiked) MaterialTheme.colorScheme.error else androidx.compose.material3.LocalContentColor.current
                                 )
@@ -502,7 +499,7 @@ fun OldPlayerMenu(
                                                 else -> R.drawable.repeat
                                             }
                                         ),
-                                        contentDescription = null,
+                                        contentDescription = "Play",
                                         modifier = Modifier.size(24.dp),
                                         tint = if (repeatMode != Player.REPEAT_MODE_OFF) MaterialTheme.colorScheme.primary else androidx.compose.material3.LocalContentColor.current
                                     )
@@ -521,7 +518,7 @@ fun OldPlayerMenu(
                             icon = {
                                 Icon(
                                     painter = painterResource(R.drawable.sync),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                     modifier = Modifier.graphicsLayer(rotationZ = rotationAnimation)
                                 )
                             },
@@ -577,7 +574,7 @@ fun OldPlayerMenu(
                                 icon = {
                                     Icon(
                                         painter = painterResource(R.drawable.artist),
-                                        contentDescription = null,
+                                        contentDescription = "Icon",
                                         modifier = Modifier.size(24.dp)
                                     )
                                 },
@@ -612,7 +609,7 @@ fun OldPlayerMenu(
                                         if (isInLibrary) R.drawable.library_add_check
                                         else R.drawable.library_add
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                     modifier = Modifier.size(24.dp)
                                 )
                             },
@@ -636,7 +633,7 @@ fun OldPlayerMenu(
                         icon = {
                             Icon(
                                 painter = painterResource(R.drawable.notification),
-                                contentDescription = null,
+                                contentDescription = "Icon",
                                 modifier = Modifier.size(24.dp)
                             )
                         },
@@ -670,7 +667,7 @@ fun OldPlayerMenu(
                             icon = {
                                 Icon(
                                     painter = painterResource(R.drawable.group),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                     modifier = Modifier.size(24.dp)
                                 )
                             },
@@ -684,7 +681,7 @@ fun OldPlayerMenu(
                                 icon = {
                                     Icon(
                                         painter = painterResource(R.drawable.replay),
-                                        contentDescription = null,
+                                        contentDescription = "Play",
                                         modifier = Modifier.size(24.dp)
                                     )
                                 },
@@ -711,8 +708,7 @@ fun OldPlayerMenu(
                             description = { Text(text = stringResource(R.string.details_desc)) },
                             icon = {
                                 Icon(
-                                    painter = painterResource(R.drawable.info),
-                                    contentDescription = null,
+                                    painter = painterResource(R.drawable.info), contentDescription = "Info",
                                     modifier = Modifier.size(24.dp)
                                 )
                             },
@@ -730,7 +726,7 @@ fun OldPlayerMenu(
                             icon = {
                                 Icon(
                                     painter = painterResource(R.drawable.equalizer),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                     modifier = Modifier.size(24.dp)
                                 )
                             },
@@ -748,7 +744,7 @@ fun OldPlayerMenu(
                             icon = {
                                 Icon(
                                     painter = painterResource(R.drawable.tune),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                     modifier = Modifier.size(24.dp)
                                 )
                             },

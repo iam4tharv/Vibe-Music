@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import com.music.echo.extensions.bounceClick
 import androidx.compose.ui.res.painterResource
 import androidx.navigation.NavController
 import com.music.innertube.models.PlaylistItem
@@ -70,6 +71,7 @@ fun LibraryArtistGridItem(
     fillMaxWidth = true,
     modifier = modifier
         .fillMaxWidth()
+        .bounceClick()
         .combinedClickable(
             onClick = {
                 navController.navigate("artist/${artist.id}")
@@ -141,6 +143,7 @@ fun LibraryAlbumGridItem(
     fillMaxWidth = true,
     modifier = modifier
         .fillMaxWidth()
+        .bounceClick()
         .combinedClickable(
             onClick = {
                 navController.navigate("album/${album.id}")
@@ -236,6 +239,7 @@ fun LibraryPlaylistGridItem(
     fillMaxWidth = true,
     modifier = modifier
         .fillMaxWidth()
+        .bounceClick()
         .combinedClickable(
             onClick = {
                 if (!playlist.playlist.isEditable && playlist.songCount == 0 && playlist.playlist.remoteSongCount != 0)

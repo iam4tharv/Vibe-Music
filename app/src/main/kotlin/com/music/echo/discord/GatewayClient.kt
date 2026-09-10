@@ -150,7 +150,8 @@ class GatewayClient {
                 } catch (e: Exception) {
                     if (!ready.isCompleted) ready.completeExceptionally(e)
                     onError?.invoke(e)
-                }
+                
+}
             }
 
         ready.await()
@@ -182,7 +183,8 @@ class GatewayClient {
                 session.send(jsonStr)
             } catch (e: Exception) {
                 onError?.invoke(e)
-            }
+            
+}
         }
         return true
     }
@@ -264,7 +266,8 @@ class GatewayClient {
             }
         } catch (e: Exception) {
             onError?.invoke(e)
-        }
+        
+}
     }
 
     private fun handleDispatch(

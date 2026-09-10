@@ -119,7 +119,7 @@ fun LyricsMenu(
     if (showEditDialog) {
         TextFieldDialog(
             onDismiss = { showEditDialog = false },
-            icon = { Icon(painter = painterResource(R.drawable.edit), contentDescription = null) },
+            icon = { Icon(painter = painterResource(R.drawable.edit), contentDescription = "Icon") },
             title = { Text(text = mediaMetadataProvider().title) },
             initialTextFieldValue = TextFieldValue(lyricsProvider()?.lyrics.orEmpty()),
             singleLine = false,
@@ -174,7 +174,7 @@ fun LyricsMenu(
             icon = {
                 Icon(
                     painter = painterResource(R.drawable.search),
-                    contentDescription = null
+                    contentDescription = "Icon"
                 )
             },
             title = { Text(stringResource(R.string.search_lyrics)) },
@@ -192,15 +192,19 @@ fun LyricsMenu(
                         showSearchDialog = false
                         onDismiss()
                         try {
-                            context.startActivity(
-                                Intent(Intent.ACTION_WEB_SEARCH).apply {
-                                    putExtra(
-                                        SearchManager.QUERY,
-                                        "${artistField.text} ${titleField.text} lyrics"
-                                    )
-                                },
-                            )
-                        } catch (_: Exception) {
+                            val query = "${artistField.text} ${titleField.text} lyrics"
+                            try {
+                                context.startActivity(
+                                    Intent(Intent.ACTION_WEB_SEARCH).apply {
+                                        putExtra(SearchManager.QUERY, query)
+                                    }
+                                )
+                            } catch (_: Exception) {
+                                val url = "https://www.google.com/search?q=" + java.net.URLEncoder.encode(query, "UTF-8")
+                                context.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url)))
+                            }
+                        } catch (e: Exception) {
+                            com.music.echo.utils.ErrorNotifier.notifyError(e.message ?: "Failed to open search")
                         }
                     },
                 ) {
@@ -311,7 +315,7 @@ fun LyricsMenu(
                                 if (result.lyrics.startsWith("[")) {
                                     Icon(
                                         painter = painterResource(R.drawable.sync),
-                                        contentDescription = null,
+                                        contentDescription = "Lyrics",
                                         tint = MaterialTheme.colorScheme.onSecondaryContainer,
                                         modifier = Modifier
                                             .padding(start = 4.dp)
@@ -329,7 +333,7 @@ fun LyricsMenu(
                     ) {
                         Icon(
                             painter = painterResource(if (index == expandedItemIndex) R.drawable.expand_less else R.drawable.expand_more),
-                            contentDescription = null,
+                            contentDescription = "Icon",
                         )
                     }
                 }
@@ -396,7 +400,7 @@ fun LyricsMenu(
                         icon = {
                             Icon(
                                 painter = painterResource(R.drawable.edit),
-                                contentDescription = null,
+                                contentDescription = "Icon",
                                 modifier = Modifier.size(28.dp),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -410,7 +414,7 @@ fun LyricsMenu(
                         icon = {
                             Icon(
                                 painter = painterResource(R.drawable.cached),
-                                contentDescription = null,
+                                contentDescription = "Icon",
                                 modifier = Modifier.size(28.dp),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -425,7 +429,7 @@ fun LyricsMenu(
                         icon = {
                             Icon(
                                 painter = painterResource(R.drawable.search),
-                                contentDescription = null,
+                                contentDescription = "Icon",
                                 modifier = Modifier.size(28.dp),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -451,7 +455,7 @@ fun LyricsMenu(
                                 icon = {
                                     Icon(
                                         painter = painterResource(R.drawable.translate),
-                                        contentDescription = null,
+                                        contentDescription = "Lyrics",
                                     )
                                 },
                                 onClick = {
@@ -493,7 +497,7 @@ fun LyricsMenu(
                             icon = {
                                 Icon(
                                     painter = painterResource(R.drawable.fast_forward),
-                                    contentDescription = null,
+                                    contentDescription = "Lyrics",
                                 )
                             },
                             onClick = {
@@ -516,7 +520,7 @@ fun LyricsMenu(
                             icon = {
                                 Icon(
                                     painter = painterResource(R.drawable.language_korean_latin),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                 )
                             },
                             onClick = {

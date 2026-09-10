@@ -162,7 +162,7 @@ fun GlassEffectSettings(
                                     painter = painterResource(
                                         id = if (useFloatingNavBar) R.drawable.check else R.drawable.close
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                     modifier = Modifier.size(SwitchDefaults.IconSize)
                                 )
                             }
@@ -204,7 +204,7 @@ fun GlassEffectSettings(
                                     painter = painterResource(
                                         id = if (globalEnabled && useFloatingNavBar) R.drawable.check else R.drawable.close
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                     modifier = Modifier.size(SwitchDefaults.IconSize)
                                 )
                             }
@@ -254,7 +254,7 @@ fun GlassEffectSettings(
                                     painter = painterResource(
                                         id = if (chromaticAberration) R.drawable.check else R.drawable.close
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                     modifier = Modifier.size(SwitchDefaults.IconSize)
                                 )
                             }
@@ -274,7 +274,7 @@ fun GlassEffectSettings(
                                     painter = painterResource(
                                         id = if (depthEffect) R.drawable.check else R.drawable.close
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                     modifier = Modifier.size(SwitchDefaults.IconSize)
                                 )
                             }
@@ -328,7 +328,7 @@ fun GlassEffectSettings(
                                     painter = painterResource(
                                         id = if (playerEnabled) R.drawable.check else R.drawable.close
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Play",
                                     modifier = Modifier.size(SwitchDefaults.IconSize)
                                 )
                             }
@@ -348,7 +348,7 @@ fun GlassEffectSettings(
                                     painter = painterResource(
                                         id = if (miniPlayerEnabled) R.drawable.check else R.drawable.close
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Play",
                                     modifier = Modifier.size(SwitchDefaults.IconSize)
                                 )
                             }
@@ -368,7 +368,7 @@ fun GlassEffectSettings(
                                     painter = painterResource(
                                         id = if (navBarEnabled) R.drawable.check else R.drawable.close
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                     modifier = Modifier.size(SwitchDefaults.IconSize)
                                 )
                             }
@@ -521,7 +521,7 @@ fun GlassEffectSettings(
             ) {
                 Icon(
                     painterResource(R.drawable.arrow_back),
-                    contentDescription = null,
+                    contentDescription = "Icon",
                 )
             }
         }

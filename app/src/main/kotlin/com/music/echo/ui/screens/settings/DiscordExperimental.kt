@@ -89,7 +89,7 @@ fun DiscordExperimental(navController: NavController) {
                 title = { Text(stringResource(R.string.experiment_settings)) },
                 navigationIcon = {
                     IconButton(onClick = navController::navigateUp) {
-                        Icon(painterResource(R.drawable.arrow_back), contentDescription = null)
+                        Icon(painterResource(R.drawable.arrow_back), contentDescription = "Icon")
                     }
                 },
             )

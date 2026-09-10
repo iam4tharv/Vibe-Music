@@ -168,7 +168,7 @@ highlightKey: String? = null) {
 
         DefaultDialog(
             onDismiss = { showUsernameDialog = false },
-            icon = { Icon(painterResource(R.drawable.person), contentDescription = null) },
+            icon = { Icon(painterResource(R.drawable.person), contentDescription = "Icon") },
             title = { Text(stringResource(R.string.listen_together_username)) },
             buttons = {
                 TextButton(onClick = { username = ""; showUsernameDialog = false }) {
@@ -185,12 +185,12 @@ highlightKey: String? = null) {
                 onValueChange = { tempUsername = it },
                 label = { Text(stringResource(R.string.listen_together_username)) },
                 leadingIcon = {
-                    Icon(painterResource(R.drawable.person), contentDescription = null)
+                    Icon(painterResource(R.drawable.person), contentDescription = "Icon")
                 },
                 trailingIcon = {
                     if (tempUsername.isNotBlank()) {
                         IconButton(onClick = { tempUsername = "" }, onLongClick = {}) {
-                            Icon(painterResource(R.drawable.close), contentDescription = null)
+                            Icon(painterResource(R.drawable.close), contentDescription = "Close")
                         }
                     }
                 },
@@ -205,7 +205,7 @@ highlightKey: String? = null) {
 
         DefaultDialog(
             onDismiss = { showCreateRoomDialog = false },
-            icon = { Icon(painterResource(R.drawable.add), contentDescription = null) },
+            icon = { Icon(painterResource(R.drawable.add), contentDescription = "Add") },
             title = { Text(stringResource(R.string.listen_together_create_room)) },
             buttons = {
                 TextButton(onClick = { showCreateRoomDialog = false }) {
@@ -242,7 +242,7 @@ highlightKey: String? = null) {
                     onValueChange = { createUsername = it },
                     label = { Text(stringResource(R.string.listen_together_username)) },
                     leadingIcon = {
-                        Icon(painterResource(R.drawable.person), contentDescription = null)
+                        Icon(painterResource(R.drawable.person), contentDescription = "Icon")
                     },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
@@ -256,7 +256,7 @@ highlightKey: String? = null) {
 
         DefaultDialog(
             onDismiss = { showJoinRoomDialog = false },
-            icon = { Icon(painterResource(R.drawable.group_add), contentDescription = null) },
+            icon = { Icon(painterResource(R.drawable.group_add), contentDescription = "Icon") },
             title = { Text(stringResource(R.string.listen_together_join_room)) },
             buttons = {
                 TextButton(onClick = { showJoinRoomDialog = false }) {
@@ -289,7 +289,7 @@ highlightKey: String? = null) {
                     onValueChange = { joinUsername = it },
                     label = { Text(stringResource(R.string.listen_together_username)) },
                     leadingIcon = {
-                        Icon(painterResource(R.drawable.person), contentDescription = null)
+                        Icon(painterResource(R.drawable.person), contentDescription = "Icon")
                     },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
@@ -299,7 +299,7 @@ highlightKey: String? = null) {
                     onValueChange = { roomCodeInput = it.uppercase().filter { c -> c.isLetterOrDigit() }.take(8) },
                     label = { Text(stringResource(R.string.listen_together_room_code)) },
                     leadingIcon = {
-                        Icon(painterResource(R.drawable.key), contentDescription = null)
+                        Icon(painterResource(R.drawable.key), contentDescription = "Icon")
                     },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
@@ -400,7 +400,7 @@ highlightKey: String? = null) {
                                         painter = painterResource(
                                             id = if (autoApproval) R.drawable.check else R.drawable.close
                                         ),
-                                        contentDescription = null,
+                                        contentDescription = "Icon",
                                         modifier = Modifier.size(SwitchDefaults.IconSize),
                                     )
                                 }
@@ -424,7 +424,7 @@ highlightKey: String? = null) {
                                         painter = painterResource(
                                             id = if (syncHostVolume) R.drawable.check else R.drawable.close
                                         ),
-                                        contentDescription = null,
+                                        contentDescription = "Icon",
                                         modifier = Modifier.size(SwitchDefaults.IconSize),
                                     )
                                 }
@@ -447,7 +447,7 @@ highlightKey: String? = null) {
                                         painter = painterResource(
                                             id = if (smartResync) R.drawable.check else R.drawable.close
                                         ),
-                                        contentDescription = null,
+                                        contentDescription = "Icon",
                                         modifier = Modifier.size(SwitchDefaults.IconSize),
                                     )
                                 }
@@ -481,7 +481,7 @@ highlightKey: String? = null) {
             ) {
                 Icon(
                     painterResource(R.drawable.arrow_back),
-                    contentDescription = null,
+                    contentDescription = "Icon",
                 )
             }
         }
@@ -506,7 +506,7 @@ fun LogsDialog(
 
     DefaultDialog(
         onDismiss = onDismiss,
-        icon = { Icon(painterResource(R.drawable.bug_report), contentDescription = null) },
+        icon = { Icon(painterResource(R.drawable.bug_report), contentDescription = "Icon") },
         title = { Text(stringResource(R.string.listen_together_logs)) },
         buttons = {
             TextButton(
@@ -581,7 +581,7 @@ private fun ServerChooserDialog(
 
     DefaultDialog(
         onDismiss = onDismiss,
-        icon = { Icon(painterResource(R.drawable.cloud), contentDescription = null) },
+        icon = { Icon(painterResource(R.drawable.cloud), contentDescription = "Icon") },
         title = { Text(stringResource(R.string.listen_together_choose_server)) },
         buttons = {
             TextButton(onClick = onDismiss) {
@@ -638,7 +638,7 @@ private fun ServerChooserDialog(
                         if (isSelected) {
                             Icon(
                                 painter = painterResource(R.drawable.done),
-                                contentDescription = null,
+                                contentDescription = "Icon",
                                 tint = MaterialTheme.colorScheme.primary
                             )
                         }
@@ -658,7 +658,7 @@ private fun ServerChooserDialog(
                 onValueChange = { customUrl = it },
                 label = { Text(stringResource(R.string.listen_together_server_url)) },
                 leadingIcon = {
-                    Icon(painterResource(R.drawable.link), contentDescription = null)
+                    Icon(painterResource(R.drawable.link), contentDescription = "Icon")
                 },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
@@ -746,7 +746,7 @@ fun BlockedUsersDialog(
 
     DefaultDialog(
         onDismiss = onDismiss,
-        icon = { Icon(painterResource(R.drawable.person), contentDescription = null) },
+        icon = { Icon(painterResource(R.drawable.person), contentDescription = "Icon") },
         title = { Text(stringResource(R.string.listen_together_blocked_users)) },
         buttons = {
             Button(onClick = onDismiss) {
@@ -791,7 +791,7 @@ fun BlockedUsersDialog(
                             ) {
                                 Icon(
                                     painter = painterResource(R.drawable.person),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                     modifier = Modifier.size(20.dp),
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                                 )

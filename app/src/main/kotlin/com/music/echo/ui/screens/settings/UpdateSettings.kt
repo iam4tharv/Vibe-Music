@@ -153,7 +153,7 @@ fun UpdateSettings(
                                     painter = painterResource(
                                         id = if (autoUpdateEnabled) R.drawable.check else R.drawable.close
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                     modifier = Modifier.size(SwitchDefaults.IconSize)
                                 )
                             }
@@ -185,7 +185,7 @@ fun UpdateSettings(
                                     painter = painterResource(
                                         id = if (updateNotificationsEnabled) R.drawable.check else R.drawable.close
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                     modifier = Modifier.size(SwitchDefaults.IconSize)
                                 )
                             }
@@ -219,8 +219,7 @@ fun UpdateSettings(
                             onLongClick = {}
                         ) {
                             Icon(
-                                painterResource(R.drawable.info),
-                                contentDescription = null,
+                                painterResource(R.drawable.info), contentDescription = "Info",
                                 modifier = Modifier.size(20.dp)
                             )
                         }
@@ -275,7 +274,7 @@ fun UpdateSettings(
             ) {
                 Icon(
                     painterResource(R.drawable.arrow_back),
-                    contentDescription = null
+                    contentDescription = "Icon"
                 )
             }
         }

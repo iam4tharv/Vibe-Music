@@ -336,7 +336,7 @@ fun LastFMSettingsScreen(
                                     painter = painterResource(
                                         id = if (lastfmScrobbling) R.drawable.check else R.drawable.close
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                     modifier = Modifier.size(SwitchDefaults.IconSize),
                                 )
                             }
@@ -357,7 +357,7 @@ fun LastFMSettingsScreen(
                                     painter = painterResource(
                                         id = if (useNowPlaying) R.drawable.check else R.drawable.close
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Play",
                                     modifier = Modifier.size(SwitchDefaults.IconSize),
                                 )
                             }
@@ -379,7 +379,7 @@ fun LastFMSettingsScreen(
                                     painter = painterResource(
                                         id = if (useSendLikes) R.drawable.check else R.drawable.close
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                     modifier = Modifier.size(SwitchDefaults.IconSize),
                                 )
                             }
@@ -622,7 +622,7 @@ fun LastFMSettingsScreen(
             ) {
                 Icon(
                     painterResource(R.drawable.arrow_back),
-                    contentDescription = null,
+                    contentDescription = "Icon",
                 )
             }
         }

@@ -36,7 +36,9 @@ object ListenBrainzManager {
                         return result
                     }
                 } catch (e: Exception) {
-                }
+    com.music.echo.utils.ErrorNotifier.notifyError(e.message ?: "An unexpected error occurred")
+    e.printStackTrace()
+}
             }
 
             val fieldNames = listOf("name", "artistName")
@@ -49,7 +51,9 @@ object ListenBrainzManager {
                         return result
                     }
                 } catch (e: Exception) {
-                }
+    com.music.echo.utils.ErrorNotifier.notifyError(e.message ?: "An unexpected error occurred")
+    e.printStackTrace()
+}
             }
 
             val str = artist.toString()
@@ -106,7 +110,8 @@ object ListenBrainzManager {
                                 resp.body?.string() ?: ""
                             } catch (e: Exception) {
                                 "<unable to read>"
-                            }
+                            
+}
                         Timber.tag(logTag).w("playing_now submit failed: %s - %s", resp.code, respBody)
                     }
                     success
@@ -170,7 +175,8 @@ object ListenBrainzManager {
                                 resp.body?.string() ?: ""
                             } catch (e: Exception) {
                                 "<unable to read>"
-                            }
+                            
+}
                         Timber.tag(logTag).w("finished listen submit failed: %s - %s", resp.code, respBody)
                     }
                     success

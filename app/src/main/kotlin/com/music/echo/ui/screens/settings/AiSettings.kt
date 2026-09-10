@@ -52,6 +52,11 @@ import com.music.echo.ui.component.Material3SettingsGroup
 import com.music.echo.ui.component.Material3SettingsItem
 import com.music.echo.ui.component.TextFieldDialog
 import com.music.echo.utils.rememberPreference
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.core.content.ContextCompat
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -73,6 +78,12 @@ highlightKey: String? = null) {
     var heyVibeeEnabled by rememberPreference(HeyVibeeEnabledKey, false)
     var deeplApiKey by rememberPreference(DeeplApiKey, "")
     var deeplFormality by rememberPreference(DeeplFormalityKey, "default")
+    
+    val micPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        heyVibeeEnabled = isGranted
+    }
 
     val aiProviders = mapOf(
         "OpenRouter" to "https://openrouter.ai/api/v1/chat/completions",
@@ -554,8 +565,7 @@ highlightKey: String? = null) {
                             trailingContent = {
                                 IconButton(onClick = { showTranslateModeHelpDialog = true }) {
                                     Icon(
-                                        painterResource(R.drawable.info),
-                                        contentDescription = null,
+                                        painterResource(R.drawable.info), contentDescription = "Info",
                                         modifier = Modifier.size(20.dp)
                                     )
                                 }
@@ -639,10 +649,38 @@ highlightKey: String? = null) {
                         trailingContent = {
                             Switch(
                                 checked = heyVibeeEnabled,
-                                onCheckedChange = { heyVibeeEnabled = it }
+                                onCheckedChange = { isChecked -> 
+                                    if (isChecked) {
+                                        if (ContextCompat.checkSelfPermission(
+                                                context,
+                                                Manifest.permission.RECORD_AUDIO
+                                            ) == PackageManager.PERMISSION_GRANTED
+                                        ) {
+                                            heyVibeeEnabled = true
+                                        } else {
+                                            micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                                        }
+                                    } else {
+                                        heyVibeeEnabled = false
+                                    }
+                                }
                             )
                         },
-                        onClick = { heyVibeeEnabled = !heyVibeeEnabled }
+                        onClick = { 
+                            if (!heyVibeeEnabled) {
+                                if (ContextCompat.checkSelfPermission(
+                                        context,
+                                        Manifest.permission.RECORD_AUDIO
+                                    ) == PackageManager.PERMISSION_GRANTED
+                                ) {
+                                    heyVibeeEnabled = true
+                                } else {
+                                    micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                                }
+                            } else {
+                                heyVibeeEnabled = false
+                            }
+                        }
                     )
                 )
             }
@@ -664,7 +702,7 @@ highlightKey: String? = null) {
             IconButton(onClick = { navController.navigateUp() }) {
                 Icon(
                     painterResource(R.drawable.arrow_back),
-                    contentDescription = null
+                    contentDescription = "Lyrics"
                 )
             }
         }

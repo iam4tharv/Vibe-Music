@@ -355,7 +355,7 @@ fun DiscordSettings(
                     ) {
                         Icon(
                             painter = painterResource(R.drawable.arrow_back),
-                            contentDescription = null,
+                            contentDescription = "Icon",
                         )
                     }
                 },
@@ -364,8 +364,7 @@ fun DiscordSettings(
 
                     IconButton(onClick = { threeDotMenuExpanded = true }) {
                         Icon(
-                            painter = painterResource(R.drawable.more_vert),
-                            contentDescription = null,
+                            painter = painterResource(R.drawable.more_vert), contentDescription = "Options",
                         )
                     }
 
@@ -382,7 +381,7 @@ fun DiscordSettings(
                             leadingIcon = {
                                 Icon(
                                     painter = painterResource(R.drawable.bug_report),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                 )
                             },
                         )
@@ -840,7 +839,7 @@ private fun DiscordAccountGroupCard(
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
                                 painter = painterResource(R.drawable.discord),
-                                contentDescription = null,
+                                contentDescription = "Icon",
                                 modifier = Modifier.size(40.dp),
                                 tint = MaterialTheme.colorScheme.onSecondaryContainer,
                             )
@@ -911,7 +910,7 @@ private fun DiscordAccountGroupCard(
                                             DiscordAuthorizationUiMode.Waiting -> R.drawable.discord
                                         },
                                     ),
-                                contentDescription = null,
+                                contentDescription = "Icon",
                                 tint = sessionContentColor,
                             )
                         }
@@ -952,8 +951,7 @@ private fun DiscordAccountGroupCard(
                             contentAlignment = Alignment.Center,
                         ) {
                             Icon(
-                                painter = painterResource(R.drawable.info),
-                                contentDescription = null,
+                                painter = painterResource(R.drawable.info), contentDescription = "Info",
                                 tint = MaterialTheme.colorScheme.primary,
                             )
                         }
@@ -1042,7 +1040,7 @@ private fun DiscordReauthorizeWarningRow(
             leadingContent = {
                 Icon(
                     painter = painterResource(R.drawable.error),
-                    contentDescription = null,
+                    contentDescription = "Icon",
                 )
             },
             trailingContent = {
@@ -1295,7 +1293,7 @@ fun RichPresence(
                                 }
                             AsyncImage(
                                 model = largeImageModel,
-                                contentDescription = null,
+                                contentDescription = "Album Art",
                                 modifier =
                                     Modifier
                                         .size(96.dp)
@@ -1334,7 +1332,7 @@ fun RichPresence(
                                 ) {
                                     AsyncImage(
                                         model = it,
-                                        contentDescription = null,
+                                        contentDescription = "Album Art",
                                         modifier = Modifier.size(32.dp).clip(CircleShape),
                                     )
                                 }

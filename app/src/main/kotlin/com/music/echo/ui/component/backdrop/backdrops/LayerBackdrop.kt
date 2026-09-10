@@ -67,8 +67,7 @@ class LayerBackdrop internal constructor(
                 try {
                     layerCoordinates.localPositionOf(coordinates)
                 } catch (_: Exception) {
-                    // TODO: outer transformations lead to wrong position calculation
-                    coordinates.positionInWindow() - layerCoordinates.positionInWindow()
+                    androidx.compose.ui.geometry.Offset.Zero
                 }
             translate(-offset.x, -offset.y)
         }) {

@@ -117,8 +117,7 @@ fun RecognitionHistoryScreen(
             onDismiss = { showClearDialog = false },
             icon = {
                 Icon(
-                    painter = painterResource(R.drawable.delete),
-                    contentDescription = null
+                    painter = painterResource(R.drawable.delete), contentDescription = "Delete"
                 )
             },
             title = { Text(stringResource(R.string.clear_recognition_history)) },
@@ -152,8 +151,7 @@ fun RecognitionHistoryScreen(
             onDismiss = { itemToDelete = null },
             icon = {
                 Icon(
-                    painter = painterResource(R.drawable.delete),
-                    contentDescription = null
+                    painter = painterResource(R.drawable.delete), contentDescription = "Delete"
                 )
             },
             title = { Text(stringResource(R.string.delete)) },
@@ -193,7 +191,7 @@ fun RecognitionHistoryScreen(
                     ) {
                         Icon(
                             painter = painterResource(R.drawable.arrow_back),
-                            contentDescription = null
+                            contentDescription = "Icon"
                         )
                     }
                 },
@@ -229,7 +227,7 @@ fun RecognitionHistoryScreen(
                 leadingIcon = {
                     Icon(
                         painter = painterResource(R.drawable.search),
-                        contentDescription = null,
+                        contentDescription = "Icon",
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 },
@@ -237,8 +235,7 @@ fun RecognitionHistoryScreen(
                     if (query.text.isNotEmpty()) {
                         IconButton(onClick = { query = TextFieldValue() }) {
                             Icon(
-                                painter = painterResource(R.drawable.close),
-                                contentDescription = null,
+                                painter = painterResource(R.drawable.close), contentDescription = "Close",
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
@@ -272,7 +269,7 @@ fun RecognitionHistoryScreen(
                         ) {
                             Icon(
                                 painter = painterResource(R.drawable.history),
-                                contentDescription = null,
+                                contentDescription = "Icon",
                                 modifier = Modifier.size(64.dp),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                             )
@@ -296,7 +293,7 @@ fun RecognitionHistoryScreen(
                         ) {
                             Icon(
                                 painter = painterResource(R.drawable.search),
-                                contentDescription = null,
+                                contentDescription = "Icon",
                                 modifier = Modifier.size(64.dp),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                             )
@@ -395,7 +392,7 @@ private fun RecognitionHistoryItem(
             
             AsyncImage(
                 model = item.coverArtUrl,
-                contentDescription = null,
+                contentDescription = "Album Art",
                 modifier = Modifier
                     .size(60.dp)
                     .clip(RoundedCornerShape(ThumbnailCornerRadius)),

@@ -30,6 +30,7 @@ open class MusicWidgetReceiver : AppWidgetProvider() {
                 context.startService(intent)
             } catch (e: Exception) {
                 // Service might be restricted in background
+                timber.log.Timber.e(e, "Service restricted")
             }
         }
         // If service is not running, widget shows default layout until user opens app
@@ -51,32 +52,14 @@ open class MusicWidgetReceiver : AppWidgetProvider() {
                 context.startService(intent)
             } catch (e: Exception) {
                 // Service might be restricted in background
+                timber.log.Timber.e(e, "Service restricted")
             }
         }
     }
 
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
-
-        when (intent.action) {
-            ACTION_PLAY_PAUSE, ACTION_LIKE, ACTION_NEXT, ACTION_PREVIOUS -> {
-                // User interactions from widget buttons can start the service
-                // Android allows starting FGS from widget PendingIntent clicks
-                val serviceIntent = Intent(context, MusicService::class.java).apply {
-                    action = intent.action
-                    putExtras(intent)
-                }
-                try {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        context.startService(serviceIntent)
-                    } else {
-                        context.startService(serviceIntent)
-                    }
-                } catch (e: Exception) {
-                    // Service might be restricted in background
-                }
-            }
-        }
+        // Custom actions are now handled securely by WidgetActionReceiver
     }
 
     companion object {

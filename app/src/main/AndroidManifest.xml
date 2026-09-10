@@ -1,5 +1,5 @@
 <?xml version='1.0' encoding='utf-8'?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:ns1="http://schemas.android.com/tools">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:ns1="http://schemas.android.com/tools" xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.VIBRATE" />
@@ -46,11 +46,12 @@
 
 
     <application android:name=".App" android:allowBackup="true" android:appCategory="audio" android:banner="@mipmap/tv_banner" android:dataExtractionRules="@xml/data_extraction_rules" android:enableOnBackInvokedCallback="true" android:extractNativeLibs="true" android:fullBackupContent="@xml/backup_rules" android:icon="@mipmap/ic_launcher" android:label="@string/app_name" android:networkSecurityConfig="@xml/network_security_config" android:roundIcon="@mipmap/ic_launcher_round" android:supportsRtl="false" android:largeHeap="true" android:theme="@style/Theme.vibemusic" ns1:targetApi="tiramisu">
+        <property android:name="android.adservices.AD_SERVICES_CONFIG" android:resource="@xml/gma_ad_services_config" tools:replace="android:resource" />
         <uses-library android:name="org.apache.http.legacy" android:required="false" />
 
         <activity android:name=".ui.screens.CrashActivity" android:exported="false" android:theme="@style/Theme.vibemusic" android:excludeFromRecents="true" android:process=":crash" />
 
-        <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTask" android:theme="@style/Theme.vibemusic" android:windowSoftInputMode="adjustResize">
+        <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTask" android:theme="@style/Theme.vibemusic" android:windowSoftInputMode="adjustResize" android:configChanges="orientation|screenSize|screenLayout|keyboardHidden">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
             </intent-filter>
@@ -232,12 +233,11 @@
         <receiver android:name=".widget.MusicWidgetReceiver" android:exported="true" android:label="@string/widget_music_player">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-                <action android:name="com.music.echo.widget.PLAY_PAUSE" />
-                <action android:name="com.music.echo.widget.LIKE" />
-                <action android:name="com.music.echo.widget.UPDATE_WIDGET" />
             </intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/music_widget_info" />
         </receiver>
+
+        <receiver android:name=".widget.WidgetActionReceiver" android:exported="false" />
 
         
         <receiver android:name=".widget.PlaylistWidgetReceiver" android:exported="true" android:label="@string/widget_playlists">
@@ -251,9 +251,6 @@
         <receiver android:name=".widget.TurntableWidgetReceiver" android:exported="true" android:label="@string/widget_turntable">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-                <action android:name="com.music.echo.widget.TURNTABLE_PLAY_PAUSE" />
-                <action android:name="com.music.echo.widget.TURNTABLE_LIKE" />
-                <action android:name="com.music.echo.widget.UPDATE_TURNTABLE_WIDGET" />
             </intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/turntable_widget_info" />
         </receiver>
@@ -273,9 +270,6 @@
         <receiver android:name=".widget.MusicRecognizerWidgetReceiver" android:exported="true" android:label="@string/widget_recognizer_name">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-                <action android:name="com.music.echo.widget.recognizer.TAP_MIC" />
-                <action android:name="com.music.echo.widget.recognizer.UPDATE" />
-                <action android:name="com.music.echo.widget.recognizer.RESET" />
             </intent-filter>
 
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/recognizer_widget_info" />
@@ -292,6 +286,7 @@
             </intent-filter>
         </service>
 
-    <receiver android:name=".widget.DotMaterialWidgetReceiver" android:exported="true" android:label="@string/widget_dot_material_desc"><intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /><action android:name="com.music.echo.widget.PLAY_PAUSE" /><action android:name="com.music.echo.widget.NEXT" /><action android:name="com.music.echo.widget.PREVIOUS" /><action android:name="com.music.echo.widget.UPDATE_WIDGET" /></intent-filter><meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_dot_material_info" /></receiver><receiver android:name=".widget.LocalSpecWidgetReceiver" android:exported="true" android:label="@string/widget_local_spec_desc"><intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /><action android:name="com.music.echo.widget.PLAY_PAUSE" /><action android:name="com.music.echo.widget.NEXT" /><action android:name="com.music.echo.widget.PREVIOUS" /><action android:name="com.music.echo.widget.UPDATE_WIDGET" /></intent-filter><meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_local_spec_info" /></receiver><receiver android:name=".widget.SplitGridWidgetReceiver" android:exported="true" android:label="@string/widget_split_grid_desc"><intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /><action android:name="com.music.echo.widget.PLAY_PAUSE" /><action android:name="com.music.echo.widget.NEXT" /><action android:name="com.music.echo.widget.PREVIOUS" /><action android:name="com.music.echo.widget.UPDATE_WIDGET" /></intent-filter><meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_split_grid_info" /></receiver><receiver android:name=".widget.MiniDialWidgetReceiver" android:exported="true" android:label="@string/widget_mini_dial_desc"><intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /><action android:name="com.music.echo.widget.PLAY_PAUSE" /><action android:name="com.music.echo.widget.NEXT" /><action android:name="com.music.echo.widget.PREVIOUS" /><action android:name="com.music.echo.widget.UPDATE_WIDGET" /></intent-filter><meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_mini_dial_info" /></receiver></application>
+    <receiver android:name=".widget.DotMaterialWidgetReceiver" android:exported="true" android:label="@string/widget_dot_material_desc"><intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter><meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_dot_material_info" /></receiver><receiver android:name=".widget.LocalSpecWidgetReceiver" android:exported="true" android:label="@string/widget_local_spec_desc"><intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter><meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_local_spec_info" /></receiver><receiver android:name=".widget.SplitGridWidgetReceiver" android:exported="true" android:label="@string/widget_split_grid_desc"><intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter><meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_split_grid_info" /></receiver><receiver android:name=".widget.MiniDialWidgetReceiver" android:exported="true" android:label="@string/widget_mini_dial_desc"><intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter><meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_mini_dial_info" /></receiver>    <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-3940256099942544~3347511713"/>
+</application>
 
 </manifest>

@@ -88,6 +88,7 @@ import androidx.media3.exoplayer.offline.Download.STATE_COMPLETED
 import androidx.media3.exoplayer.offline.Download.STATE_DOWNLOADING
 import androidx.media3.exoplayer.offline.Download.STATE_QUEUED
 import coil3.compose.AsyncImage
+import com.music.echo.ui.component.shimmer.ShimmeringAsyncImage
 import coil3.request.ImageRequest
 import com.music.innertube.YouTube
 import com.music.innertube.models.AlbumItem
@@ -187,7 +188,7 @@ inline fun ListItem(
                 ) {
                     Icon(
                         painter = painterResource(R.drawable.offline),
-                        contentDescription = null,
+                        contentDescription = "Icon",
                         tint = Color.White,
                         modifier = Modifier
                             .size(ListThumbnailSize / 2)
@@ -558,8 +559,7 @@ fun ArtistListItem(
     badges: @Composable RowScope.() -> Unit = {
         if (artist.artist.bookmarkedAt != null) {
             Icon(
-                painter = painterResource(R.drawable.favorite),
-                contentDescription = null,
+                painter = painterResource(R.drawable.favorite), contentDescription = "Favorite",
                 tint = MaterialTheme.colorScheme.error,
                 modifier = Modifier
                     .size(18.dp)
@@ -573,14 +573,14 @@ fun ArtistListItem(
     subtitle = pluralStringResource(R.plurals.n_song, artist.songCount, artist.songCount),
     badges = badges,
     thumbnailContent = {
-        AsyncImage(
+        ShimmeringAsyncImage(
             model = ImageRequest.Builder(LocalContext.current)
                 .data(artist.artist.thumbnailUrl?.resize(544, 544))
                 .memoryCachePolicy(coil3.request.CachePolicy.ENABLED)
                 .diskCachePolicy(coil3.request.CachePolicy.ENABLED)
                 .networkCachePolicy(coil3.request.CachePolicy.ENABLED)
                 .build(),
-            contentDescription = null,
+            contentDescription = "Album Art",
             modifier = Modifier
                 .size(ListThumbnailSize)
                 .clip(CircleShape),
@@ -607,14 +607,14 @@ fun ArtistGridItem(
     subtitle = pluralStringResource(R.plurals.n_song, artist.songCount, artist.songCount),
     badges = badges,
     thumbnailContent = {
-        AsyncImage(
+        ShimmeringAsyncImage(
             model = ImageRequest.Builder(LocalContext.current)
                 .data(artist.artist.thumbnailUrl?.resize(544, 544))
                 .memoryCachePolicy(coil3.request.CachePolicy.ENABLED)
                 .diskCachePolicy(coil3.request.CachePolicy.ENABLED)
                 .networkCachePolicy(coil3.request.CachePolicy.ENABLED)
                 .build(),
-            contentDescription = null,
+            contentDescription = "Album Art",
             contentScale = ContentScale.Crop,
             modifier = Modifier
                 .fillMaxSize()
@@ -820,7 +820,7 @@ fun PlaylistListItem(
         if (playlist.playlist.isPinned) {
             Icon(
                 painter = painterResource(R.drawable.ic_push_pin),
-                contentDescription = null,
+                contentDescription = "Play",
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(16.dp).padding(end = 2.dp)
             )
@@ -864,7 +864,7 @@ fun PlaylistListItem(
                 }
                 Icon(
                     painter = painterResource(painter),
-                    contentDescription = null,
+                    contentDescription = "Play",
                     tint = LocalContentColor.current.copy(alpha = 0.8f),
                     modifier = Modifier.size(ListThumbnailSize / 2)
                 )
@@ -912,7 +912,7 @@ fun PlaylistGridItem(
         if (playlist.playlist.isPinned) {
             Icon(
                 painter = painterResource(R.drawable.ic_push_pin),
-                contentDescription = null,
+                contentDescription = "Play",
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(16.dp).padding(end = 2.dp)
             )
@@ -978,7 +978,7 @@ fun PlaylistGridItem(
                 ) {
                     Icon(
                         painter = painterResource(painter),
-                        contentDescription = null,
+                        contentDescription = "Icon",
                         tint = LocalContentColor.current.copy(alpha = 0.8f),
                         modifier = Modifier.size(width / 2)
                     )
@@ -1336,14 +1336,14 @@ fun ItemThumbnail(
             .clip(shape)
     ) {
         if (albumIndex == null) {
-            AsyncImage(
+            ShimmeringAsyncImage(
                 model = ImageRequest.Builder(LocalContext.current)
                     .data(thumbnailUrl?.resize(544, 544))
                     .memoryCachePolicy(coil3.request.CachePolicy.ENABLED)
                     .diskCachePolicy(coil3.request.CachePolicy.ENABLED)
                     .networkCachePolicy(coil3.request.CachePolicy.ENABLED)
                     .build(),
-                contentDescription = null,
+                contentDescription = "Album Art",
                 contentScale = if (cropAlbumArt) ContentScale.Crop else ContentScale.Fit,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1375,7 +1375,7 @@ fun ItemThumbnail(
             ) {
                 Icon(
                     painter = painterResource(R.drawable.done),
-                    contentDescription = null
+                    contentDescription = "Icon"
                 )
             }
         }
@@ -1416,14 +1416,14 @@ fun LocalThumbnail(
             .aspectRatio(thumbnailRatio)
             .clip(shape)
     ) {
-        AsyncImage(
+        ShimmeringAsyncImage(
             model = ImageRequest.Builder(LocalContext.current)
                 .data(thumbnailUrl)
                 .memoryCachePolicy(coil3.request.CachePolicy.ENABLED)
                 .diskCachePolicy(coil3.request.CachePolicy.ENABLED)
                 .networkCachePolicy(coil3.request.CachePolicy.ENABLED)
                 .build(),
-            contentDescription = null,
+            contentDescription = "Album Art",
             contentScale = if (cropAlbumArt) ContentScale.Crop else ContentScale.Fit,
             modifier = Modifier.fillMaxSize()
         )
@@ -1446,8 +1446,7 @@ fun LocalThumbnail(
                     )
                 } else {
                     Icon(
-                        painter = painterResource(R.drawable.play),
-                        contentDescription = null,
+                        painter = painterResource(R.drawable.play), contentDescription = "Play",
                         tint = Color.White
                     )
                 }
@@ -1471,8 +1470,7 @@ fun LocalThumbnail(
                         .background(Color.Black.copy(alpha = 0.6f))
                 ) {
                     Icon(
-                        painter = painterResource(R.drawable.play),
-                        contentDescription = null,
+                        painter = painterResource(R.drawable.play), contentDescription = "Play",
                         tint = Color.White
                     )
                 }
@@ -1496,8 +1494,7 @@ fun LocalThumbnail(
                         .background(Color.Black.copy(alpha = ActiveBoxAlpha))
                 ) {
                     Icon(
-                        painter = painterResource(R.drawable.play),
-                        contentDescription = null,
+                        painter = painterResource(R.drawable.play), contentDescription = "Play",
                         tint = Color.White
                     )
                 }
@@ -1526,7 +1523,7 @@ fun PlaylistThumbnail(
         ) {
             placeHolder()
         }
-        1 -> AsyncImage(
+        1 -> ShimmeringAsyncImage(
             model = ImageRequest.Builder(LocalContext.current)
                 .data(thumbnails[0].resize(544, 544))
                 .apply {  }
@@ -1534,10 +1531,10 @@ fun PlaylistThumbnail(
                 .diskCachePolicy(coil3.request.CachePolicy.ENABLED)
                 .networkCachePolicy(coil3.request.CachePolicy.ENABLED)
                 .build(),
-            contentDescription = null,
+            contentDescription = "Icon",
             contentScale = if (cropAlbumArt) ContentScale.Crop else ContentScale.Fit,
-            placeholder = painterResource(R.drawable.music_note),
-            error = painterResource(R.drawable.music_note),
+            
+            errorPainter = painterResource(R.drawable.music_note),
             modifier = Modifier
                 .size(size)
                 .clip(shape)
@@ -1553,7 +1550,7 @@ fun PlaylistThumbnail(
                 Alignment.BottomStart,
                 Alignment.BottomEnd
             ).fastForEachIndexed { index, alignment ->
-                AsyncImage(
+                ShimmeringAsyncImage(
                     model = ImageRequest.Builder(LocalContext.current)
                         .data(thumbnails.getOrNull(index)?.resize(544, 544))
                         .apply {  }
@@ -1561,10 +1558,10 @@ fun PlaylistThumbnail(
                         .diskCachePolicy(coil3.request.CachePolicy.ENABLED)
                         .networkCachePolicy(coil3.request.CachePolicy.ENABLED)
                         .build(),
-                    contentDescription = null,
+                    contentDescription = "Icon",
                     contentScale = if (cropAlbumArt) ContentScale.Crop else ContentScale.Fit,
-                    placeholder = painterResource(R.drawable.music_note),
-                    error = painterResource(R.drawable.music_note),
+                    
+                    errorPainter = painterResource(R.drawable.music_note),
                     modifier = Modifier
                         .align(alignment)
                         .size(size / 2)
@@ -1593,8 +1590,7 @@ fun BoxScope.OverlayPlayButton(
                 .background(Color.Black.copy(alpha = ActiveBoxAlpha))
         ) {
             Icon(
-                painter = painterResource(R.drawable.play),
-                contentDescription = null,
+                painter = painterResource(R.drawable.play), contentDescription = "Play",
                 tint = Color.White,
                 modifier = Modifier.size(20.dp)
             )
@@ -1627,7 +1623,7 @@ fun BoxScope.OverlayEditButton(
         ) {
             Icon(
                 painter = painterResource(R.drawable.edit),
-                contentDescription = null,
+                contentDescription = "Icon",
                 tint = Color.White,
                 modifier = Modifier.size(20.dp)
             )
@@ -1657,8 +1653,7 @@ fun BoxScope.AlbumPlayButton(
                 .clickable(onClick = onClick)
         ) {
             Icon(
-                painter = painterResource(R.drawable.play),
-                contentDescription = null,
+                painter = painterResource(R.drawable.play), contentDescription = "Play",
                 tint = Color.White
             )
         }
@@ -1724,7 +1719,7 @@ fun SwipeToSongBox(
                 ) {
                     Icon(
                         painter = painterResource(id = iconRes),
-                        contentDescription = null,
+                        contentDescription = "Icon",
                         modifier = Modifier
                             .padding(horizontal = 24.dp)
                             .size(30.dp),
@@ -1767,8 +1762,7 @@ object Icon {
     @Composable
     fun Favorite() {
         Icon(
-            painter = painterResource(R.drawable.favorite),
-            contentDescription = null,
+            painter = painterResource(R.drawable.favorite), contentDescription = "Favorite",
             tint = MaterialTheme.colorScheme.error,
             modifier = Modifier
                 .size(18.dp)
@@ -1780,7 +1774,7 @@ object Icon {
     fun Library() {
         Icon(
             painter = painterResource(R.drawable.library_add_check),
-            contentDescription = null,
+            contentDescription = "Icon",
             modifier = Modifier
                 .size(18.dp)
                 .padding(end = 2.dp)
@@ -1792,7 +1786,7 @@ object Icon {
         when (state) {
             STATE_COMPLETED -> Icon(
                 painter = painterResource(R.drawable.offline),
-                contentDescription = null,
+                contentDescription = "Icon",
                 modifier = Modifier
                     .size(18.dp)
                     .padding(end = 2.dp)
@@ -1811,7 +1805,7 @@ object Icon {
     fun Explicit() {
         Icon(
             painter = painterResource(R.drawable.explicit),
-            contentDescription = null,
+            contentDescription = "Icon",
             modifier = Modifier
                 .size(18.dp)
                 .padding(end = 2.dp)

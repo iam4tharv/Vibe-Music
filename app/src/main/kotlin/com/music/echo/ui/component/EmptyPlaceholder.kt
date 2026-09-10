@@ -34,7 +34,7 @@ fun EmptyPlaceholder(
     ) {
         Image(
             painter = painterResource(icon),
-            contentDescription = null,
+            contentDescription = "Icon",
             colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.onBackground),
             modifier = Modifier.size(64.dp),
         )

@@ -1,8 +1,18 @@
 
 
 package com.music.echo
+
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import com.music.echo.R
 import com.music.echo.BuildConfig
+import com.music.echo.ui.utils.appEnterTransition
+import com.music.echo.ui.utils.appExitTransition
+import com.music.echo.ui.utils.appPopEnterTransition
+import com.music.echo.ui.utils.appPopExitTransition
 import com.music.echo.ui.screens.settings.RingtoneViewModel
 import com.music.echo.ui.component.RingtoneTrimmerDialog
 import com.music.echo.ui.component.RingtoneProgressDialog
@@ -20,12 +30,18 @@ import android.annotation.SuppressLint
 import androidx.datastore.preferences.core.edit
 import kotlinx.coroutines.flow.first
 import android.app.PendingIntent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import android.content.ComponentName
 import android.content.Intent
 import android.content.ServiceConnection
 import android.content.pm.PackageManager
 import android.os.Build
+import com.google.android.gms.ads.MobileAds
 import android.os.Bundle
+import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.ExperimentalSharedTransitionApi
 import android.os.IBinder
 import android.view.View
 import android.view.WindowManager
@@ -35,6 +51,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
+import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
@@ -47,6 +64,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.add
 import androidx.compose.foundation.layout.asPaddingValues
@@ -218,11 +237,14 @@ import com.music.echo.utils.rememberPreference
 import com.music.echo.utils.reportException
 import com.music.echo.utils.setAppLocale
 import com.music.echo.viewmodels.HomeViewModel
+import com.music.echo.ui.vibee.VibeeManager
+import com.music.echo.ui.vibee.VibeeOverlay
 import com.valentinilk.shimmer.LocalShimmerTheme
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -311,19 +333,24 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onStop() {
-        unbindService(serviceConnection)
         super.onStop()
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        try {
+            unbindService(serviceConnection)
+        } catch (e: Exception) {
+    com.music.echo.utils.ErrorNotifier.notifyError(e.message ?: "An unexpected error occurred")
+    e.printStackTrace()
+}
+        listenTogetherManager.setPlayerConnection(null)
         playerConnection?.dispose()
         if (dataStore.get(StopMusicOnTaskClearKey, false) &&
             playerConnection?.isPlaying?.value == true &&
             isFinishing
         ) {
             stopService(Intent(this, MusicService::class.java))
-            unbindService(serviceConnection)
             playerConnection = null
         }
     }
@@ -359,6 +386,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
+        MobileAds.initialize(this) {}
         window.decorView.layoutDirection = View.LAYOUT_DIRECTION_LTR
         WindowCompat.setDecorFitsSystemWindows(window, false)
 
@@ -541,7 +569,8 @@ class MainActivity : ComponentActivity() {
                         } catch (e: Exception) {
                             
                             themeColor = selectedThemeColor
-                        }
+                        
+}
                     }
                 } else {
                     themeColor = selectedThemeColor
@@ -552,6 +581,18 @@ class MainActivity : ComponentActivity() {
         val (enableHaptics) = rememberPreference(com.music.echo.constants.EnableHapticsKey, defaultValue = false)
         val view = LocalView.current
         var lastScrollHapticTime by remember { mutableStateOf(0L) }
+        
+        val vibeeScope = rememberCoroutineScope()
+        val vibeeManager = remember(context, playerConnection, vibeeScope) {
+            VibeeManager(context, playerConnection, vibeeScope).apply {
+                startWakeWordListeningIfNeeded()
+            }
+        }
+        DisposableEffect(vibeeManager) {
+            onDispose {
+                vibeeManager.release()
+            }
+        }
 
         echomusicTheme(
             darkTheme = useDarkTheme,
@@ -592,6 +633,13 @@ class MainActivity : ComponentActivity() {
                 val bottomInsetDp = WindowInsets.systemBars.asPaddingValues().calculateBottomPadding()
 
                 val navController = rememberNavController()
+                val micPermissionLauncher = rememberLauncherForActivityResult(
+                    ActivityResultContracts.RequestPermission()
+                ) { isGranted ->
+                    if (isGranted) {
+                        vibeeManager.startListening()
+                    }
+                }
                 val homeViewModel: HomeViewModel = hiltViewModel()
                 val accountImageUrl by homeViewModel.accountImageUrl.collectAsState()
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -841,14 +889,22 @@ class MainActivity : ComponentActivity() {
                     mutableStateOf(null)
                 }
                 val snackbarHostState = remember { SnackbarHostState() }
+                
+                androidx.compose.runtime.LaunchedEffect(Unit) {
+                    com.music.echo.utils.ErrorNotifier.errors.collect { errorMessage ->
+                        snackbarHostState.showSnackbar(errorMessage)
+                    }
+                }
                 var showSettingDialoge by remember { mutableStateOf(false) }
 
                 val (lastOpenedVersionCode, setLastOpenedVersionCode) = rememberPreference(com.music.echo.constants.LastOpenedVersionCodeKey, -1)
                 var showWelcomeDialog by remember { mutableStateOf(false) }
                 val (showDonationDialog, setShowDonationDialog) = rememberPreference(com.music.echo.constants.ShowDonationDialogKey, false)
 
-                LaunchedEffect(lastOpenedVersionCode) {
-                    if (lastOpenedVersionCode < BuildConfig.VERSION_CODE) {
+                val context = LocalContext.current
+                LaunchedEffect(Unit) {
+                    val currentVersionCode = context.dataStore.data.firstOrNull()?.get(com.music.echo.constants.LastOpenedVersionCodeKey) ?: -1
+                    if (currentVersionCode < BuildConfig.VERSION_CODE) {
                         showWelcomeDialog = true
                     }
                 }
@@ -884,7 +940,7 @@ class MainActivity : ComponentActivity() {
                 }
 
                 val currentTitle = when (navBackStackEntry?.destination?.route) {
-                    Screens.Home.route -> "Echo Music"
+                    Screens.Home.route -> "Vibe Music"
                     Screens.Search.route -> stringResource(R.string.search)
                     Screens.Library.route -> stringResource(R.string.filter_library)
                     Screens.ListenTogether.route -> stringResource(R.string.together)
@@ -945,27 +1001,29 @@ class MainActivity : ComponentActivity() {
                 val ringtoneViewModel: RingtoneViewModel = viewModel()
                 val ringtoneUiState by ringtoneViewModel.uiState.collectAsState()
 
-                CompositionLocalProvider(
-                    LocalRingtoneViewModel provides ringtoneViewModel,
-                    LocalDatabase provides database,
-                    LocalContentColor provides if (pureBlack) Color.White else contentColorFor(MaterialTheme.colorScheme.surface),
-                    LocalPlayerConnection provides playerConnection,
-                    LocalPlayerAwareWindowInsets provides playerAwareWindowInsets,
-                    LocalDownloadUtil provides downloadUtil,
-                    LocalShimmerTheme provides getShimmerTheme(),
-                    LocalSyncUtils provides syncUtils,
-                    LocalListenTogetherManager provides listenTogetherManager,
-                    LocalGlassEffectConfig provides glassEffectConfig,
-                    LocalAppBackdrop provides appBackdrop,
-                ) {
+                SharedTransitionLayout {
+                    CompositionLocalProvider(
+                        LocalSharedTransitionScope provides this@SharedTransitionLayout,
+                        LocalRingtoneViewModel provides ringtoneViewModel,
+                        LocalDatabase provides database,
+                        LocalContentColor provides if (pureBlack) Color.White else contentColorFor(MaterialTheme.colorScheme.surface),
+                        LocalPlayerConnection provides playerConnection,
+                        LocalPlayerAwareWindowInsets provides playerAwareWindowInsets,
+                        LocalDownloadUtil provides downloadUtil,
+                        LocalShimmerTheme provides getShimmerTheme(),
+                        LocalSyncUtils provides syncUtils,
+                        LocalListenTogetherManager provides listenTogetherManager,
+                        LocalGlassEffectConfig provides glassEffectConfig,
+                        LocalAppBackdrop provides appBackdrop,
+                    ) {
 
                     Scaffold(
                         snackbarHost = { SnackbarHost(snackbarHostState) },
                         topBar = {
                             AnimatedVisibility(
                                 visible = shouldShowTopBar,
-                                enter = fadeIn(animationSpec = tween(durationMillis = 300)),
-                                exit = fadeOut(animationSpec = tween(durationMillis = 200))
+                                enter = fadeIn(animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing)),
+                                exit = fadeOut(animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing))
                             ) {
                                 Row {
                                     TopAppBar(
@@ -979,6 +1037,29 @@ class MainActivity : ComponentActivity() {
                                             )
                                         },
                                         actions = {
+                                            IconButton(
+                                                onClick = {
+                                                    if (ContextCompat.checkSelfPermission(
+                                                            context,
+                                                            Manifest.permission.RECORD_AUDIO
+                                                        ) == PackageManager.PERMISSION_GRANTED
+                                                    ) {
+                                                        vibeeManager.startListening()
+                                                    } else {
+                                                        micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                                                    }
+                                                },
+                                                modifier = Modifier
+                                                    .padding(end = 4.dp)
+                                                    .clip(CircleShape)
+                                                    .background(MaterialTheme.colorScheme.primaryContainer)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Rounded.Mic,
+                                                    contentDescription = "Vibee AI",
+                                                    tint = MaterialTheme.colorScheme.onPrimaryContainer
+                                                )
+                                            }
                                             if (showHistoryButton) {
                                                 IconButton(onClick = { navController.navigate("history") }) {
                                                     Icon(
@@ -1251,59 +1332,16 @@ class MainActivity : ComponentActivity() {
                                     }.route,
                                     
                                     enterTransition = {
-                                        val currentRouteIndex = navigationItems.indexOfFirst {
-                                            it.route == targetState.destination.route
-                                        }
-                                        val previousRouteIndex = navigationItems.indexOfFirst {
-                                            it.route == initialState.destination.route
-                                        }
-
-                                        if (currentRouteIndex == -1 || currentRouteIndex > previousRouteIndex)
-                                            slideInHorizontally { it / 8 } + fadeIn(tween(200))
-                                        else
-                                            slideInHorizontally { -it / 8 } + fadeIn(tween(200))
+                                        appEnterTransition(navigationItems.map { it.route })
                                     },
-                                    
                                     exitTransition = {
-                                        val currentRouteIndex = navigationItems.indexOfFirst {
-                                            it.route == initialState.destination.route
-                                        }
-                                        val targetRouteIndex = navigationItems.indexOfFirst {
-                                            it.route == targetState.destination.route
-                                        }
-
-                                        if (targetRouteIndex == -1 || targetRouteIndex > currentRouteIndex)
-                                            slideOutHorizontally { -it / 8 } + fadeOut(tween(200))
-                                        else
-                                            slideOutHorizontally { it / 8 } + fadeOut(tween(200))
+                                        appExitTransition(navigationItems.map { it.route })
                                     },
-                                    
                                     popEnterTransition = {
-                                        val currentRouteIndex = navigationItems.indexOfFirst {
-                                            it.route == targetState.destination.route
-                                        }
-                                        val previousRouteIndex = navigationItems.indexOfFirst {
-                                            it.route == initialState.destination.route
-                                        }
-
-                                        if (previousRouteIndex != -1 && previousRouteIndex < currentRouteIndex)
-                                            slideInHorizontally { it / 8 } + fadeIn(tween(200))
-                                        else
-                                            slideInHorizontally { -it / 8 } + fadeIn(tween(200))
+                                        appPopEnterTransition(navigationItems.map { it.route })
                                     },
-                                    
                                     popExitTransition = {
-                                        val currentRouteIndex = navigationItems.indexOfFirst {
-                                            it.route == initialState.destination.route
-                                        }
-                                        val targetRouteIndex = navigationItems.indexOfFirst {
-                                            it.route == targetState.destination.route
-                                        }
-
-                                        if (currentRouteIndex != -1 && currentRouteIndex < targetRouteIndex)
-                                            slideOutHorizontally { -it / 8 } + fadeOut(tween(200))
-                                        else
-                                            slideOutHorizontally { it / 8 } + fadeOut(tween(200))
+                                        appPopExitTransition(navigationItems.map { it.route })
                                     },
                                     modifier = Modifier
                                         .layerBackdrop(appBackdrop)
@@ -1406,11 +1444,17 @@ class MainActivity : ComponentActivity() {
                                 setShowDonationDialog(false)
                             },
                             title = { androidx.compose.material3.Text("Enjoying the music?") },
-                            text = { androidx.compose.material3.Text("You've enjoyed 2 hours of uninterrupted music!. Please concider donating to keep our servers running") },
+                            text = { androidx.compose.material3.Text("You've enjoyed 2 hours of uninterrupted music! Please consider donating to support the app development.") },
                             confirmButton = {
                                 androidx.compose.material3.TextButton(onClick = {
                                     setShowDonationDialog(false)
-                                    navController.navigate("settings/donate")
+                                    try {
+                                        val uri = android.net.Uri.parse("upi://pay?pa=dev.atharv@fam&pn=Atharv&am=99&cu=INR&tn=Donation%20to%20Vibe%20Music&tr=ORDER123")
+                                        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, uri)
+                                        context.startActivity(intent)
+                                    } catch (e: Exception) {
+                                        android.widget.Toast.makeText(context, "No UPI app found", android.widget.Toast.LENGTH_SHORT).show()
+                                    }
                                 }) {
                                     androidx.compose.material3.Text("Donate")
                                 }
@@ -1425,6 +1469,8 @@ class MainActivity : ComponentActivity() {
                         )
                     }
 
+                    VibeeOverlay(manager = vibeeManager)
+                }
                 }
             }
         }
@@ -1585,6 +1631,12 @@ val LocalDatabase = staticCompositionLocalOf<MusicDatabase> { error("No database
 val LocalRingtoneViewModel = compositionLocalOf<RingtoneViewModel> { error("No RingtoneViewModel provided") }
 
 val LocalPlayerConnection = staticCompositionLocalOf<PlayerConnection?> { error("No PlayerConnection provided") }
+
+
+
+@OptIn(ExperimentalSharedTransitionApi::class)
+val LocalSharedTransitionScope = compositionLocalOf<SharedTransitionScope?> { null }
+val LocalNavAnimatedVisibilityScope = compositionLocalOf<AnimatedVisibilityScope?> { null }
 
 val LocalPlayerAwareWindowInsets = compositionLocalOf<WindowInsets> { error("No WindowInsets provided") }
 val LocalDownloadUtil = staticCompositionLocalOf<DownloadUtil> { error("No DownloadUtil provided") }

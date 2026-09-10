@@ -8,6 +8,7 @@ if (localPropertiesFile.exists()) {
     localProperties.load(localPropertiesFile.inputStream())
 }
 plugins {
+    // alias(libs.plugins.baselineprofile)
     id("com.android.application")
     alias(libs.plugins.hilt)
     alias(libs.plugins.kotlin.ksp)
@@ -34,8 +35,8 @@ android {
         applicationId = "com.music.echo"
         minSdk = 26
         targetSdk = 36
-        versionCode = 525
-        versionName = "1.0.5"
+        versionCode = 527
+        versionName = "1.2.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
@@ -47,7 +48,10 @@ android {
         buildConfigField("String", "LASTFM_API_KEY", "\"$lastFmKey\"")
         buildConfigField("String", "LASTFM_SECRET", "\"$lastFmSecret\"")
         val vibeeKey = localProperties.getProperty("Vibee") ?: System.getenv("Vibee") ?: localProperties.getProperty("VIBEE") ?: System.getenv("VIBEE") ?: ""
-        buildConfigField("String", "VIBEE", "\"\$vibeeKey\"")
+        buildConfigField("String", "VIBEE", "\"$vibeeKey\"")
+
+        val quoueKey = localProperties.getProperty("Quoue") ?: System.getenv("Quoue") ?: localProperties.getProperty("QUOUE") ?: System.getenv("QUOUE") ?: ""
+        buildConfigField("String", "QUOUE", "\"$quoueKey\"")
 
         // GitHub OAuth keys
         val githubClientId = localProperties.getProperty("GH_CLIENT_ID") ?: System.getenv("GH_CLIENT_ID") ?: ""
@@ -189,6 +193,10 @@ tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach 
 }
 
 dependencies {
+    // baselineProfile(project(":baselineprofile"))
+    implementation("androidx.profileinstaller:profileinstaller:1.3.1")
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.11.1")
     // Firebase - GMS flavor only (excluded from F-Droid / FOSS builds)
     implementation(platform("com.google.firebase:firebase-bom:33.1.0"))
     implementation("com.google.firebase:firebase-analytics")
@@ -292,5 +300,6 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended:1.7.8")
     implementation(libs.work.runtime.ktx)
     implementation(libs.androidx.core.splashscreen)
+    implementation("com.google.android.gms:play-services-ads:23.0.0")
 
 }

@@ -81,7 +81,9 @@ object ComposeToImage {
                     .build()
                 val result = imageLoader.execute(request)
                 coverArtBitmap = result.image?.toBitmap()
-            } catch (_: Exception) {}
+            } catch (_: Exception) {
+    com.music.echo.utils.ErrorNotifier.notifyError("An unexpected error occurred")
+}
         }
 
         
@@ -120,7 +122,8 @@ object ComposeToImage {
                         
                         backgroundPaint.color = bgColor
                         canvas.drawRect(backgroundRect, backgroundPaint)
-                    }
+                    
+}
                 } else {
                     backgroundPaint.color = bgColor
                     canvas.drawRect(backgroundRect, backgroundPaint)

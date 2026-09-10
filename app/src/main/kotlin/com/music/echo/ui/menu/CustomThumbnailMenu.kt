@@ -42,7 +42,7 @@ fun CustomThumbnailMenu(
                 leadingContent = {
                     Icon(
                         painter = painterResource(R.drawable.insert_photo),
-                        contentDescription = null,
+                        contentDescription = "Icon",
                     )
                 },
                 modifier = Modifier.clickable {
@@ -58,8 +58,7 @@ fun CustomThumbnailMenu(
                 },
                 leadingContent = {
                     Icon(
-                        painter = painterResource(R.drawable.delete),
-                        contentDescription = null,
+                        painter = painterResource(R.drawable.delete), contentDescription = "Delete",
                     )
                 },
                 modifier = Modifier.clickable {

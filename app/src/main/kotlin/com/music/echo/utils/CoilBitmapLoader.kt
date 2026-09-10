@@ -38,7 +38,8 @@ class CoilBitmapLoader(
                 copy(Bitmap.Config.ARGB_8888, false) ?: createFallbackBitmap()
             } catch (e: Exception) {
                 createFallbackBitmap()
-            }
+            
+}
         }
     }
 

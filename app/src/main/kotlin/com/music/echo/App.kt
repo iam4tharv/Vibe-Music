@@ -107,6 +107,7 @@ class App : Application(), SingletonImageLoader.Factory {
             launch(Dispatchers.IO) {
                 delay(1500)
                 CipherDeobfuscator.prewarm()
+                com.music.echo.utils.YTPlayerUtils.prewarm()
             }
             
             observeSettingsChanges()

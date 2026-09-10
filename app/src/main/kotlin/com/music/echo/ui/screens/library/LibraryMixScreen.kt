@@ -2,6 +2,7 @@
 
 package com.music.echo.ui.screens.library
 
+import android.annotation.SuppressLint
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -40,6 +41,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.music.echo.extensions.bounceClick
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
@@ -187,6 +189,7 @@ fun LibraryMixScreen(
     val playlist = viewModel.playlists.collectAsState()
 
     var allItems = albums.value + artist.value + playlist.value
+    @SuppressLint("NonObservableLocale")
     val collator = Collator.getInstance(Locale.getDefault())
     collator.strength = Collator.PRIMARY
     allItems =
@@ -255,7 +258,8 @@ fun LibraryMixScreen(
     val headerContent = @Composable {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(start = 16.dp),
+            modifier = Modifier
+                                    .padding(start = 16.dp),
         ) {
             SortHeader(
                 sortType = sortType,
@@ -273,7 +277,8 @@ fun LibraryMixScreen(
 
             Spacer(Modifier.weight(1f))
 
-            Spacer(modifier = Modifier.width(16.dp))
+            Spacer(modifier = Modifier
+                                    .width(16.dp))
         }
     }
 
@@ -288,7 +293,8 @@ fun LibraryMixScreen(
             PullToRefreshDefaults.LoadingIndicator(
                 state = pullRefreshState,
                 isRefreshing = isRefreshing,
-                modifier = Modifier.align(Alignment.TopCenter),
+                modifier = Modifier
+                                    .align(Alignment.TopCenter),
             )
         }
     ) {
@@ -321,6 +327,7 @@ fun LibraryMixScreen(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                             modifier = Modifier
+                                    
                                 .fillMaxWidth()
                                 .padding(horizontal = 16.dp, vertical = 8.dp)
                         ) {
@@ -377,6 +384,7 @@ fun LibraryMixScreen(
                                 iconTint = androidx.compose.material3.MaterialTheme.colorScheme.onSurface,
                                 onClick = { navController.navigate("local_songs") },
                                 modifier = Modifier
+                                    
                                     .fillMaxWidth(0.5f)
                                     .padding(end = 4.dp)
                             )
@@ -391,7 +399,8 @@ fun LibraryMixScreen(
                             text = "Playlists",
                             style = androidx.compose.material3.MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 8.dp)
+                            modifier = Modifier
+                                    .padding(start = 16.dp, top = 16.dp, bottom = 8.dp)
                         )
                     }
 
@@ -425,6 +434,7 @@ fun LibraryMixScreen(
                                     modifier =
                                     Modifier
                                         .fillMaxWidth()
+                                        .bounceClick()
                                         .combinedClickable(
                                             onClick = {
                                                 navController.navigate("local_playlist/${item.id}")
@@ -468,6 +478,7 @@ fun LibraryMixScreen(
                                     modifier =
                                     Modifier
                                         .fillMaxWidth()
+                                        .bounceClick()
                                         .combinedClickable(
                                             onClick = {
                                                 navController.navigate("artist/${item.id}")
@@ -513,6 +524,7 @@ fun LibraryMixScreen(
                                     modifier =
                                     Modifier
                                         .fillMaxWidth()
+                                        .bounceClick()
                                         .combinedClickable(
                                             onClick = {
                                                 navController.navigate("album/${item.id}")
@@ -572,6 +584,7 @@ fun LibraryMixScreen(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                             modifier = Modifier
+                                    
                                 .fillMaxWidth()
                                 .padding(horizontal = 16.dp, vertical = 8.dp)
                         ) {
@@ -628,6 +641,7 @@ fun LibraryMixScreen(
                                 iconTint = androidx.compose.material3.MaterialTheme.colorScheme.onSurface,
                                 onClick = { navController.navigate("local_songs") },
                                 modifier = Modifier
+                                    
                                     .fillMaxWidth(0.5f)
                                     .padding(end = 4.dp)
                             )
@@ -643,7 +657,8 @@ fun LibraryMixScreen(
                             text = "Playlists",
                             style = androidx.compose.material3.MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 8.dp)
+                            modifier = Modifier
+                                    .padding(start = 16.dp, top = 16.dp, bottom = 8.dp)
                         )
                     }
 
@@ -660,6 +675,7 @@ fun LibraryMixScreen(
                                     modifier =
                                     Modifier
                                         .fillMaxWidth()
+                                        .bounceClick()
                                         .combinedClickable(
                                             onClick = {
                                                 navController.navigate("local_playlist/${item.id}")
@@ -686,6 +702,7 @@ fun LibraryMixScreen(
                                     modifier =
                                     Modifier
                                         .fillMaxWidth()
+                                        .bounceClick()
                                         .combinedClickable(
                                             onClick = {
                                                 navController.navigate("artist/${item.id}")
@@ -715,6 +732,7 @@ fun LibraryMixScreen(
                                     modifier =
                                     Modifier
                                         .fillMaxWidth()
+                                        .bounceClick()
                                         .combinedClickable(
                                             onClick = {
                                                 navController.navigate("album/${item.id}")

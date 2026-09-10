@@ -29,7 +29,7 @@ class SponsorBlockRepository @Inject constructor() {
                 .url(url)
                 .build()
 
-            val response = client.newCall(request).execute()
+            client.newCall(request).execute().use { response ->
             if (!response.isSuccessful) {
                 if (response.code != 404) {
                     Timber.w("SponsorBlock API failed for video $videoId with code ${response.code}")
@@ -61,6 +61,7 @@ class SponsorBlockRepository @Inject constructor() {
             
             cache[videoId] = segments
             segments
+            }
         } catch (e: Exception) {
             Timber.e(e, "Error fetching SponsorBlock segments for $videoId")
             emptyList()

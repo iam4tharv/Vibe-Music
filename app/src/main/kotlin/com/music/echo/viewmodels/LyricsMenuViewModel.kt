@@ -53,7 +53,8 @@ constructor(
             networkConnectivity.isCurrentlyConnected()
         } catch (e: Exception) {
             true 
-        }
+        
+}
     }
 
     fun setCurrentSong(song: Song) {

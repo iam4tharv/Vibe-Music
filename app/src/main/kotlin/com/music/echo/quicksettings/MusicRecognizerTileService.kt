@@ -6,6 +6,7 @@ import android.graphics.drawable.Icon
 import android.os.Build
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
+import android.annotation.SuppressLint
 import com.music.echo.R
 import com.music.echo.recognition.RecognitionLaunchActivity
 
@@ -37,6 +38,7 @@ class MusicRecognizerTileService : TileService() {
             startActivityAndCollapse(pendingIntent)
         } else {
             @Suppress("DEPRECATION")
+            @SuppressLint("StartActivityAndCollapseDeprecated")
             startActivityAndCollapse(launchIntent)
         }
     }

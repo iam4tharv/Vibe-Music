@@ -51,6 +51,7 @@ fun ActivityHistoryBottomSheet(
     uniqueArtists: Int,
     uniqueAlbums: Int,
     periodLabel: String,
+    onShareClick: (() -> Unit)? = null,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
@@ -93,6 +94,15 @@ fun ActivityHistoryBottomSheet(
                     )
                 }
                 Spacer(modifier = Modifier.width(8.dp))
+                if (onShareClick != null) {
+                    IconButton(onClick = onShareClick) {
+                        Icon(
+                            painter = painterResource(R.drawable.share),
+                            contentDescription = stringResource(R.string.share_wrapped),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
                 IconButton(onClick = onDismiss) {
                     Icon(
                         painter = painterResource(R.drawable.close),
@@ -153,7 +163,7 @@ fun ActivityHistoryBottomSheet(
                     ) {
                         Icon(
                             painter = painterResource(R.drawable.timer),
-                            contentDescription = null,
+                            contentDescription = "Icon",
                             tint = MaterialTheme.colorScheme.onPrimary,
                             modifier = Modifier.size(24.dp)
                         )
@@ -191,8 +201,7 @@ fun ActivityHistoryBottomSheet(
                         modifier = Modifier.padding(horizontal = 4.dp)
                     ) {
                         Icon(
-                            painter = painterResource(R.drawable.music_note),
-                            contentDescription = null,
+                            painter = painterResource(R.drawable.music_note), contentDescription = "Music Note",
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(20.dp)
                         )
@@ -245,7 +254,7 @@ fun ActivityHistoryBottomSheet(
                     ) {
                         Icon(
                             painter = painterResource(R.drawable.artist),
-                            contentDescription = null,
+                            contentDescription = "Icon",
                             tint = MaterialTheme.colorScheme.secondary,
                             modifier = Modifier.size(20.dp)
                         )
@@ -303,7 +312,7 @@ fun ActivityHistoryBottomSheet(
                     ) {
                         Icon(
                             painter = painterResource(R.drawable.album),
-                            contentDescription = null,
+                            contentDescription = "Icon",
                             tint = MaterialTheme.colorScheme.tertiary,
                             modifier = Modifier.size(20.dp)
                         )
@@ -364,7 +373,7 @@ fun ActivityHistoryBottomSheet(
                         ) {
                             Icon(
                                 painter = painterResource(R.drawable.timer),
-                                contentDescription = null,
+                                contentDescription = "Icon",
                                 tint = MaterialTheme.colorScheme.secondary,
                                 modifier = Modifier.size(20.dp)
                             )

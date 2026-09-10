@@ -63,6 +63,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.music.echo.extensions.bounceClick
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -85,6 +86,7 @@ import androidx.compose.ui.util.fastForEach
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.navigation.NavController
 import coil3.compose.AsyncImage
+import com.music.echo.ui.component.shimmer.ShimmeringAsyncImage
 import com.music.innertube.YouTube
 import com.music.innertube.models.AlbumItem
 import com.music.innertube.models.ArtistItem
@@ -328,9 +330,9 @@ fun ArtistScreen(
                                         )
                                 ) {
                                     if (thumbnail != null) {
-                                        AsyncImage(
+                                        ShimmeringAsyncImage(
                                             model = thumbnail.resize(1200, 1200),
-                                            contentDescription = null,
+                                            contentDescription = "Album Art",
                                             modifier = Modifier.fillMaxSize(),
                                             contentScale = androidx.compose.ui.layout.ContentScale.Crop
                                         )
@@ -428,7 +430,7 @@ fun ArtistScreen(
                                             ) {
                                                 Icon(
                                                     painter = painterResource(R.drawable.artist_screen),
-                                                    contentDescription = null,
+                                                    contentDescription = "Icon",
                                                     modifier = Modifier.size(16.dp),
                                                     tint = MaterialTheme.colorScheme.onSecondaryContainer
                                                 )
@@ -456,7 +458,7 @@ fun ArtistScreen(
                                             ) {
                                                 Icon(
                                                     painter = painterResource(R.drawable.graphic_eq),
-                                                    contentDescription = null,
+                                                    contentDescription = "Icon",
                                                     modifier = Modifier.size(16.dp),
                                                     tint = MaterialTheme.colorScheme.onTertiaryContainer
                                                 )
@@ -550,7 +552,7 @@ fun ArtistScreen(
                                                     R.drawable.subscribe
                                                 }
                                             ),
-                                            contentDescription = null,
+                                            contentDescription = "Icon",
                                             modifier = Modifier.size(20.dp),
                                             tint = if (libraryArtist?.artist?.bookmarkedAt != null) {
                                                 MaterialTheme.colorScheme.onPrimary
@@ -589,7 +591,7 @@ fun ArtistScreen(
                                             ) {
                                                 Icon(
                                                     painter = painterResource(R.drawable.radio),
-                                                    contentDescription = null,
+                                                    contentDescription = "Icon",
                                                     modifier = Modifier.size(20.dp)
                                                 )
                                                 Spacer(Modifier.size(ToggleButtonDefaults.IconSpacing))
@@ -717,13 +719,13 @@ fun ArtistScreen(
                                         },
                                     ) {
                                         Icon(
-                                            painter = painterResource(R.drawable.more_vert),
-                                            contentDescription = null,
+                                            painter = painterResource(R.drawable.more_vert), contentDescription = "Options",
                                         )
                                     }
                                 },
                                 modifier = Modifier
                                     .fillMaxWidth()
+                                    .bounceClick()
                                     .combinedClickable(
                                         onClick = {
                                             if (song.id == mediaMetadata?.id) {
@@ -784,6 +786,7 @@ fun ArtistScreen(
                                         isPlaying = isPlaying,
                                         coroutineScope = coroutineScope,
                                         modifier = Modifier
+                                            .bounceClick()
                                             .combinedClickable(
                                                 onClick = {
                                                     navController.navigate("album/${album.id}")
@@ -846,12 +849,12 @@ fun ArtistScreen(
                                             },
                                         ) {
                                             Icon(
-                                                painter = painterResource(R.drawable.more_vert),
-                                                contentDescription = null,
+                                                painter = painterResource(R.drawable.more_vert), contentDescription = "Options",
                                             )
                                         }
                                     },
                                     modifier = Modifier
+                                        .bounceClick()
                                         .combinedClickable(
                                             onClick = {
                                                 if (song.id == mediaMetadata?.id) {
@@ -899,6 +902,7 @@ fun ArtistScreen(
                                             coroutineScope = coroutineScope,
                                             thumbnailRatio = 1f, 
                                             modifier = Modifier
+                                                .bounceClick()
                                                 .combinedClickable(
                                                     onClick = {
                                                         when (item) {
@@ -1098,7 +1102,7 @@ fun ArtistScreen(
             ) {
                 Icon(
                     painterResource(R.drawable.arrow_back),
-                    contentDescription = null,
+                    contentDescription = "Icon",
                 )
             }
         },
@@ -1115,7 +1119,7 @@ fun ArtistScreen(
             ) {
                 Icon(
                     painterResource(R.drawable.link),
-                    contentDescription = null,
+                    contentDescription = "Icon",
                 )
             }
         },

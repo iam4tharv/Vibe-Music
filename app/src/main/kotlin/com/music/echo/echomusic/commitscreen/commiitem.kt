@@ -53,7 +53,7 @@ import com.music.echo.R
         ) {
             Icon(
                 painter = painterResource(R.drawable.commit), 
-                contentDescription = null,
+                contentDescription = "Icon",
                 tint = MaterialTheme.colorScheme.onPrimaryContainer,
                 modifier = Modifier.size(20.dp)
             )

@@ -4,6 +4,7 @@ package com.music.echo.ui.player
 
 import android.content.res.Configuration
 import android.os.Build
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
@@ -16,6 +17,10 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
@@ -97,6 +102,7 @@ import androidx.compose.ui.unit.sp
 import androidx.media3.common.Player
 import androidx.palette.graphics.Palette
 import coil3.compose.AsyncImage
+import com.music.echo.ui.component.shimmer.ShimmeringAsyncImage
 import coil3.imageLoader
 import coil3.request.ImageRequest
 import coil3.request.allowHardware
@@ -256,7 +262,8 @@ private fun NewMiniPlayer(
             playerConnection.service.castConnectionHandler
         } catch (e: Exception) {
             null
-        }
+        
+}
     }
     val isCasting by castHandler?.isCasting?.collectAsState() ?: remember { mutableStateOf(false) }
 
@@ -288,7 +295,7 @@ private fun NewMiniPlayer(
     var totalDragDistance by remember { mutableFloatStateOf(0f) }
 
     val animationSpec = remember {
-        spring<Float>(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow)
+        spring<Float>(dampingRatio = 0.8f, stiffness = 350f)
     }
 
     val autoSwipeThreshold = remember(swipeSensitivity) {
@@ -517,11 +524,11 @@ private fun NewMiniPlayerThumbnail(
                 .border(1.dp, outlineColor.copy(alpha = 0.3f), CircleShape)
         ) {
             mediaMetadata?.let { metadata ->
-                AsyncImage(
+                ShimmeringAsyncImage(
                     model = ImageRequest.Builder(LocalContext.current)
                         .data(metadata.thumbnailUrl)
                         .build(),
-                    contentDescription = null,
+                    contentDescription = "Album Art",
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize().clip(CircleShape)
                 )
@@ -544,42 +551,55 @@ private fun NewMiniPlayerSongInfo(
         modifier = modifier,
         verticalArrangement = Arrangement.Center
     ) {
-        mediaMetadata?.let { metadata ->
-            Text(
-                text = metadata.title,
-                color = onSurfaceColor,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.basicMarquee(iterations = 1, initialDelayMillis = 3000, velocity = 30.dp),
-            )
-            Row(
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                if (metadata.explicit) MIcon.Explicit()
-                if (metadata.artists.any { it.name.isNotBlank() }) {
+        AnimatedContent(
+            targetState = mediaMetadata,
+            transitionSpec = {
+                (slideInVertically(animationSpec = spring(dampingRatio = 0.88f, stiffness = 400f)) { it / 3 } +
+                 fadeIn(animationSpec = spring(dampingRatio = 0.92f, stiffness = 420f))) togetherWith
+                (slideOutVertically(animationSpec = spring(dampingRatio = 0.88f, stiffness = 400f)) { -it / 3 } +
+                 fadeOut(animationSpec = spring(dampingRatio = 0.92f, stiffness = 420f)))
+            },
+            label = "MiniPlayerSongInfoAnimated"
+        ) { metadata ->
+            if (metadata != null) {
+                Column {
                     Text(
-                        text = metadata.artists.joinToString { it.name },
-                        color = onSurfaceColor.copy(alpha = 0.7f),
-                        fontSize = 12.sp,
+                        text = metadata.title,
+                        color = onSurfaceColor,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.basicMarquee(iterations = 1, initialDelayMillis = 3000, velocity = 30.dp),
                     )
+                    Row(
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        if (metadata.explicit) MIcon.Explicit()
+                        if (metadata.artists.any { it.name.isNotBlank() }) {
+                            Text(
+                                text = metadata.artists.joinToString { it.name },
+                                color = onSurfaceColor.copy(alpha = 0.7f),
+                                fontSize = 12.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.basicMarquee(iterations = 1, initialDelayMillis = 3000, velocity = 30.dp),
+                            )
+                        }
+                    }
                 }
             }
+        }
 
-            AnimatedVisibility(visible = error != null, enter = fadeIn(), exit = fadeOut()) {
-                Text(
-                    text = stringResource(R.string.error_playing),
-                    color = errorColor,
-                    fontSize = 10.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
+        AnimatedVisibility(visible = error != null, enter = fadeIn(), exit = fadeOut()) {
+            Text(
+                text = stringResource(R.string.error_playing),
+                color = errorColor,
+                fontSize = 10.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }
@@ -606,7 +626,8 @@ private fun LegacyMiniPlayer(
             playerConnection.service.castConnectionHandler
         } catch (e: Exception) {
             null
-        }
+        
+}
     }
     val isCasting by castHandler?.isCasting?.collectAsState() ?: remember { mutableStateOf(false) }
 
@@ -631,7 +652,7 @@ private fun LegacyMiniPlayer(
     var totalDragDistance by remember { mutableFloatStateOf(0f) }
 
     val animationSpec = remember {
-        spring<Float>(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow)
+        spring<Float>(dampingRatio = 0.8f, stiffness = 350f)
     }
 
     val autoSwipeThreshold = remember(swipeSensitivity) {
@@ -751,7 +772,7 @@ private fun LegacyMiniPlayer(
                     enabled = canSkipNext && !isListenTogetherGuest,
                     onClick = if (isListenTogetherGuest) ({}) else ({ playerConnection.seekToNext() }),
             ) {
-                Icon(painter = painterResource(R.drawable.skip_next), contentDescription = null)
+                Icon(painter = painterResource(R.drawable.skip_next), contentDescription = "Skip Next")
             }
         }
 
@@ -766,7 +787,7 @@ private fun LegacyMiniPlayer(
                     painter = painterResource(
                         if (offsetXAnimatable.value > 0) R.drawable.skip_previous else R.drawable.skip_next
                     ),
-                    contentDescription = null,
+                    contentDescription = "Skip Next",
                     tint = primaryColor.copy(
                         alpha = (offsetXAnimatable.value.absoluteValue / autoSwipeThreshold).coerceIn(0f, 1f)
                     ),
@@ -828,7 +849,7 @@ private fun LegacyPlayPauseButton(
                     else -> R.drawable.play
                 }
             ),
-            contentDescription = null,
+            contentDescription = "Play",
             tint = tint,
         )
     }
@@ -859,11 +880,11 @@ private fun LegacyMiniMediaInfo(
                     .background(MaterialTheme.colorScheme.surfaceVariant)
             )
 
-            AsyncImage(
+            ShimmeringAsyncImage(
                 model = ImageRequest.Builder(LocalContext.current)
                     .data(mediaMetadata.thumbnailUrl)
                     .build(),
-                contentDescription = null,
+                contentDescription = "Album Art",
                 contentScale = if (cropAlbumArt) ContentScale.Crop else ContentScale.Fit,
                 modifier = Modifier
                     .fillMaxSize()
@@ -880,8 +901,7 @@ private fun LegacyMiniMediaInfo(
                         ),
                 ) {
                     Icon(
-                        painter = painterResource(R.drawable.info),
-                        contentDescription = null,
+                        painter = painterResource(R.drawable.info), contentDescription = "Info",
                         tint = MaterialTheme.colorScheme.error,
                         modifier = Modifier.align(Alignment.Center),
                     )
@@ -952,7 +972,7 @@ private fun FavoriteButton(
     ) {
         Icon(
             painter = painterResource(if (isLiked) R.drawable.favorite else R.drawable.favorite_border),
-            contentDescription = null,
+            contentDescription = "Play",
             tint = if (isLiked) errorColor else onSurfaceColor.copy(alpha = 0.7f),
             modifier = Modifier.size(20.dp)
         )
@@ -1025,13 +1045,13 @@ private fun MiniPlayerBackgroundLayer(
     when (style) {
         PlayerBackgroundStyle.BLUR -> {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                AsyncImage(
+                ShimmeringAsyncImage(
                     model = ImageRequest.Builder(context)
                         .data(mediaMetadata?.thumbnailUrl?.replace("w1200-h1200", "w512-h512"))
                         .size(128, 128)
                         .allowHardware(false)
                         .build(),
-                    contentDescription = null,
+                    contentDescription = "Album Art",
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
                         .fillMaxSize()
@@ -1137,13 +1157,13 @@ private fun MiniPlayerBackgroundLayer(
                     }
             ) {
                 val matrix = remember { ColorMatrix().apply { setToSaturation(1.6f) } }
-                AsyncImage(
+                ShimmeringAsyncImage(
                     model = ImageRequest.Builder(context)
                         .data(mediaMetadata?.thumbnailUrl?.replace("w1200-h1200", "w512-h512"))
                         .size(128, 128)
                         .allowHardware(false)
                         .build(),
-                    contentDescription = null,
+                    contentDescription = "Album Art",
                     contentScale = ContentScale.Crop,
                     colorFilter = ColorFilter.colorMatrix(matrix),
                     modifier = Modifier
@@ -1200,14 +1220,14 @@ private fun MiniPlayerControls(
             onClick = if (isListenTogetherGuest) ({}) else ({ playerConnection.player.seekToPreviousMediaItem() }),
             modifier = Modifier.size(32.dp)
         ) {
-            Icon(painter = painterResource(R.drawable.skip_previous), contentDescription = null, tint = onSurfaceColor, modifier = Modifier.size(20.dp))
+            Icon(painter = painterResource(R.drawable.skip_previous), contentDescription = "Skip Previous", tint = onSurfaceColor, modifier = Modifier.size(20.dp))
         }
 
         Spacer(modifier = Modifier.width(12.dp))
 
         val cookieIndent by androidx.compose.animation.core.animateFloatAsState(
             targetValue = if (effectiveIsPlaying) 0.08f else 0f,
-            animationSpec = androidx.compose.animation.core.tween(durationMillis = 300, easing = androidx.compose.animation.core.LinearEasing),
+            animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.8f, stiffness = 400f),
             label = "cookieIndent",
         )
 
@@ -1253,19 +1273,28 @@ private fun MiniPlayerControls(
                     .background(primaryColor)
             )
 
-            Icon(
-                painter = painterResource(
-                    when {
-                        isListenTogetherGuest -> if (isMuted) R.drawable.volume_off else R.drawable.volume_up
-                        playbackState == Player.STATE_ENDED -> R.drawable.replay
-                        effectiveIsPlaying -> R.drawable.pause
-                        else -> R.drawable.play
-                    }
-                ),
-                contentDescription = null,
-                tint = onPrimaryColor,
-                modifier = Modifier.size(24.dp)
-            )
+            AnimatedContent(
+                targetState = when {
+                    isListenTogetherGuest -> if (isMuted) R.drawable.volume_off else R.drawable.volume_up
+                    playbackState == Player.STATE_ENDED -> R.drawable.replay
+                    effectiveIsPlaying -> R.drawable.pause
+                    else -> R.drawable.play
+                },
+                transitionSpec = {
+                    (scaleIn(initialScale = 0.72f, animationSpec = spring(dampingRatio = 0.75f, stiffness = 450f)) +
+                     fadeIn(animationSpec = spring(dampingRatio = 0.9f, stiffness = 450f))) togetherWith
+                    (scaleOut(targetScale = 0.72f, animationSpec = spring(dampingRatio = 0.9f, stiffness = 450f)) +
+                     fadeOut(animationSpec = spring(dampingRatio = 0.9f, stiffness = 450f)))
+                },
+                label = "MiniPlayerPlayPauseIconMorph"
+            ) { iconRes ->
+                Icon(
+                    painter = painterResource(iconRes),
+                    contentDescription = "Play/Pause",
+                    tint = onPrimaryColor,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
         }
 
         Spacer(modifier = Modifier.width(12.dp))
@@ -1275,7 +1304,7 @@ private fun MiniPlayerControls(
             onClick = if (isListenTogetherGuest) ({}) else ({ playerConnection.player.seekToNext() }),
             modifier = Modifier.size(32.dp)
         ) {
-            Icon(painter = painterResource(R.drawable.skip_next), contentDescription = null, tint = onSurfaceColor, modifier = Modifier.size(20.dp))
+            Icon(painter = painterResource(R.drawable.skip_next), contentDescription = "Skip Next", tint = onSurfaceColor, modifier = Modifier.size(20.dp))
         }
     }
 }

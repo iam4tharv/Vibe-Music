@@ -164,7 +164,8 @@ object DiscordAssetRegistrar {
                 uri.scheme == "http" || uri.scheme == "https"
             } catch (_: Exception) {
                 false
-            }
+            
+}
         if (!isValidUrl) {
             return ImageType.Raw(image)
         }

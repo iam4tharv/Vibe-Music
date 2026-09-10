@@ -18,6 +18,7 @@ package com.music.echo.ui.screens
  import androidx.compose.runtime.getValue
  import androidx.compose.runtime.rememberCoroutineScope
  import androidx.compose.ui.Modifier
+import com.music.echo.extensions.bounceClick
  import androidx.compose.ui.res.painterResource
  import androidx.compose.ui.unit.dp
  import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -77,6 +78,7 @@ package com.music.echo.ui.screens
                      fillMaxWidth = true,
                      coroutineScope = coroutineScope,
                      modifier = Modifier
+                         .bounceClick()
                          .combinedClickable(
                              onClick = {
                                  when (item) {
@@ -142,7 +144,7 @@ package com.music.echo.ui.screens
              ) {
                  Icon(
                      painterResource(R.drawable.arrow_back),
-                     contentDescription = null
+                     contentDescription = "Icon"
                  )
              }
          }

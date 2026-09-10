@@ -153,7 +153,7 @@ fun CommentSheet(
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Icon(
                                 painter = painterResource(R.drawable.error),
-                                contentDescription = null,
+                                contentDescription = "Icon",
                                 modifier = Modifier.size(48.dp),
                                 tint = MaterialTheme.colorScheme.error
                             )
@@ -244,7 +244,7 @@ fun CommentItem(
     ) {
         AsyncImage(
             model = renderer.authorThumbnail?.thumbnails?.lastOrNull()?.url,
-            contentDescription = null,
+            contentDescription = "Album Art",
             modifier = Modifier
                 .size(if (isReply) 28.dp else 36.dp)
                 .clip(MaterialTheme.shapes.extraLarge),
@@ -288,7 +288,7 @@ fun CommentItem(
                 if (voteCount != null) {
                     Icon(
                         painter = painterResource(R.drawable.thumb_up_like),
-                        contentDescription = null,
+                        contentDescription = "Icon",
                         modifier = Modifier.size(14.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )

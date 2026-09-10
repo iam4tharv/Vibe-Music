@@ -70,6 +70,10 @@ class MusicRecognizerWidgetReceiver : AppWidgetProvider() {
 
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
+        // Custom actions are now handled securely by WidgetActionReceiver
+    }
+
+    internal fun processCustomAction(context: Context, intent: Intent) {
         when (intent.action) {
             ACTION_START_RECOGNITION -> handleStartRecognition(context)
             ACTION_UPDATE_WIDGET -> updateAllWidgets(context, AppWidgetManager.getInstance(context))
@@ -146,6 +150,37 @@ class MusicRecognizerWidgetReceiver : AppWidgetProvider() {
         val componentName = ComponentName(context, MusicRecognizerWidgetReceiver::class.java)
         val widgetIds = appWidgetManager.getAppWidgetIds(componentName)
 
+            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            val state = prefs.getInt(PREF_STATE, STATE_IDLE)
+            val songTitle = prefs.getString(PREF_SONG_TITLE, "") ?: ""
+            val artistName = prefs.getString(PREF_ARTIST_NAME, "") ?: ""
+            val errorMessage = prefs.getString(PREF_ERROR_MESSAGE, "") ?: ""
+            val coverArtPath = prefs.getString(PREF_COVER_ART_PATH, "") ?: ""
+            val pulseFrame = prefs.getInt(PREF_PULSE_FRAME, 0)
+
+            // Load album art bitmap from the cached file (synchronous, already on disk)
+            val albumArtBitmap = if (state == STATE_SUCCESS && coverArtPath.isNotEmpty()) {
+                try { BitmapFactory.decodeFile(coverArtPath) } catch (_: Exception) { null }
+            } else null
+
+            widgetIds.forEach { widgetId ->
+                val options = appWidgetManager.getAppWidgetOptions(widgetId)
+                val minWidth = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH)
+
+                val views = when {
+                    minWidth < 110 -> createTinyViews(context, state, pulseFrame)
+                    minWidth < 230 -> createCompactViews(context, state, songTitle, artistName, errorMessage, albumArtBitmap, pulseFrame)
+                    else -> createWideViews(context, state, songTitle, artistName, errorMessage, albumArtBitmap, pulseFrame)
+                }
+
+                appWidgetManager.updateAppWidget(widgetId, views)
+            }
+        }
+
+    private fun updateAllWidgets(context: Context, appWidgetManager: AppWidgetManager) {
+        val componentName = ComponentName(context, MusicRecognizerWidgetReceiver::class.java)
+        val widgetIds = appWidgetManager.getAppWidgetIds(componentName)
+
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val state = prefs.getInt(PREF_STATE, STATE_IDLE)
         val songTitle = prefs.getString(PREF_SONG_TITLE, "") ?: ""
@@ -156,7 +191,8 @@ class MusicRecognizerWidgetReceiver : AppWidgetProvider() {
 
         // Load album art bitmap from the cached file (synchronous, already on disk)
         val albumArtBitmap = if (state == STATE_SUCCESS && coverArtPath.isNotEmpty()) {
-            try { BitmapFactory.decodeFile(coverArtPath) } catch (_: Exception) { null }
+            try { BitmapFactory.decodeFile(coverArtPath) } catch (_: Exception) { null 
+}
         } else null
 
         widgetIds.forEach { widgetId ->
@@ -319,7 +355,7 @@ class MusicRecognizerWidgetReceiver : AppWidgetProvider() {
     private fun getMicIntent(context: Context): PendingIntent =
         PendingIntent.getBroadcast(
             context, 20,
-            Intent(context, MusicRecognizerWidgetReceiver::class.java).apply {
+            Intent(context, WidgetActionReceiver::class.java).apply {
                 action = ACTION_START_RECOGNITION
             },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE

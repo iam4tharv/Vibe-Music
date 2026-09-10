@@ -18,6 +18,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import com.music.echo.extensions.bounceClick
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
@@ -75,6 +76,7 @@ fun NewReleaseScreen(
                 coroutineScope = coroutineScope,
                 modifier =
                 Modifier
+                    .bounceClick()
                     .combinedClickable(
                         onClick = {
                             navController.navigate("album/${album.id}")
@@ -111,7 +113,7 @@ fun NewReleaseScreen(
             ) {
                 Icon(
                     painterResource(R.drawable.arrow_back),
-                    contentDescription = null,
+                    contentDescription = "Icon",
                 )
             }
         },

@@ -143,7 +143,7 @@ highlightKey: String? = null) {
                     IconButton(onClick = navController::navigateUp) {
                         Icon(
                             painter = painterResource(R.drawable.arrow_back),
-                            contentDescription = null
+                            contentDescription = "Icon"
                         )
                     }
                 },
@@ -282,7 +282,7 @@ fun ServiceStatusCard(service: ServiceStatus) {
                                 painter = painterResource(
                                     id = if (status == ServiceStatus.Status.ONLINE) R.drawable.check else R.drawable.error
                                 ),
-                                contentDescription = null,
+                                contentDescription = "Icon",
                                 tint = statusColor,
                                 modifier = Modifier.size(16.dp)
                             )
@@ -308,8 +308,7 @@ fun ServiceStatusCard(service: ServiceStatus) {
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Icon(
-                            painter = painterResource(R.drawable.info),
-                            contentDescription = null,
+                            painter = painterResource(R.drawable.info), contentDescription = "Info",
                             tint = Color(0xFFF44336).copy(alpha = 0.8f),
                             modifier = Modifier.size(14.dp)
                         )

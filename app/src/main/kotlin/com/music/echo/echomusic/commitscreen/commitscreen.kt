@@ -126,7 +126,8 @@ fun CommitScreen(
                     val rawDate = authorObj.optString("date", "")
                     val formattedDate = try {
                         ZonedDateTime.parse(rawDate).format(outputFormatter)
-                    } catch (e: Exception) { rawDate }
+                    } catch (e: Exception) { rawDate 
+}
 
                     
                     val authorLogin = if (!obj.isNull("author")) {
@@ -197,7 +198,7 @@ fun CommitScreen(
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Icon(
                                 Icons.Default.Error,
-                                contentDescription = null,
+                                contentDescription = "Icon",
                                 tint = MaterialTheme.colorScheme.error,
                                 modifier = Modifier.size(48.dp)
                             )

@@ -19,6 +19,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import com.music.echo.extensions.bounceClick
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
@@ -89,6 +90,7 @@ fun AccountScreen(
                         item = item,
                         fillMaxWidth = true,
                         modifier = Modifier
+                            .bounceClick()
                             .combinedClickable(
                                 onClick = {
                                     navController.navigate("online_playlist/${item.id}")
@@ -125,6 +127,7 @@ fun AccountScreen(
                         item = item,
                         fillMaxWidth = true,
                         modifier = Modifier
+                            .bounceClick()
                             .combinedClickable(
                                 onClick = {
                                     navController.navigate("album/${item.id}")
@@ -161,6 +164,7 @@ fun AccountScreen(
                         item = item,
                         fillMaxWidth = true,
                         modifier = Modifier
+                            .bounceClick()
                             .combinedClickable(
                                 onClick = {
                                     navController.navigate("artist/${item.id}")
@@ -198,7 +202,7 @@ fun AccountScreen(
             ) {
                 Icon(
                     painterResource(R.drawable.arrow_back),
-                    contentDescription = null,
+                    contentDescription = "Icon",
                 )
             }
         },

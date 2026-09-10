@@ -334,7 +334,7 @@ fun ThemeModeCard(
         ) {
             Icon(
                 imageVector = icon,
-                contentDescription = null,
+                contentDescription = "Icon",
                 tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(32.dp)
             )
@@ -435,7 +435,7 @@ fun PaletteItem(
             ) {
                 Icon(
                     painter = painterResource(R.drawable.palette),
-                    contentDescription = null,
+                    contentDescription = "Icon",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(26.dp)
                 )
@@ -449,7 +449,7 @@ fun PaletteItem(
             ) {
                 Icon(
                     painter = painterResource(R.drawable.check),
-                    contentDescription = null,
+                    contentDescription = "Icon",
                     tint = if (palette.seedColor == Color.Transparent) MaterialTheme.colorScheme.onSurfaceVariant else colorScheme.onPrimary,
                     modifier = Modifier.size(24.dp)
                 )

@@ -70,6 +70,7 @@ import androidx.compose.runtime.toMutableStateList
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.music.echo.extensions.bounceClick
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
@@ -100,6 +101,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.media3.exoplayer.offline.Download
 import androidx.navigation.NavController
 import coil3.compose.AsyncImage
+import com.music.echo.ui.component.shimmer.ShimmeringAsyncImage
 import com.music.echo.LocalDatabase
 import com.music.echo.LocalDownloadUtil
 import com.music.echo.LocalPlayerAwareWindowInsets
@@ -269,9 +271,9 @@ fun AlbumScreen(
                         Box(
                             modifier = Modifier.fillMaxSize()
                         ) {
-                            AsyncImage(
+                            ShimmeringAsyncImage(
                                 model = albumWithSongs.album.thumbnailUrl,
-                                contentDescription = null,
+                                contentDescription = "Album Art",
                                 modifier = Modifier.fillMaxSize(),
                                 contentScale = ContentScale.Crop
                             )
@@ -361,15 +363,16 @@ fun AlbumScreen(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.Center,
                                     modifier = Modifier
+                                        .bounceClick()
                                         .combinedClickable(
                                             onClick = {
                                                 navController.navigate("artist/${artist.id}")
                                             }
                                         )
                                 ) {
-                                    AsyncImage(
+                                    ShimmeringAsyncImage(
                                         model = artist.thumbnailUrl,
-                                        contentDescription = null,
+                                        contentDescription = "Album Art",
                                         modifier = Modifier
                                             .size(28.dp)
                                             .clip(CircleShape),
@@ -554,7 +557,7 @@ fun AlbumScreen(
                                         else
                                             R.drawable.play
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Play",
                                     modifier = Modifier.size(20.dp),
                                     tint = MaterialTheme.colorScheme.onPrimary
                                 )
@@ -709,8 +712,7 @@ fun AlbumScreen(
                                     },
                                 ) {
                                     Icon(
-                                        painter = painterResource(R.drawable.more_vert),
-                                        contentDescription = null,
+                                        painter = painterResource(R.drawable.more_vert), contentDescription = "Options",
                                     )
                                 }
                             }
@@ -719,6 +721,7 @@ fun AlbumScreen(
                         Modifier
                             .fillMaxWidth()
                             .animateItem()
+                            .bounceClick()
                             .combinedClickable(
                                 onClick = {
                                     if (inSelectMode) {
@@ -766,6 +769,7 @@ fun AlbumScreen(
                                 coroutineScope = scope,
                                 modifier =
                                 Modifier
+                                    .bounceClick()
                                     .combinedClickable(
                                         onClick = { navController.navigate("album/${item.id}") },
                                         onLongClick = {
@@ -808,6 +812,7 @@ fun AlbumScreen(
                                 coroutineScope = scope,
                                 modifier =
                                 Modifier
+                                    .bounceClick()
                                     .combinedClickable(
                                         onClick = { navController.navigate("album/${item.id}") },
                                         onLongClick = {
@@ -855,8 +860,7 @@ fun AlbumScreen(
             if (inSelectMode) {
                 IconButton(onClick = onExitSelectionMode) {
                     Icon(
-                        painter = painterResource(R.drawable.close),
-                        contentDescription = null,
+                        painter = painterResource(R.drawable.close), contentDescription = "Close",
                     )
                 }
             } else {
@@ -876,7 +880,7 @@ fun AlbumScreen(
                 ) {
                     Icon(
                         painter = painterResource(R.drawable.arrow_back_ios),
-                        contentDescription = null
+                        contentDescription = "Icon"
                     )
                 }
             }
@@ -909,8 +913,7 @@ fun AlbumScreen(
                     }
                 ) {
                     Icon(
-                        painter = painterResource(R.drawable.more_vert),
-                        contentDescription = null
+                        painter = painterResource(R.drawable.more_vert), contentDescription = "Options"
                     )
                 }
             } else {

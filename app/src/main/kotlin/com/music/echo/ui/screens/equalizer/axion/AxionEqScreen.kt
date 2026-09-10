@@ -59,7 +59,7 @@ fun AxionEqScreen(
                     ) {
                         Icon(
                             painter = androidx.compose.ui.res.painterResource(R.drawable.arrow_back),
-                            contentDescription = null
+                            contentDescription = "Icon"
                         )
                     }
                 }
@@ -89,7 +89,7 @@ fun AxionEqScreen(
                                         painter = androidx.compose.ui.res.painterResource(
                                             id = if (enabled) R.drawable.check else R.drawable.close
                                         ),
-                                        contentDescription = null,
+                                        contentDescription = "Icon",
                                         modifier = Modifier.size(SwitchDefaults.IconSize)
                                     )
                                 }
@@ -110,7 +110,7 @@ fun AxionEqScreen(
                                         painter = androidx.compose.ui.res.painterResource(
                                             id = if (fxBoosterEnabled) R.drawable.check else R.drawable.close
                                         ),
-                                        contentDescription = null,
+                                        contentDescription = "Icon",
                                         modifier = Modifier.size(SwitchDefaults.IconSize)
                                     )
                                 }
@@ -305,7 +305,7 @@ private fun SimpleEqMode(
             ) {
                 Icon(
                     imageVector = androidx.compose.material.icons.Icons.Rounded.Check,
-                    contentDescription = null,
+                    contentDescription = "Icon",
                     modifier = Modifier.size(18.dp)
                 )
                 Spacer(Modifier.width(8.dp))
@@ -377,7 +377,7 @@ private fun PresetSection(
                     ) {
                         Icon(
                             imageVector = Icons.Rounded.Edit,
-                            contentDescription = null,
+                            contentDescription = "Icon",
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(16.dp)
                         )
@@ -540,7 +540,7 @@ private fun AdvancedEqMode(
             horizontalArrangement = Arrangement.Center,
         ) {
             OutlinedButton(onClick = onReset) {
-                Icon(Icons.Rounded.Replay, contentDescription = null)
+                Icon(Icons.Rounded.Replay, contentDescription = "Play")
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(stringResource(R.string.eq_reset))
             }

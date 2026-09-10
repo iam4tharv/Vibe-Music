@@ -39,7 +39,7 @@ class UpdateDownloadWorker(private val context: Context, workerParams: WorkerPar
             }
             setForeground(foregroundInfo)
         } catch (e: Exception) {
-            
+            e.printStackTrace()
         }
 
         try {
@@ -183,6 +183,7 @@ class UpdateDownloadWorker(private val context: Context, workerParams: WorkerPar
                 e.message ?: context.getString(R.string.download_failed)
             )
             Result.failure()
-        }
+        
+}
     }
 }

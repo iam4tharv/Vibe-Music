@@ -26,21 +26,10 @@ fun ShimmerHost(
     verticalArrangement: Arrangement.Vertical = Arrangement.Top,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    val infiniteTransition = rememberInfiniteTransition(label = "shimmerTransition")
-    val alpha by infiniteTransition.animateFloat(
-        initialValue = 0.3f,
-        targetValue = 0.7f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(800, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "shimmerAlpha"
-    )
-
     Column(
         horizontalAlignment = horizontalAlignment,
         verticalArrangement = verticalArrangement,
-        modifier = modifier.graphicsLayer { this.alpha = alpha },
+        modifier = modifier.shimmer(),
         content = content,
     )
 }

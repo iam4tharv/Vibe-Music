@@ -237,7 +237,8 @@ fun ChangelogScreen(
                     val publishedAt = obj.getString("published_at")
                     val formattedDate = try {
                         ZonedDateTime.parse(publishedAt).format(outputFormatter)
-                    } catch (e: Exception) { publishedAt }
+                    } catch (e: Exception) { publishedAt 
+}
 
                     val assets = obj.getJSONArray("assets")
                     var changelogUrl: String? = null
@@ -393,7 +394,7 @@ fun ChangelogScreen(
                                     Spacer(modifier = Modifier.height(16.dp))
                                     AsyncImage(
                                         model = imageUrl,
-                                        contentDescription = null,
+                                        contentDescription = "Album Art",
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .clip(RoundedCornerShape(12.dp)),
@@ -532,5 +533,6 @@ private fun loadChangelogFromCache(context: Context, versionTag: String): Cached
             description = cacheData.optString("description", null).takeIf { !it.isNullOrBlank() },
             warning = cacheData.optString("warning", null).takeIf { !it.isNullOrBlank() }
         )
-    } catch (e: Exception) { null }
+    } catch (e: Exception) { null 
+}
 }

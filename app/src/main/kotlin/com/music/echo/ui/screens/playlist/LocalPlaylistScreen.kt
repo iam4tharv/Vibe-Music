@@ -78,6 +78,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.music.echo.extensions.bounceClick
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
@@ -112,6 +113,7 @@ import androidx.media3.exoplayer.offline.DownloadRequest
 import androidx.media3.exoplayer.offline.DownloadService
 import androidx.navigation.NavController
 import coil3.compose.AsyncImage
+import com.music.echo.ui.component.shimmer.ShimmeringAsyncImage
 import com.music.innertube.YouTube
 import com.music.innertube.models.SongItem
 import com.music.innertube.utils.completed
@@ -340,7 +342,7 @@ fun LocalPlaylistScreen(
                 icon = {
                     Icon(
                         painter = painterResource(R.drawable.edit),
-                        contentDescription = null
+                        contentDescription = "Play"
                     )
                 },
                 title = { Text(text = stringResource(R.string.edit_playlist)) },
@@ -692,8 +694,7 @@ fun LocalPlaylistScreen(
                                         },
                                     ) {
                                         Icon(
-                                            painter = painterResource(R.drawable.more_vert),
-                                            contentDescription = null,
+                                            painter = painterResource(R.drawable.more_vert), contentDescription = "Options",
                                         )
                                     }
 
@@ -704,7 +705,7 @@ fun LocalPlaylistScreen(
                                         ) {
                                             Icon(
                                                 painter = painterResource(R.drawable.drag_handle),
-                                                contentDescription = null,
+                                                contentDescription = "Icon",
                                             )
                                         }
                                     }
@@ -713,6 +714,7 @@ fun LocalPlaylistScreen(
                             modifier =
                             Modifier
                                 .fillMaxWidth()
+                                .bounceClick()
                                 .combinedClickable(
                                     onClick = {
                                         if (inSelectMode) {
@@ -810,8 +812,7 @@ fun LocalPlaylistScreen(
                 if (inSelectMode) {
                     IconButton(onClick = onExitSelectionMode) {
                         Icon(
-                            painter = painterResource(R.drawable.close),
-                            contentDescription = null,
+                            painter = painterResource(R.drawable.close), contentDescription = "Close",
                         )
                     }
                 } else {
@@ -832,7 +833,7 @@ fun LocalPlaylistScreen(
                     ) {
                         Icon(
                             painter = painterResource(R.drawable.arrow_back),
-                            contentDescription = null
+                            contentDescription = "Icon"
                         )
                     }
                 }
@@ -868,8 +869,7 @@ fun LocalPlaylistScreen(
                         }
                     ) {
                         Icon(
-                            painter = painterResource(R.drawable.more_vert),
-                            contentDescription = null
+                            painter = painterResource(R.drawable.more_vert), contentDescription = "Options"
                         )
                     }
                 } else if (!isSearching) {
@@ -879,7 +879,7 @@ fun LocalPlaylistScreen(
                     ) {
                         Icon(
                             painter = painterResource(R.drawable.search),
-                            contentDescription = null
+                            contentDescription = "Icon"
                         )
                     }
                 }
@@ -1106,17 +1106,16 @@ fun LocalPlaylistHeader(
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            painter = painterResource(R.drawable.queue_music),
-                            contentDescription = null,
+                            painter = painterResource(R.drawable.queue_music), contentDescription = "Queue",
                             modifier = Modifier.size(80.dp),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
                 1 -> {
-                    AsyncImage(
+                    ShimmeringAsyncImage(
                         model = overrideThumbnail.value ?: playlist.thumbnails[0],
-                        contentDescription = null,
+                        contentDescription = "Album Art",
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
                     )
@@ -1179,9 +1178,9 @@ fun LocalPlaylistHeader(
                             Alignment.BottomStart,
                             Alignment.BottomEnd,
                         ).fastForEachIndexed { index, alignment ->
-                            AsyncImage(
+                            ShimmeringAsyncImage(
                                 model = playlist.thumbnails.getOrNull(index),
-                                contentDescription = null,
+                                contentDescription = "Album Art",
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier
                                     .align(alignment)
@@ -1305,8 +1304,7 @@ fun LocalPlaylistHeader(
                 )
             ) {
                 Icon(
-                    painter = painterResource(R.drawable.play),
-                    contentDescription = null,
+                    painter = painterResource(R.drawable.play), contentDescription = "Play",
                     modifier = Modifier.size(20.dp)
                 )
                 Spacer(Modifier.width(8.dp))
@@ -1337,8 +1335,7 @@ fun LocalPlaylistHeader(
                 )
             ) {
                 Icon(
-                    painter = painterResource(R.drawable.shuffle),
-                    contentDescription = null,
+                    painter = painterResource(R.drawable.shuffle), contentDescription = "Shuffle",
                     modifier = Modifier.size(20.dp)
                 )
                 Spacer(Modifier.width(8.dp))
@@ -1439,8 +1436,7 @@ fun LocalPlaylistHeader(
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        painter = painterResource(R.drawable.more_vert),
-                        contentDescription = null,
+                        painter = painterResource(R.drawable.more_vert), contentDescription = "Options",
                         modifier = Modifier.size(20.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -1508,7 +1504,7 @@ private fun MetadataChip(
         ) {
             Icon(
                 painter = painterResource(icon),
-                contentDescription = null,
+                contentDescription = "Icon",
                 modifier = Modifier.size(16.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -1525,7 +1521,7 @@ private fun MetadataChip(
 fun uriToByteArray(context: Context, uri: Uri): ByteArray? {
     return try {
         context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-    } catch (_: SecurityException) {
+    } catch (_: Exception) {
         null
     }
 }

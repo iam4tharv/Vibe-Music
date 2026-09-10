@@ -634,7 +634,7 @@ private fun SpotifySourceThumbnail(source: SpotifyImportSourceUi) {
         if (!source.thumbnailUrl.isNullOrBlank()) {
             AsyncImage(
                 model = source.thumbnailUrl,
-                contentDescription = null,
+                contentDescription = "Album Art",
                 modifier = Modifier.fillMaxSize(),
             )
         } else {
@@ -646,7 +646,7 @@ private fun SpotifySourceThumbnail(source: SpotifyImportSourceUi) {
                         R.drawable.playlist_play
                     },
                 ),
-                contentDescription = null,
+                contentDescription = "Play",
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(24.dp),
             )

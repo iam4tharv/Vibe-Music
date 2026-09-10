@@ -151,7 +151,9 @@ fun DraggableScrollbar(
                                         scrollOffset = 0
                                     )
                                 } catch (e: Exception) {
-                                }
+    com.music.echo.utils.ErrorNotifier.notifyError(e.message ?: "An unexpected error occurred")
+    e.printStackTrace()
+}
                             }
                         }
                     }

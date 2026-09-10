@@ -204,8 +204,7 @@ fun SelectionSongMenu(
                     if (!isGuest) NewAction(
                         icon = {
                             Icon(
-                                painter = painterResource(R.drawable.play),
-                                contentDescription = null,
+                                painter = painterResource(R.drawable.play), contentDescription = "Play",
                                 modifier = Modifier.size(28.dp),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -225,8 +224,7 @@ fun SelectionSongMenu(
                     if (!isGuest) NewAction(
                         icon = {
                             Icon(
-                                painter = painterResource(R.drawable.shuffle),
-                                contentDescription = null,
+                                painter = painterResource(R.drawable.shuffle), contentDescription = "Shuffle",
                                 modifier = Modifier.size(28.dp),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -247,7 +245,7 @@ fun SelectionSongMenu(
                         icon = {
                             Icon(
                                 painter = painterResource(R.drawable.playlist_add),
-                                contentDescription = null,
+                                contentDescription = "Play",
                                 modifier = Modifier.size(28.dp),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -272,7 +270,7 @@ fun SelectionSongMenu(
                                 icon = {
                                     Icon(
                                         painter = painterResource(R.drawable.playlist_play),
-                                        contentDescription = null,
+                                        contentDescription = "Play",
                                     )
                                 },
                                 onClick = {
@@ -288,8 +286,7 @@ fun SelectionSongMenu(
                                 description = { Text(text = stringResource(R.string.add_to_queue_desc)) },
                                 icon = {
                                     Icon(
-                                        painter = painterResource(R.drawable.shuffle),
-                                        contentDescription = null,
+                                        painter = painterResource(R.drawable.shuffle), contentDescription = "Shuffle",
                                     )
                                 },
                                 onClick = {
@@ -310,8 +307,7 @@ fun SelectionSongMenu(
                                 description = { Text(text = stringResource(R.string.add_to_queue_desc)) },
                                 icon = {
                                     Icon(
-                                        painter = painterResource(R.drawable.queue_music),
-                                        contentDescription = null,
+                                        painter = painterResource(R.drawable.queue_music), contentDescription = "Queue",
                                     )
                                 },
                                 onClick = {
@@ -329,7 +325,7 @@ fun SelectionSongMenu(
                             icon = {
                                 Icon(
                                     painter = painterResource(R.drawable.playlist_add),
-                                    contentDescription = null,
+                                    contentDescription = "Play",
                                 )
                             },
                             onClick = {
@@ -351,7 +347,7 @@ fun SelectionSongMenu(
                                     painter = painterResource(
                                         if (allInLibrary) R.drawable.library_add_check else R.drawable.library_add
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                 )
                             },
                             onClick = {
@@ -406,7 +402,7 @@ fun SelectionSongMenu(
                                     icon = {
                                         Icon(
                                             painter = painterResource(R.drawable.offline),
-                                            contentDescription = null
+                                            contentDescription = "Icon"
                                         )
                                     },
                                     onClick = {
@@ -433,8 +429,7 @@ fun SelectionSongMenu(
                                     title = { Text(text = stringResource(R.string.action_download)) },
                                     icon = {
                                         Icon(
-                                            painter = painterResource(R.drawable.download),
-                                            contentDescription = null,
+                                            painter = painterResource(R.drawable.download), contentDescription = "Download",
                                         )
                                     },
                                     onClick = {
@@ -471,7 +466,7 @@ fun SelectionSongMenu(
                                     painter = painterResource(
                                         if (allLiked) R.drawable.favorite else R.drawable.favorite_border
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                 )
                             },
                             onClick = {
@@ -495,8 +490,7 @@ fun SelectionSongMenu(
                                 title = { Text(text = stringResource(R.string.delete)) },
                                 icon = {
                                     Icon(
-                                        painter = painterResource(R.drawable.delete),
-                                        contentDescription = null,
+                                        painter = painterResource(R.drawable.delete), contentDescription = "Delete",
                                     )
                                 },
                                 onClick = {
@@ -645,8 +639,7 @@ fun SelectionMediaMetadataMenu(
                                 title = { Text(text = stringResource(R.string.delete)) },
                                 icon = {
                                     Icon(
-                                        painter = painterResource(R.drawable.delete),
-                                        contentDescription = null,
+                                        painter = painterResource(R.drawable.delete), contentDescription = "Delete",
                                     )
                                 },
                                 onClick = {
@@ -671,8 +664,7 @@ fun SelectionMediaMetadataMenu(
                                 title = { Text(text = stringResource(R.string.play)) },
                                 icon = {
                                     Icon(
-                                        painter = painterResource(R.drawable.play),
-                                        contentDescription = null,
+                                        painter = painterResource(R.drawable.play), contentDescription = "Play",
                                     )
                                 },
                                 onClick = {
@@ -692,8 +684,7 @@ fun SelectionMediaMetadataMenu(
                                 title = { Text(text = stringResource(R.string.shuffle)) },
                                 icon = {
                                     Icon(
-                                        painter = painterResource(R.drawable.shuffle),
-                                        contentDescription = null,
+                                        painter = painterResource(R.drawable.shuffle), contentDescription = "Shuffle",
                                     )
                                 },
                                 onClick = {
@@ -715,7 +706,7 @@ fun SelectionMediaMetadataMenu(
                                     icon = {
                                         Icon(
                                             painter = painterResource(R.drawable.playlist_play),
-                                            contentDescription = null,
+                                            contentDescription = "Play",
                                         )
                                     },
                                     onClick = {
@@ -730,8 +721,7 @@ fun SelectionMediaMetadataMenu(
                                     title = { Text(text = stringResource(R.string.add_to_queue)) },
                                     icon = {
                                         Icon(
-                                            painter = painterResource(R.drawable.queue_music),
-                                            contentDescription = null,
+                                            painter = painterResource(R.drawable.queue_music), contentDescription = "Queue",
                                         )
                                     },
                                     onClick = {
@@ -749,7 +739,7 @@ fun SelectionMediaMetadataMenu(
                             icon = {
                                 Icon(
                                     painter = painterResource(R.drawable.playlist_add),
-                                    contentDescription = null,
+                                    contentDescription = "Play",
                                 )
                             },
                             onClick = {
@@ -778,7 +768,7 @@ fun SelectionMediaMetadataMenu(
                                     painter = painterResource(
                                         if (allLiked) R.drawable.favorite else R.drawable.favorite_border
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                 )
                             },
                             onClick = {
@@ -809,7 +799,7 @@ fun SelectionMediaMetadataMenu(
                                     icon = {
                                         Icon(
                                             painter = painterResource(R.drawable.offline),
-                                            contentDescription = null,
+                                            contentDescription = "Icon",
                                             tint = MaterialTheme.colorScheme.surface
                                         )
                                     },
@@ -840,8 +830,7 @@ fun SelectionMediaMetadataMenu(
                                     title = { Text(text = stringResource(R.string.action_download)) },
                                     icon = {
                                         Icon(
-                                            painter = painterResource(R.drawable.download),
-                                            contentDescription = null,
+                                            painter = painterResource(R.drawable.download), contentDescription = "Download",
                                         )
                                     },
                                     onClick = {

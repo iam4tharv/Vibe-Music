@@ -119,7 +119,7 @@ private fun IntegrationCardItemRow(
                     ) {
                         Icon(
                             painter = icon,
-                            contentDescription = null,
+                            contentDescription = "Icon",
                             tint = if (item.isHighlighted)
                                 MaterialTheme.colorScheme.primary
                             else
@@ -130,7 +130,7 @@ private fun IntegrationCardItemRow(
                 } else {
                     Icon(
                         painter = icon,
-                        contentDescription = null,
+                        contentDescription = "Icon",
                         tint = if (item.isHighlighted)
                             MaterialTheme.colorScheme.primary
                         else

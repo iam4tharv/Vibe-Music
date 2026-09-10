@@ -5,6 +5,12 @@ import androidx.compose.foundation.horizontalScroll
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -54,8 +60,10 @@ import androidx.compose.material3.carousel.rememberCarouselState
 import androidx.compose.material3.ContainedLoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
@@ -64,7 +72,9 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.material3.Text
 import androidx.compose.runtime.collectAsState
+
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableLongStateOf
@@ -76,6 +86,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import com.music.echo.ui.utils.NavigationAnimationStrategy
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -96,6 +108,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.NavController
 import coil3.compose.AsyncImage
+import com.music.echo.ui.component.shimmer.ShimmeringAsyncImage
 import coil3.request.CachePolicy
 import coil3.request.crossfade
 import coil3.request.ImageRequest
@@ -126,6 +139,7 @@ import com.music.echo.db.entities.PlaylistEntity
 import com.music.echo.db.entities.PlaylistSongMap
 import com.music.echo.db.entities.Song
 import com.music.echo.extensions.toMediaItem
+import com.music.echo.extensions.bounceClick
 import com.music.echo.LocalDatabase
 import com.music.echo.LocalPlayerAwareWindowInsets
 import com.music.echo.LocalPlayerConnection
@@ -244,17 +258,17 @@ fun CommunityPlaylistCard(
                 ) {
                     Column(modifier = Modifier.fillMaxSize()) {
                         Row(modifier = Modifier.weight(1f)) {
-                            AsyncImage(
+                            ShimmeringAsyncImage(
                                 model = item.songs.getOrNull(0)?.thumbnail?.resize(544, 544),
-                                contentDescription = null,
+                                contentDescription = "Album Art",
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier
                                     .weight(1f)
                                     .fillMaxSize()
                             )
-                            AsyncImage(
+                            ShimmeringAsyncImage(
                                 model = item.songs.getOrNull(1)?.thumbnail?.resize(544, 544),
-                                contentDescription = null,
+                                contentDescription = "Album Art",
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier
                                     .weight(1f)
@@ -262,17 +276,17 @@ fun CommunityPlaylistCard(
                             )
                         }
                         Row(modifier = Modifier.weight(1f)) {
-                            AsyncImage(
+                            ShimmeringAsyncImage(
                                 model = item.songs.getOrNull(2)?.thumbnail?.resize(544, 544),
-                                contentDescription = null,
+                                contentDescription = "Album Art",
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier
                                     .weight(1f)
                                     .fillMaxSize()
                             )
-                            AsyncImage(
+                            ShimmeringAsyncImage(
                                 model = item.songs.getOrNull(3)?.thumbnail?.resize(544, 544),
-                                contentDescription = null,
+                                contentDescription = "Album Art",
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier
                                     .weight(1f)
@@ -318,9 +332,9 @@ fun CommunityPlaylistCard(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        AsyncImage(
+                        ShimmeringAsyncImage(
                             model = song.thumbnail.resize(544, 544),
-                            contentDescription = null,
+                            contentDescription = "Album Art",
                             modifier = Modifier
                                 .size(56.dp)
                                 .clip(RoundedCornerShape(12.dp)),
@@ -363,7 +377,7 @@ fun CommunityPlaylistCard(
                 ) {
                     Icon(
                         painter = painterResource(R.drawable.ic_widget_play),
-                        contentDescription = null,
+                        contentDescription = "Play",
                         tint = MaterialTheme.colorScheme.onPrimaryContainer,
                         modifier = Modifier.size(24.dp)
                     )
@@ -381,7 +395,7 @@ fun CommunityPlaylistCard(
                 ) {
                     Icon(
                         painter = painterResource(R.drawable.radio),
-                        contentDescription = null,
+                        contentDescription = "Icon",
                         tint = MaterialTheme.colorScheme.onSecondaryContainer,
                         modifier = Modifier.size(24.dp)
                     )
@@ -433,7 +447,7 @@ fun CommunityPlaylistCard(
                 ) {
                     Icon(
                         painter = painterResource(if (isBookmarked) R.drawable.library_add_check else R.drawable.library_add),
-                        contentDescription = null,
+                        contentDescription = "Icon",
                         tint = MaterialTheme.colorScheme.onSecondaryContainer,
                         modifier = Modifier.size(24.dp)
                     )
@@ -454,6 +468,7 @@ fun DailyDiscoverCard(
     val database = LocalDatabase.current
     val playCount by database.getLifetimePlayCount(dailyDiscover.recommendation.id).collectAsState(initial = 0)
     val menuState = LocalMenuState.current
+    val context = androidx.compose.ui.platform.LocalContext.current
     val haptic = LocalHapticFeedback.current
 
     val song = dailyDiscover.recommendation as? SongItem
@@ -484,12 +499,12 @@ fun DailyDiscoverCard(
         shape = RoundedCornerShape(28.dp)
     ) {
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-            AsyncImage(
+            ShimmeringAsyncImage(
                 model = ImageRequest.Builder(LocalContext.current)
                     .data(dailyDiscover.recommendation.thumbnail?.resize(1200, 1200))
-                    .crossfade(false)
+                    .crossfade(500)
                     .build(),
-                contentDescription = null,
+                contentDescription = "Album Art",
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
                     .fillMaxSize()
@@ -569,6 +584,7 @@ fun HomeScreen(
     viewModel: HomeViewModel = hiltViewModel(),
 ) {
     val menuState = LocalMenuState.current
+    val context = androidx.compose.ui.platform.LocalContext.current
     val bottomSheetPageState = LocalBottomSheetPageState.current
     val database = LocalDatabase.current
     val playerConnection = LocalPlayerConnection.current ?: return
@@ -609,7 +625,6 @@ fun HomeScreen(
     val (randomizeHomeOrder) = rememberPreference(RandomizeHomeOrderKey, true)
     val (showSpeedDial) = rememberPreference(ShowSpeedDialKey, true)
 
-
     val isLoggedIn = remember(innerTubeCookie) {
         "SAPISID" in parseCookieString(innerTubeCookie)
     }
@@ -618,6 +633,11 @@ fun HomeScreen(
     val scope = rememberCoroutineScope()
     
     var randomizeJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    var vibeCheckInfo by remember { mutableStateOf<com.music.echo.ui.vibee.VibeCheckInfo?>(null) }
+    val localContext = LocalContext.current
+    LaunchedEffect(isRefreshing) {
+        vibeCheckInfo = com.music.echo.ui.vibee.VibeCheckManager.computeCurrentVibe(localContext, database)
+    }
 
     val lazylistState = rememberLazyListState()
     val gridItemSize by rememberEnumPreference(GridItemsSizeKey, GridItemSize.BIG)
@@ -671,6 +691,7 @@ fun HomeScreen(
                 song = it,
                 modifier = Modifier
                     .fillMaxWidth()
+                    .bounceClick()
                     .combinedClickable(
                         onClick = {
                             if (it.id == mediaMetadata?.id) {
@@ -705,6 +726,7 @@ fun HomeScreen(
                 coroutineScope = scope,
                 modifier = Modifier
                     .fillMaxWidth()
+                    .bounceClick()
                     .combinedClickable(
                         onClick = {
                             navController.navigate("album/${it.id}")
@@ -726,6 +748,7 @@ fun HomeScreen(
                 artist = it,
                 modifier = Modifier
                     .fillMaxWidth()
+                    .bounceClick()
                     .combinedClickable(
                         onClick = {
                             navController.navigate("artist/${it.id}")
@@ -757,6 +780,7 @@ fun HomeScreen(
             coroutineScope = scope,
             thumbnailRatio = 1f,
             modifier = Modifier
+                .bounceClick()
                 .combinedClickable(
                     onClick = {
                         when (item) {
@@ -959,22 +983,24 @@ fun HomeScreen(
                 state = lazylistState,
                 contentPadding = LocalPlayerAwareWindowInsets.current.asPaddingValues()
             ) {
-                item {
-                    ChipsRow(
-                        chips = homePage?.chips?.filter { 
-                              
-                            !it.title.equals("Uploaded", ignoreCase = true)
-                        }?.map { it to it.title } ?: emptyList(),
-                        currentValue = selectedChip,
-                        onValueUpdate = {
-                            viewModel.toggleChip(it)
-                        }
-                    )
+                item(key = "chips_row") {
+                    Box(modifier = Modifier.animateItem()) {
+                        ChipsRow(
+                            chips = homePage?.chips?.filter { 
+                                  
+                                !it.title.equals("Uploaded", ignoreCase = true)
+                            }?.map { it to it.title } ?: emptyList(),
+                            currentValue = selectedChip,
+                            onValueUpdate = {
+                                viewModel.toggleChip(it)
+                            }
+                        )
+                    }
                 }
 
                 if (isLoading && homePage?.chips.isNullOrEmpty()) {
                     item(key = "chips_shimmer") {
-                        ShimmerHost {
+                        ShimmerHost(modifier = Modifier.animateItem()) {
                             Row(
                                 modifier = Modifier
                                     .padding(horizontal = 16.dp, vertical = 8.dp)
@@ -993,6 +1019,16 @@ fun HomeScreen(
                     }
                 }
 
+                vibeCheckInfo?.let { vibe ->
+                    item(key = "vibe_check_card") {
+                        com.music.echo.ui.vibee.VibeCheckCard(
+                            vibeInfo = vibe,
+                            playerConnection = playerConnection,
+                            onDismiss = { vibeCheckInfo = null },
+                            modifier = Modifier.animateItem()
+                        )
+                    }
+                }
 
                 homeSections.forEach { section ->
                     when (section) {
@@ -1001,7 +1037,7 @@ fun HomeScreen(
                                 item(key = "speed_dial_title") {
                                     NavigationTitle(
                                         title = stringResource(R.string.speed_dial),
-                                        
+                                        modifier = Modifier.animateItem()
                                     )
                                 }
 
@@ -1019,7 +1055,7 @@ fun HomeScreen(
                                         modifier =
                                             Modifier
                                                 .fillMaxWidth()
-
+                                                .animateItem()
                                     ) {
                                         HorizontalPager(
                                             state = pagerState,
@@ -1184,14 +1220,14 @@ fun HomeScreen(
                                         onClick = {
                                             navController.navigate("local_playlist/${playlist.id}")
                                         },
-                                        
+                                        modifier = Modifier.animateItem()
                                     )
                                 }
                                 item(key = "ai_recommendation_list") {
                                     LazyRow(
                                         contentPadding = PaddingValues(horizontal = 16.dp),
                                         horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                        
+                                        modifier = Modifier.animateItem()
                                     ) {
                                         items(items = songs, key = { it.id }) { songObj ->
                                             localGridItem(songObj)
@@ -1214,7 +1250,7 @@ fun HomeScreen(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .height(290.dp)
-                                            
+                                            .animateItem()
                                     ) { index ->
                                         val originalSong = distinctQuickPicks[index]
                                         val song by database.song(originalSong.id)
@@ -1250,12 +1286,12 @@ fun HomeScreen(
                                                     }
                                                 )
                                         ) {
-                                            AsyncImage(
+                                            ShimmeringAsyncImage(
                                                 model = coil3.request.ImageRequest.Builder(LocalContext.current)
                                                     .data((song ?: originalSong).thumbnailUrl)
-                                                    .crossfade(false)
+                                                    .crossfade(500)
                                                     .build(),
-                                                contentDescription = null,
+                                                contentDescription = "Album Art",
                                                 contentScale = ContentScale.Crop,
                                                 modifier = Modifier.fillMaxSize()
                                             )
@@ -1287,8 +1323,7 @@ fun HomeScreen(
                                                     contentAlignment = Alignment.Center
                                                 ) {
                                                     Icon(
-                                                        painter = painterResource(R.drawable.volume_up),
-                                                        contentDescription = null,
+                                                        painter = painterResource(R.drawable.volume_up), contentDescription = "Volume Up",
                                                         tint = MaterialTheme.colorScheme.onPrimary,
                                                         modifier = Modifier.size(18.dp)
                                                     )
@@ -1325,7 +1360,7 @@ fun HomeScreen(
                                 item(key = "community_playlists_title") {
                                     NavigationTitle(
                                         title = stringResource(R.string.from_the_community),
-                                        
+                                        modifier = Modifier.animateItem()
                                     )
                                 }
 
@@ -1333,7 +1368,7 @@ fun HomeScreen(
                                     LazyRow(
                                         contentPadding = PaddingValues(horizontal = 16.dp),
                                         horizontalArrangement = Arrangement.spacedBy(16.dp),
-                                        
+                                        modifier = Modifier.animateItem()
                                     ) {
                                         items(playlists, key = { it.playlist.id }) { item ->
                                             CommunityPlaylistCard(
@@ -1375,7 +1410,8 @@ fun HomeScreen(
                                                     )
                                                 )
                                             }
-                                        }
+                                        },
+                                        modifier = Modifier.animateItem()
                                     )
                                 }
                                 item(key = "daily_discover_content") {
@@ -1383,7 +1419,8 @@ fun HomeScreen(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .height(340.dp)
-                                            .padding(horizontal = 16.dp),
+                                            .padding(horizontal = 16.dp)
+                                            .animateItem(),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         val carouselState = rememberCarouselState { discoverList.size }
@@ -1423,7 +1460,7 @@ fun HomeScreen(
                                 item(key = "recently_played_title") {
                                     NavigationTitle(
                                         title = stringResource(R.string.recently_played),
-                                        
+                                        modifier = Modifier.animateItem()
                                     )
                                 }
                                 item(key = "recently_played_list") {
@@ -1439,7 +1476,7 @@ fun HomeScreen(
                                                 MaterialTheme.typography.bodyLarge.lineHeight.toDp() * 2 +
                                                         MaterialTheme.typography.bodyMedium.lineHeight.toDp() * 2
                                             }) * rows)
-                                            
+                                            .animateItem()
                                     ) {
                                         items(recentlyPlayed, key = { it.id }) { song ->
                                             localGridItem(song)
@@ -1453,7 +1490,7 @@ fun HomeScreen(
                                 item(key = "keep_listening_title") {
                                     NavigationTitle(
                                         title = stringResource(R.string.keep_listening),
-                                        
+                                        modifier = Modifier.animateItem()
                                     )
                                 }
 
@@ -1470,7 +1507,7 @@ fun HomeScreen(
                                                 MaterialTheme.typography.bodyLarge.lineHeight.toDp() * 2 +
                                                         MaterialTheme.typography.bodyMedium.lineHeight.toDp() * 2
                                             }) * rows)
-                                            
+                                            .animateItem()
                                     ) {
                                         items(keepListening, key = { it.id }) {
                                             localGridItem(it)
@@ -1487,16 +1524,16 @@ fun HomeScreen(
                                         title = accountName,
                                         thumbnail = {
                                             if (url != null) {
-                                                AsyncImage(
+                                                ShimmeringAsyncImage(
                                                     model = ImageRequest.Builder(LocalContext.current)
                                                         .data(url)
                                                         .diskCachePolicy(CachePolicy.ENABLED)
                                                         .diskCacheKey(url)
-                                                        .crossfade(false)
+                                                        .crossfade(500)
                                                         .build(),
-                                                    placeholder = painterResource(id = R.drawable.person),
-                                                    error = painterResource(id = R.drawable.person),
-                                                    contentDescription = null,
+                                                    
+                                                    errorPainter = painterResource(id = R.drawable.person),
+                                                    contentDescription = "Icon",
                                                     contentScale = ContentScale.Crop,
                                                     modifier = Modifier
                                                         .size(ListThumbnailSize)
@@ -1505,7 +1542,7 @@ fun HomeScreen(
                                             } else {
                                                 Icon(
                                                     painter = painterResource(id = R.drawable.person),
-                                                    contentDescription = null,
+                                                    contentDescription = "Icon",
                                                     modifier = Modifier.size(ListThumbnailSize)
                                                 )
                                             }
@@ -1513,7 +1550,7 @@ fun HomeScreen(
                                         onClick = {
                                             navController.navigate("account")
                                         },
-                                        
+                                        modifier = Modifier.animateItem()
                                     )
                                 }
 
@@ -1522,7 +1559,7 @@ fun HomeScreen(
                                         contentPadding = WindowInsets.systemBars
                                             .only(WindowInsetsSides.Horizontal)
                                             .asPaddingValues(),
-                                        
+                                        modifier = Modifier.animateItem()
                                     ) {
                                         items(
                                             items = accountPlaylists.distinctBy { it.id },
@@ -1547,7 +1584,8 @@ fun HomeScreen(
                                                     items = forgottenFavorites.distinctBy { it.id }.map { it.toMediaItem() }
                                                 )
                                             )
-                                        }
+                                        },
+                                        modifier = Modifier.animateItem()
                                     )
                                 }
 
@@ -1565,7 +1603,7 @@ fun HomeScreen(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .height(ListItemHeight * rows)
-                                            
+                                            .animateItem()
                                     ) {
                                         itemsIndexed(
                                             items = forgottenFavorites.distinctBy { it.id },
@@ -1595,8 +1633,7 @@ fun HomeScreen(
                                                         }
                                                     ) {
                                                         Icon(
-                                                            painter = painterResource(R.drawable.more_vert),
-                                                            contentDescription = null
+                                                            painter = painterResource(R.drawable.more_vert), contentDescription = "Options"
                                                         )
                                                     }
                                                 },
@@ -1644,9 +1681,9 @@ fun HomeScreen(
                                                     if (recommendation.title is Artist) CircleShape else RoundedCornerShape(
                                                         ThumbnailCornerRadius
                                                     )
-                                                AsyncImage(
+                                                ShimmeringAsyncImage(
                                                     model = thumbnailUrl,
-                                                    contentDescription = null,
+                                                    contentDescription = "Album Art",
                                                     modifier = Modifier
                                                         .size(ListThumbnailSize)
                                                         .clip(shape)
@@ -1661,7 +1698,7 @@ fun HomeScreen(
                                                 is Playlist -> {}
                                             }
                                         },
-                                        
+                                        modifier = Modifier.animateItem()
                                     )
                                 }
 
@@ -1670,7 +1707,7 @@ fun HomeScreen(
                                         contentPadding = WindowInsets.systemBars
                                             .only(WindowInsetsSides.Horizontal)
                                             .asPaddingValues(),
-                                        
+                                        modifier = Modifier.animateItem()
                                     ) {
                                         items(recommendation.items, key = { it.id }) { item ->
                                             ytGridItem(item)
@@ -1699,9 +1736,9 @@ fun HomeScreen(
                                                     if (sectionData.endpoint?.isArtistEndpoint == true) CircleShape else RoundedCornerShape(
                                                         ThumbnailCornerRadius
                                                     )
-                                                AsyncImage(
+                                                ShimmeringAsyncImage(
                                                     model = thumbnailUrl,
-                                                    contentDescription = null,
+                                                    contentDescription = "Album Art",
                                                     modifier = Modifier
                                                         .size(ListThumbnailSize)
                                                         .clip(shape)
@@ -1730,7 +1767,7 @@ fun HomeScreen(
                                                 )
                                             }
                                         } else null,
-                                        
+                                        modifier = Modifier.animateItem()
                                     )
                                 }
 
@@ -1746,7 +1783,7 @@ fun HomeScreen(
                                             modifier = Modifier
                                                 .fillMaxWidth()
                                                 .height(ListItemHeight * 4)
-                                                
+                                                .animateItem()
                                         ) {
                                             itemsIndexed(
                                                 items = sectionSongs.distinctBy { it.id },
@@ -1771,8 +1808,7 @@ fun HomeScreen(
                                                             }
                                                         ) {
                                                             Icon(
-                                                                painter = painterResource(R.drawable.more_vert),
-                                                                contentDescription = null
+                                                                painter = painterResource(R.drawable.more_vert), contentDescription = "Options"
                                                             )
                                                         }
                                                     },
@@ -1810,7 +1846,7 @@ fun HomeScreen(
                                             contentPadding = WindowInsets.systemBars
                                                 .only(WindowInsetsSides.Horizontal)
                                                 .asPaddingValues(),
-                                            
+                                            modifier = Modifier.animateItem()
                                         ) {
                                             items(sectionData.items, key = { it.id }) { item ->
                                                 ytGridItem(item)
@@ -1828,7 +1864,7 @@ fun HomeScreen(
                                         onClick = {
                                             navController.navigate("mood_and_genres")
                                         },
-                                        
+                                        modifier = Modifier.animateItem()
                                     )
                                 }
                                 item(key = "mood_and_genres_list") {
@@ -1837,7 +1873,7 @@ fun HomeScreen(
                                         contentPadding = PaddingValues(6.dp),
                                         modifier = Modifier
                                             .height((MoodAndGenresButtonHeight + 12.dp) * 4 + 12.dp)
-                                            
+                                            .animateItem()
                                     ) {
                                         items(moodAndGenres.distinctBy { it.title }, key = { it.title }) {
                                             MoodAndGenresButton(
@@ -1861,7 +1897,7 @@ fun HomeScreen(
                 if (isLoading || homePage?.continuation != null && homePage?.sections?.isNotEmpty() == true) {
                     item(key = "loading_shimmer") {
                         ShimmerHost(
-                            
+                            modifier = Modifier.animateItem()
                         ) {
                             // 1. Quick Picks Skeleton
                             Row(
@@ -1926,7 +1962,53 @@ fun HomeScreen(
                 }
 
                 item(key = "bottom_spacer") {
-                    Spacer(modifier = Modifier.height(30.dp))
+                    Spacer(modifier = Modifier.height(30.dp).animateItem())
+                }
+            }
+
+            val showScrollToTop by remember {
+                derivedStateOf {
+                    lazylistState.firstVisibleItemIndex > 2 ||
+                    (lazylistState.firstVisibleItemIndex > 0 && lazylistState.firstVisibleItemScrollOffset > 250)
+                }
+            }
+
+            AnimatedVisibility(
+                visible = showScrollToTop,
+                enter = fadeIn(animationSpec = NavigationAnimationStrategy.FadeSpring) +
+                        scaleIn(initialScale = 0.75f, animationSpec = NavigationAnimationStrategy.ScaleSpring) +
+                        slideInVertically(initialOffsetY = { it / 2 }, animationSpec = NavigationAnimationStrategy.MotionSpring),
+                exit = fadeOut(animationSpec = NavigationAnimationStrategy.FadeSpring) +
+                       scaleOut(targetScale = 0.75f, animationSpec = NavigationAnimationStrategy.ScaleSpring) +
+                       slideOutVertically(targetOffsetY = { it / 2 }, animationSpec = NavigationAnimationStrategy.MotionSpring),
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(
+                        bottom = LocalPlayerAwareWindowInsets.current.asPaddingValues().calculateBottomPadding() + 16.dp,
+                        end = 16.dp
+                    )
+            ) {
+                FilledTonalIconButton(
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        scope.launch {
+                            lazylistState.animateScrollToItem(0)
+                        }
+                    },
+                    modifier = Modifier
+                        .size(48.dp)
+                        .bounceClick()
+                        .shadow(6.dp, CircleShape),
+                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.expand_less),
+                        contentDescription = stringResource(R.string.scroll_to_top),
+                        modifier = Modifier.size(28.dp)
+                    )
                 }
             }
 

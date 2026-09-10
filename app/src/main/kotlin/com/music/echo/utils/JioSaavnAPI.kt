@@ -70,7 +70,7 @@ object JioSaavnAPI {
         }
     }
 
-    suspend fun search(queryTitle: String, queryArtist: String): JioSaavnTrack? = withContext(Dispatchers.IO) {
+    suspend fun search(queryTitle: String, queryArtist: String, durationSeconds: Int? = null, requestedIsrc: String? = null): JioSaavnTrack? = withContext(Dispatchers.IO) {
         val titleClean = cleanString(queryTitle)
         val artistClean = cleanString(queryArtist)
         val fullQuery = "$queryTitle $queryArtist".trim()
@@ -78,18 +78,30 @@ object JioSaavnAPI {
             URLEncoder.encode(fullQuery, "UTF-8")
         } catch (e: Exception) {
             fullQuery.replace(" ", "%20")
-        }
+        
+}
 
-        var track = fetchFromOfficialAPI(encodedQuery, titleClean, artistClean)
+        val encodedTitle = try {
+            URLEncoder.encode(queryTitle, "UTF-8")
+        } catch (e: Exception) {
+            queryTitle.replace(" ", "%20")
+        
+}
+
+        var track = fetchFromOfficialAPI(encodedQuery, queryTitle, queryArtist, titleClean, artistClean, true, durationSeconds, requestedIsrc)
+        
         if (track == null) {
-            // Fallback search with title only
-            val encodedTitle = try {
-                URLEncoder.encode(queryTitle, "UTF-8")
-            } catch (e: Exception) {
-                queryTitle.replace(" ", "%20")
-            }
-            track = fetchFromOfficialAPI(encodedTitle, titleClean, artistClean)
+            track = fetchFromOfficialAPI(encodedTitle, queryTitle, queryArtist, titleClean, artistClean, true, durationSeconds, requestedIsrc)
         }
+        
+        if (track == null) {
+            track = fetchFromOfficialAPI(encodedTitle, queryTitle, queryArtist, titleClean, "", true, durationSeconds, requestedIsrc)
+        }
+        
+        if (track == null) {
+            track = fetchFromOfficialAPI(encodedTitle, queryTitle, queryArtist, titleClean, "", false, durationSeconds, requestedIsrc)
+        }
+        
         return@withContext track
     }
 
@@ -124,7 +136,7 @@ object JioSaavnAPI {
         return 1.0 - (distance.toDouble() / maxLen)
     }
 
-    private fun fetchFromOfficialAPI(query: String, titleClean: String, artistClean: String): JioSaavnTrack? {
+    private fun fetchFromOfficialAPI(query: String, queryTitle: String, queryArtist: String, titleClean: String, artistClean: String, strict: Boolean, durationSeconds: Int?, requestedIsrc: String?): JioSaavnTrack? {
         val url = "https://www.jiosaavn.com/api.php?__call=search.getResults&q=$query&n=10&p=1&_format=json&_marker=0&ctx=web6dot0"
         try {
             val request = Request.Builder()
@@ -133,7 +145,7 @@ object JioSaavnAPI {
                 .get()
                 .build()
 
-            val response = httpClient.newCall(request).execute()
+            httpClient.newCall(request).execute().use { response ->
             if (response.isSuccessful) {
                 val body = response.body?.string()
                 if (!body.isNullOrEmpty()) {
@@ -141,25 +153,78 @@ object JioSaavnAPI {
                         val json = JSONObject(body)
                         val results = json.optJSONArray("results")
                         if (results != null && results.length() > 0) {
-                            var firstValidTrack: JioSaavnTrack? = null
+                            var bestTrack: JioSaavnTrack? = null
+                            var bestScore = -Double.MAX_VALUE
 
                             for (i in 0 until results.length()) {
                                 val songObj = results.getJSONObject(i)
                                 val sTitleRaw = songObj.optString("song", "")
                                 val sArtistRaw = songObj.optString("primary_artists", "")
+                                val sAlbumRaw = songObj.optString("album", "")
+                                val sDuration = songObj.optInt("duration", 0)
+                                val sIsrc = songObj.optString("isrc", "")
+
                                 val sTitle = cleanString(sTitleRaw)
                                 val sArtist = cleanString(sArtistRaw)
                                 
-                                val isTitleMatch = sTitle == titleClean || (sTitle.isNotEmpty() && titleClean.isNotEmpty() && (sTitle.startsWith(titleClean) || titleClean.startsWith(sTitle) || similarity(sTitle, titleClean) >= 0.7))
+                                // Compare ISRC if available
+                                if (!requestedIsrc.isNullOrEmpty() && sIsrc.isNotEmpty()) {
+                                    if (requestedIsrc.lowercase() != sIsrc.lowercase()) {
+                                        continue
+                                    }
+                                }
+
+                                // Reject covers/unauthorized remixes if not explicitly requested
+                                val coverKeywords = listOf("cover", "karaoke", "instrumental", "tribute", "8 bit", "8-bit", "lofi", "lo-fi", "slowed", "reverb", "sped up", "remix", "mashup", "parody")
+                                var isRequestedCover = false
+                                var isResultCover = false
+                                
+                                val queryTitleLower = queryTitle.lowercase()
+                                val queryArtistLower = queryArtist.lowercase()
+                                val sTitleRawLower = sTitleRaw.lowercase()
+                                val sArtistRawLower = sArtistRaw.lowercase()
+                                val sAlbumRawLower = sAlbumRaw.lowercase()
+                                
+                                for (keyword in coverKeywords) {
+                                    if (queryTitleLower.contains(keyword) || queryArtistLower.contains(keyword)) isRequestedCover = true
+                                    if (sTitleRawLower.contains(keyword) || sArtistRawLower.contains(keyword) || sAlbumRawLower.contains(keyword)) isResultCover = true
+                                }
+                                
+                                if (!isRequestedCover && isResultCover) {
+                                    continue
+                                }
+                                
+                                var dSim = 1.0
+                                // Compare track duration
+                                if (durationSeconds != null && durationSeconds > 0 && sDuration > 0) {
+                                    val diff = kotlin.math.abs(sDuration - durationSeconds)
+                                    // Reject results where duration significantly deviates (e.g. > 20 seconds)
+                                    if (diff > 25) {
+                                        continue
+                                    }
+                                    dSim = 1.0 - (diff.toDouble() / 25.0)
+                                }
+                                
+                                var tSim = similarity(sTitle, titleClean)
+                                if (sTitle.isNotEmpty() && titleClean.isNotEmpty()) {
+                                    if (sTitle.startsWith(titleClean) || titleClean.startsWith(sTitle)) {
+                                        tSim = maxOf(tSim, 0.8)
+                                    }
+                                }
+                                
+                                var aSim = similarity(sArtist, artistClean)
                                 val sArtistParts = sArtist.split(Regex("\\s+&\\s+|\\s*,\\s+|\\s+and\\s+|\\s+ft\\.?\\s+|\\s+feat\\.?\\s+|\\s+featuring\\s+")).map { it.trim() }.filter { it.isNotEmpty() }
                                 val targetArtistParts = artistClean.split(Regex("\\s+&\\s+|\\s*,\\s+|\\s+and\\s+|\\s+ft\\.?\\s+|\\s+feat\\.?\\s+|\\s+featuring\\s+")).map { it.trim() }.filter { it.isNotEmpty() }
                                 
-                                val isArtistMatch = sArtist == artistClean || 
-                                    sArtist.replace(" ", "") == artistClean.replace(" ", "") ||
-                                    similarity(sArtist, artistClean) >= 0.6 ||
-                                    (sArtist.isNotEmpty() && artistClean.isNotEmpty() && 
-                                     (sArtistParts.any { a1 -> targetArtistParts.any { a2 -> a1 == a2 || a1.replace(" ", "") == a2.replace(" ", "") || similarity(a1, a2) >= 0.6 } } || targetArtistParts.any { a1 -> sArtistParts.any { a2 -> a1 == a2 || a1.replace(" ", "") == a2.replace(" ", "") || similarity(a1, a2) >= 0.6 } }))
+                                for (a1 in sArtistParts) {
+                                    for (a2 in targetArtistParts) {
+                                        aSim = maxOf(aSim, similarity(a1, a2))
+                                    }
+                                }
                                 
+                                val positionPenalty = i * 0.05
+                                val currentScore = (tSim * 2.0) + (aSim * 1.5) + (dSim * 1.0) - positionPenalty
+
                                 val encryptedUrl = songObj.optString("encrypted_media_url", "")
                                 if (encryptedUrl.isNotEmpty()) {
                                     val decryptedUrl = decryptUrl(encryptedUrl)
@@ -172,25 +237,32 @@ object JioSaavnAPI {
                                             quality = "320kbps"
                                         )
                                         
-                                        if (firstValidTrack == null) {
-                                            firstValidTrack = track
+                                        if (currentScore > bestScore) {
+                                            bestScore = currentScore
+                                            bestTrack = track
                                         }
-
-                                        if (isTitleMatch && (isArtistMatch || artistClean.isEmpty())) {
-                                            Timber.d("JioSaavnAPI: Found strict match $sTitleRaw with URL: $finalUrl")
-                                            return track
+                                        
+                                        // If strict, we require high similarity
+                                        if (strict && tSim >= 0.8 && aSim >= 0.8 && dSim >= 0.8 && currentScore > bestScore) {
+                                            bestScore = currentScore
+                                            bestTrack = track
                                         }
                                     }
                                 }
                             }
                             
-                            if (firstValidTrack != null) {
-                                Timber.d("JioSaavnAPI: No strict match found, returning first valid track: ${firstValidTrack.song}")
-                                return firstValidTrack
+                            if (strict && bestScore < 2.5) {
+                                return null
+                            }
+                            
+                            if (bestTrack != null) {
+                                Timber.d("JioSaavnAPI: Returning best track: ${bestTrack.song} with score: $bestScore")
+                                return bestTrack
                             }
                         }
                     }
                 }
+            }
             }
         } catch (e: Exception) {
             Timber.w(e, "JioSaavnAPI: Failed official endpoint")

@@ -115,7 +115,8 @@ fun EqScreen(
                 }
             } catch (e: Exception) {
                 showError = context.getString(R.string.error_file_open, e.message)
-            }
+            
+}
         }
     }
 
@@ -308,7 +309,7 @@ private fun EqScreenContent(
                             ) {
                                 Icon(
                                     painter = painterResource(R.drawable.equalizer),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                     modifier = Modifier.size(48.dp),
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                                 )

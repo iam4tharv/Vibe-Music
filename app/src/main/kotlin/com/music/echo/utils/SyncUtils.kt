@@ -778,7 +778,8 @@ class SyncUtils @Inject constructor(
                                     YouTube.getChannelId(artist.id).takeIf { it.isNotEmpty() }
                                 } catch (e: Exception) {
                                     null
-                                }
+                                
+}
                             } else null
 
                             database.transaction {

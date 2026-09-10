@@ -83,8 +83,7 @@ fun UpdateInfoDialog(
                                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
                                     Icon(
-                                        painter = painterResource(R.drawable.info),
-                                        contentDescription = null,
+                                        painter = painterResource(R.drawable.info), contentDescription = "Info",
                                         tint = MaterialTheme.colorScheme.onSecondaryContainer,
                                         modifier = Modifier.size(16.dp),
                                     )
@@ -123,7 +122,7 @@ fun UpdateInfoDialog(
                     ) {
                         Icon(
                             painter = painterResource(R.drawable.manage_search),
-                            contentDescription = null,
+                            contentDescription = "Icon",
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier
                                 .padding(top = 2.dp)
@@ -158,7 +157,7 @@ fun UpdateInfoDialog(
                     ) {
                         Icon(
                             painter = painterResource(R.drawable.arrow_forward),
-                            contentDescription = null,
+                            contentDescription = "Icon",
                             modifier = Modifier.size(18.dp),
                         )
                         Spacer(modifier = Modifier.size(6.dp))

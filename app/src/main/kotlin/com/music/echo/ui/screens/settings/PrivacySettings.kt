@@ -169,7 +169,7 @@ highlightKey: String? = null) {
                                     painter = painterResource(
                                         id = if (pauseListenHistory) R.drawable.check else R.drawable.close
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Pause",
                                     modifier = Modifier.size(androidx.compose.material3.SwitchDefaults.IconSize)
                                 )
                             }
@@ -204,7 +204,7 @@ highlightKey: String? = null) {
                                     painter = painterResource(
                                         id = if (pauseSearchHistory) R.drawable.check else R.drawable.close
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Pause",
                                     modifier = Modifier.size(androidx.compose.material3.SwitchDefaults.IconSize)
                                 )
                             }
@@ -240,7 +240,7 @@ highlightKey: String? = null) {
                                     painter = painterResource(
                                         id = if (disableScreenshot) R.drawable.check else R.drawable.close
                                     ),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                     modifier = Modifier.size(androidx.compose.material3.SwitchDefaults.IconSize)
                                 )
                             }
@@ -264,7 +264,7 @@ highlightKey: String? = null) {
             ) {
                 Icon(
                     painterResource(R.drawable.arrow_back),
-                    contentDescription = null,
+                    contentDescription = "Icon",
                 )
             }
         }

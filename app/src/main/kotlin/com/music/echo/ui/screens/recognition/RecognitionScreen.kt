@@ -240,7 +240,7 @@ fun RecognitionScreen(
                                     ) {
                                         Icon(
                                             painter = painterResource(R.drawable.arrow_back),
-                                            contentDescription = null
+                                            contentDescription = "Icon"
                                         )
                                     }
                                 },
@@ -331,8 +331,7 @@ private fun ReadyState(
             contentAlignment = Alignment.Center
         ) {
             Icon(
-                painter = painterResource(R.drawable.music_note),
-                contentDescription = null,
+                painter = painterResource(R.drawable.music_note), contentDescription = "Music Note",
                 modifier = Modifier.size(48.dp),
                 tint = MaterialTheme.colorScheme.onPrimaryContainer
             )
@@ -436,8 +435,7 @@ private fun ProcessingState() {
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    painter = painterResource(R.drawable.music_note),
-                    contentDescription = null,
+                    painter = painterResource(R.drawable.music_note), contentDescription = "Music Note",
                     modifier = Modifier.size(40.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -474,7 +472,7 @@ private fun SuccessState(
         // Blurred Background
         AsyncImage(
             model = highResImageUrl,
-            contentDescription = null,
+            contentDescription = "Album Art",
             modifier = Modifier
                 .fillMaxSize()
                 .blur(radius = 48.dp)
@@ -507,7 +505,7 @@ private fun SuccessState(
         ) {
             AsyncImage(
                 model = highResImageUrl,
-                contentDescription = null,
+                contentDescription = "Album Art",
                 modifier = Modifier
                     .fillMaxWidth(0.8f)
                     .aspectRatio(1f)
@@ -551,7 +549,7 @@ private fun SuccessState(
                 ) {
                     Icon(
                         painter = painterResource(R.drawable.mic),
-                        contentDescription = null,
+                        contentDescription = "Icon",
                         modifier = Modifier.size(20.dp)
                     )
                     Text(
@@ -623,8 +621,7 @@ private fun NoMatchState(
             contentAlignment = Alignment.Center
         ) {
             Icon(
-                painter = painterResource(R.drawable.close),
-                contentDescription = null,
+                painter = painterResource(R.drawable.close), contentDescription = "Close",
                 modifier = Modifier.size(48.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -652,7 +649,7 @@ private fun NoMatchState(
         ) {
             Icon(
                 painter = painterResource(R.drawable.refresh),
-                contentDescription = null,
+                contentDescription = "Icon",
                 modifier = Modifier.size(24.dp)
             )
             Spacer(modifier = Modifier.width(8.dp))
@@ -679,7 +676,7 @@ private fun ErrorState(
         ) {
             Icon(
                 painter = painterResource(R.drawable.error),
-                contentDescription = null,
+                contentDescription = "Icon",
                 modifier = Modifier.size(48.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -707,7 +704,7 @@ private fun ErrorState(
         ) {
             Icon(
                 painter = painterResource(R.drawable.refresh),
-                contentDescription = null,
+                contentDescription = "Icon",
                 modifier = Modifier.size(24.dp)
             )
             Spacer(modifier = Modifier.width(8.dp))

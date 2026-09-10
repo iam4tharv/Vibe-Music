@@ -47,7 +47,7 @@ fun LocalPlaylistMenu(
             icon = {
                 Icon(
                     painter = painterResource(R.drawable.offline),
-                    contentDescription = null
+                    contentDescription = "Play"
                 )
             },
             onClick = {
@@ -74,8 +74,7 @@ fun LocalPlaylistMenu(
             description = { Text(stringResource(R.string.download_playlist_desc)) },
             icon = {
                 Icon(
-                    painter = painterResource(R.drawable.download),
-                    contentDescription = null
+                    painter = painterResource(R.drawable.download), contentDescription = "Download"
                 )
             },
             onClick = {
@@ -95,7 +94,7 @@ fun LocalPlaylistMenu(
                 icon = {
                     Icon(
                         painter = painterResource(R.drawable.edit),
-                        contentDescription = null
+                        contentDescription = "Play"
                     )
                 },
                 onClick = {
@@ -113,7 +112,7 @@ fun LocalPlaylistMenu(
                     icon = {
                         Icon(
                             painter = painterResource(R.drawable.edit), // Or another icon
-                            contentDescription = null
+                            contentDescription = "Icon"
                         )
                     },
                     onClick = {
@@ -131,7 +130,7 @@ fun LocalPlaylistMenu(
                 icon = {
                     Icon(
                         painter = painterResource(R.drawable.file_export),
-                        contentDescription = null
+                        contentDescription = "Play"
                     )
                 },
                 onClick = {
@@ -150,7 +149,7 @@ fun LocalPlaylistMenu(
                     icon = {
                         Icon(
                             painter = painterResource(R.drawable.sync),
-                            contentDescription = null
+                            contentDescription = "Play"
                         )
                     },
                     onClick = {
@@ -168,8 +167,7 @@ fun LocalPlaylistMenu(
                     description = { Text(stringResource(R.string.add_to_queue_desc)) },
                     icon = {
                         Icon(
-                            painter = painterResource(R.drawable.queue_music),
-                            contentDescription = null
+                            painter = painterResource(R.drawable.queue_music), contentDescription = "Queue"
                         )
                     },
                     onClick = {
@@ -188,8 +186,7 @@ fun LocalPlaylistMenu(
                 description = { Text(stringResource(R.string.share_playlist_desc)) },
                 icon = {
                     Icon(
-                        painter = painterResource(R.drawable.share),
-                        contentDescription = null
+                        painter = painterResource(R.drawable.share), contentDescription = "Share"
                     )
                 },
                 onClick = {
@@ -216,8 +213,7 @@ fun LocalPlaylistMenu(
                 description = { Text(stringResource(R.string.delete_playlist_desc)) },
                 icon = {
                     Icon(
-                        painter = painterResource(R.drawable.delete),
-                        contentDescription = null
+                        painter = painterResource(R.drawable.delete), contentDescription = "Delete"
                     )
                 },
                 onClick = {
@@ -249,7 +245,7 @@ fun AutoPlaylistMenu(
             icon = {
                 Icon(
                     painter = painterResource(R.drawable.offline),
-                    contentDescription = null
+                    contentDescription = "Play"
                 )
             },
             onClick = {
@@ -276,8 +272,7 @@ fun AutoPlaylistMenu(
             description = { Text(stringResource(R.string.download_playlist_desc)) },
             icon = {
                 Icon(
-                    painter = painterResource(R.drawable.download),
-                    contentDescription = null
+                    painter = painterResource(R.drawable.download), contentDescription = "Download"
                 )
             },
             onClick = {
@@ -295,8 +290,7 @@ fun AutoPlaylistMenu(
                     description = { Text(stringResource(R.string.add_to_queue_desc)) },
                     icon = {
                         Icon(
-                            painter = painterResource(R.drawable.queue_music),
-                            contentDescription = null
+                            painter = painterResource(R.drawable.queue_music), contentDescription = "Queue"
                         )
                     },
                     onClick = {
@@ -328,7 +322,7 @@ fun TopPlaylistMenu(
             icon = {
                 Icon(
                     painter = painterResource(R.drawable.offline),
-                    contentDescription = null
+                    contentDescription = "Play"
                 )
             },
             onClick = {
@@ -355,8 +349,7 @@ fun TopPlaylistMenu(
             description = { Text(stringResource(R.string.download_playlist_desc)) },
             icon = {
                 Icon(
-                    painter = painterResource(R.drawable.download),
-                    contentDescription = null
+                    painter = painterResource(R.drawable.download), contentDescription = "Download"
                 )
             },
             onClick = {
@@ -374,8 +367,7 @@ fun TopPlaylistMenu(
                     description = { Text(stringResource(R.string.add_to_queue_desc)) },
                     icon = {
                         Icon(
-                            painter = painterResource(R.drawable.queue_music),
-                            contentDescription = null
+                            painter = painterResource(R.drawable.queue_music), contentDescription = "Queue"
                         )
                     },
                     onClick = {
@@ -407,7 +399,7 @@ fun CachePlaylistMenu(
             icon = {
                 Icon(
                     painter = painterResource(R.drawable.offline),
-                    contentDescription = null
+                    contentDescription = "Play"
                 )
             },
             onClick = {
@@ -434,8 +426,7 @@ fun CachePlaylistMenu(
             description = { Text(stringResource(R.string.download_playlist_desc)) },
             icon = {
                 Icon(
-                    painter = painterResource(R.drawable.download),
-                    contentDescription = null
+                    painter = painterResource(R.drawable.download), contentDescription = "Download"
                 )
             },
             onClick = {
@@ -453,8 +444,7 @@ fun CachePlaylistMenu(
                     description = { Text(stringResource(R.string.add_to_queue_desc)) },
                     icon = {
                         Icon(
-                            painter = painterResource(R.drawable.queue_music),
-                            contentDescription = null
+                            painter = painterResource(R.drawable.queue_music), contentDescription = "Queue"
                         )
                     },
                     onClick = {

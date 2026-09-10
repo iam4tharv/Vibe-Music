@@ -69,7 +69,8 @@ constructor(
             networkConnectivity.isCurrentlyConnected()
         } catch (e: Exception) {
             true
-        }
+        
+}
 
         if (!isNetworkAvailable) {
             return LyricsWithProvider(LYRICS_NOT_FOUND, "Unknown")
@@ -107,7 +108,8 @@ constructor(
             } catch (e: Exception) {
                 reportException(e)
                 null
-            }
+            
+}
         }.firstOrNull() ?: bestUnsynced ?: LyricsWithProvider(LYRICS_NOT_FOUND, "Unknown")
     }
 
@@ -133,7 +135,8 @@ constructor(
             networkConnectivity.isCurrentlyConnected()
         } catch (e: Exception) {
             true
-        }
+        
+}
         
         if (!isNetworkAvailable) {
             return
@@ -153,7 +156,8 @@ constructor(
                             }
                         } catch (e: Exception) {
                             reportException(e)
-                        }
+                        
+}
                     }
                 } else null
             }

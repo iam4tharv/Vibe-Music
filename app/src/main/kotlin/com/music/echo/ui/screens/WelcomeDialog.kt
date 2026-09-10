@@ -77,21 +77,28 @@ fun WelcomeDialog(
                             try {
                                 uriHandler.openUri("https://iam4tharv.cyou")
                             } catch (e: Exception) {
-                            }
+    com.music.echo.utils.ErrorNotifier.notifyError(e.message ?: "An unexpected error occurred")
+    e.printStackTrace()
+}
                         }
                     )
                 }
 
                 WelcomeSectionCard(title = "Support Vibe") {
                     val context = androidx.compose.ui.platform.LocalContext.current
-                    val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
                     WelcomeActionRow(
                         icon = painterResource(id = R.drawable.favorite),
                         title = "UPI",
                         subtitle = "dev.atharv@fam",
                         onClick = {
-                            clipboardManager.setText(androidx.compose.ui.text.AnnotatedString("dev.atharv@fam"))
-                            android.widget.Toast.makeText(context, "UPI ID copied", android.widget.Toast.LENGTH_SHORT).show()
+                            try {
+                                val uri = android.net.Uri.parse("upi://pay?pa=dev.atharv@fam&pn=Atharv&am=99&cu=INR&tn=Donation%20to%20Vibe%20Music&tr=ORDER123")
+                                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, uri)
+                                context.startActivity(intent)
+                            } catch (e: Exception) {
+                                android.widget.Toast.makeText(context, "No UPI app found", android.widget.Toast.LENGTH_SHORT).show()
+                            
+}
                         }
                     )
                 }
@@ -105,7 +112,9 @@ fun WelcomeDialog(
                             try {
                                 uriHandler.openUri("https://t.me/vibemusicupdates")
                             } catch (e: Exception) {
-                            }
+    com.music.echo.utils.ErrorNotifier.notifyError(e.message ?: "An unexpected error occurred")
+    e.printStackTrace()
+}
                         }
                     )
                 }
@@ -251,7 +260,7 @@ private fun WelcomeActionRow(
                 Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                     Icon(
                         painter = icon,
-                        contentDescription = null,
+                        contentDescription = "Icon",
                         modifier = Modifier.size(20.dp),
                         tint = tint,
                     )
@@ -281,7 +290,7 @@ private fun WelcomeActionRow(
             }
             Icon(
                 painter = painterResource(R.drawable.arrow_forward),
-                contentDescription = null,
+                contentDescription = "Icon",
                 modifier = Modifier.size(18.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
             )

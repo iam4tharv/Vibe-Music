@@ -93,8 +93,7 @@ fun ArtistMenu(
                                 NewAction(
                                     icon = {
                                         Icon(
-                                            painter = painterResource(R.drawable.play),
-                                            contentDescription = null,
+                                            painter = painterResource(R.drawable.play), contentDescription = "Play",
                                             modifier = Modifier.size(28.dp),
                                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
@@ -124,8 +123,7 @@ fun ArtistMenu(
                                 NewAction(
                                     icon = {
                                         Icon(
-                                            painter = painterResource(R.drawable.shuffle),
-                                            contentDescription = null,
+                                            painter = painterResource(R.drawable.shuffle), contentDescription = "Shuffle",
                                             modifier = Modifier.size(28.dp),
                                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
@@ -159,7 +157,7 @@ fun ArtistMenu(
                             icon = {
                                 Icon(
                                     painter = painterResource(if (isPinned) R.drawable.remove else R.drawable.add),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                     modifier = Modifier.size(28.dp),
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -191,8 +189,7 @@ fun ArtistMenu(
                             NewAction(
                                 icon = {
                                     Icon(
-                                        painter = painterResource(R.drawable.share),
-                                        contentDescription = null,
+                                        painter = painterResource(R.drawable.share), contentDescription = "Share",
                                         modifier = Modifier.size(28.dp),
                                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -229,7 +226,7 @@ fun ArtistMenu(
                         icon = {
                             Icon(
                                 painter = painterResource(if (artist.artist.bookmarkedAt != null) R.drawable.subscribed else R.drawable.subscribe),
-                                contentDescription = null,
+                                contentDescription = "Icon",
                             )
                         },
                         onClick = {

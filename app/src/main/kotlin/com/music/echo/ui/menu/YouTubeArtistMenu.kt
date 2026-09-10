@@ -92,7 +92,7 @@ fun YouTubeArtistMenu(
                                     icon = {
                                         Icon(
                                             painter = painterResource(R.drawable.radio),
-                                            contentDescription = null,
+                                            contentDescription = "Icon",
                                             modifier = Modifier.size(28.dp),
                                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
@@ -112,7 +112,7 @@ fun YouTubeArtistMenu(
                             icon = {
                                 Icon(
                                     painter = painterResource(if (isPinned) R.drawable.remove else R.drawable.add),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                     modifier = Modifier.size(28.dp),
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -135,8 +135,7 @@ fun YouTubeArtistMenu(
                         NewAction(
                             icon = {
                                 Icon(
-                                    painter = painterResource(R.drawable.share),
-                                    contentDescription = null,
+                                    painter = painterResource(R.drawable.share), contentDescription = "Share",
                                     modifier = Modifier.size(28.dp),
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -175,7 +174,7 @@ fun YouTubeArtistMenu(
                                         R.drawable.subscribe
                                     }
                                 ),
-                                contentDescription = null,
+                                contentDescription = "Icon",
                             )
                         },
                         onClick = {

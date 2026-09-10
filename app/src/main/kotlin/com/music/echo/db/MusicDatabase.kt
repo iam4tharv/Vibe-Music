@@ -27,6 +27,7 @@ import com.music.echo.db.entities.Event
 import com.music.echo.db.entities.FormatEntity
 import com.music.echo.db.entities.LyricsEntity
 import com.music.echo.db.entities.PlayCountEntity
+import com.music.echo.db.entities.PlayHistoryEntity
 import com.music.echo.db.entities.PlaylistEntity
 import com.music.echo.db.entities.PlaylistSongMap
 import com.music.echo.db.entities.PlaylistSongMapPreview
@@ -105,14 +106,15 @@ class MusicDatabase(
         PlayCountEntity::class,
         RecognitionHistory::class,
         SpeedDialItem::class,
-        BeatInfoEntity::class
+        BeatInfoEntity::class,
+        PlayHistoryEntity::class
     ],
     views = [
         SortedSongArtistMap::class,
         SortedSongAlbumMap::class,
         PlaylistSongMapPreview::class,
     ],
-    version = 43,
+    version = 44,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 2, to = 3),
@@ -148,6 +150,7 @@ class MusicDatabase(
         AutoMigration(from = 35, to = 36),
         AutoMigration(from = 36, to = 37, spec = Migration36To37Spec::class),
         AutoMigration(from = 41, to = 42, spec = Migration41To42::class),
+        AutoMigration(from = 43, to = 44),
     ],
 )
 @TypeConverters(Converters::class)
@@ -179,6 +182,7 @@ abstract class InternalDatabase : RoomDatabase() {
                             MIGRATION_40_41,
                             MIGRATION_41_42,
                             MIGRATION_42_43,
+                            MIGRATION_43_44,
                         )
                         .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
                         .setTransactionExecutor(java.util.concurrent.Executors.newFixedThreadPool(4))
@@ -266,7 +270,7 @@ val MIGRATION_1_2 =
             }
             playlistSongMaps.sortBy { it.position }
             val playlistSongCount = mutableMapOf<String, Int>()
-            playlistSongMaps.map { map ->
+            val updatedPlaylistSongMaps = playlistSongMaps.map { map ->
                 if (map.playlistId !in playlistSongCount) playlistSongCount[map.playlistId] = 0
                 map.copy(position = playlistSongCount[map.playlistId]!!).also {
                     playlistSongCount[map.playlistId] = playlistSongCount[map.playlistId]!! + 1
@@ -395,7 +399,7 @@ val MIGRATION_1_2 =
                     ),
                 )
             }
-            playlistSongMaps.forEach { playlistSongMap ->
+            updatedPlaylistSongMaps.forEach { playlistSongMap ->
                 db.insert(
                     "playlist_song_map",
                     SQLiteDatabase.CONFLICT_ABORT,
@@ -963,5 +967,11 @@ val MIGRATION_42_43 = object : Migration(42, 43) {
         db.execSQL("INSERT INTO `_new_playlist` (`id`,`name`,`browseId`,`createdAt`,`lastUpdateTime`,`isEditable`,`bookmarkedAt`,`remoteSongCount`,`playEndpointParams`,`thumbnailUrl`,`shuffleEndpointParams`,`radioEndpointParams`,`isLocal`,`isAutoSync`,`isPinned`) SELECT `id`,`name`,`browseId`,`createdAt`,`lastUpdateTime`,`isEditable`,`bookmarkedAt`,`remoteSongCount`,`playEndpointParams`,`thumbnailUrl`,`shuffleEndpointParams`,`radioEndpointParams`,`isLocal`,`isAutoSync`,`isPinned` FROM `playlist`")
         db.execSQL("DROP TABLE `playlist`")
         db.execSQL("ALTER TABLE `_new_playlist` RENAME TO `playlist`")
+    }
+}
+
+val MIGRATION_43_44 = object : Migration(43, 44) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        // Empty migration to satisfy Room schema version 44 bump
     }
 }

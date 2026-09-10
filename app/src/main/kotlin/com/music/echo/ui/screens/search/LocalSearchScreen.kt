@@ -33,6 +33,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.music.echo.extensions.bounceClick
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -168,7 +169,7 @@ fun LocalSearchScreen(
 
                         Icon(
                             painter = painterResource(R.drawable.navigate_next),
-                            contentDescription = null,
+                            contentDescription = "Icon",
                         )
                     }
                 }
@@ -203,12 +204,12 @@ fun LocalSearchScreen(
                                 }
                             ) {
                                 Icon(
-                                    painter = painterResource(R.drawable.more_vert),
-                                    contentDescription = null,
+                                    painter = painterResource(R.drawable.more_vert), contentDescription = "Options",
                                 )
                             }
                         },
                         modifier = Modifier
+                            .bounceClick()
                             .combinedClickable(
                                 onClick = {
                                     if (item.id == mediaMetadata?.id) {

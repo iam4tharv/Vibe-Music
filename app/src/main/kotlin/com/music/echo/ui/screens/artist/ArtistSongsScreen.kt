@@ -26,6 +26,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.music.echo.extensions.bounceClick
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -145,14 +146,14 @@ fun ArtistSongsScreen(
                             },
                         ) {
                             Icon(
-                                painter = painterResource(R.drawable.more_vert),
-                                contentDescription = null,
+                                painter = painterResource(R.drawable.more_vert), contentDescription = "Options",
                             )
                         }
                     },
                     modifier =
                     Modifier
                         .fillMaxWidth()
+                        .bounceClick()
                         .combinedClickable(
                             onClick = {
                                 if (song.id == mediaMetadata?.id) {
@@ -192,7 +193,7 @@ fun ArtistSongsScreen(
                 ) {
                     Icon(
                         painterResource(R.drawable.arrow_back),
-                        contentDescription = null,
+                        contentDescription = "Icon",
                     )
                 }
             },

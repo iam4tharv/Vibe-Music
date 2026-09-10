@@ -2,6 +2,7 @@
 <resources>
     
     <string name="home">Home</string>
+    <string name="scroll_to_top">Scroll to top</string>
     <string name="music">Music</string>
     <string name="songs">Songs</string>
     <string name="artists">Artists</string>
@@ -15,7 +16,7 @@
 
     
     <string name="history">History</string>
-    <string name="stats">Stats</string>
+    <string name="stats">Vibe Wrapped (Month-in-Review &amp; Listening Stats)</string>
     <string name="mood_and_genres">Mood and Genres</string>
     <string name="account">Account</string>
     <string name="quick_picks">Quick picks</string>
@@ -533,4 +534,14 @@
     <string name="widget_split_grid_desc">Split Now Playing Grid</string>
     <string name="widget_mini_dial_desc">Vibe Mini-Dial</string>
 <string name="recently_played">Recently Played</string>
+    <string name="share_wrapped">Share Wrapped</string>
+    <string name="share_wrapped_summary">Share Vibe Wrapped Summary</string>
+    <string name="share_wrapped_desc">Generate a stylish summary card to share with friends</string>
+    <string name="share_image">Share Image</string>
+    <string name="save_to_gallery">Save Image</string>
+    <string name="image_saved">Image saved to Pictures</string>
+    <string name="generating_wrapped_image">Generating your Vibe Wrapped…</string>
+    <string name="theme_aurora">Aurora Neon</string>
+    <string name="theme_sunset">Sunset Gold</string>
+    <string name="theme_emerald">Electric Mint</string>
 </resources>

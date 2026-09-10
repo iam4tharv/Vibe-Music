@@ -49,6 +49,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.music.echo.extensions.bounceClick
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -114,7 +115,7 @@ fun ChartsScreen(
                     ) {
                         Icon(
                             painter = painterResource(R.drawable.arrow_back),
-                            contentDescription = null,
+                            contentDescription = "Icon",
                         )
                     }
                 },
@@ -266,13 +267,13 @@ fun ChartsScreen(
                                                     },
                                                 ) {
                                                     Icon(
-                                                        painter = painterResource(R.drawable.more_vert),
-                                                        contentDescription = null,
+                                                        painter = painterResource(R.drawable.more_vert), contentDescription = "Options",
                                                     )
                                                 }
                                             },
                                             modifier = Modifier
                                                 .width(horizontalLazyGridItemWidth)
+                                                .bounceClick()
                                                 .combinedClickable(
                                                     onClick = {
                                                         if (song.id == mediaMetadata?.id) {
@@ -328,6 +329,7 @@ fun ChartsScreen(
                                         isPlaying = isPlaying,
                                         coroutineScope = coroutineScope,
                                         modifier = Modifier
+                                            .bounceClick()
                                             .combinedClickable(
                                                 onClick = {
                                                     if (video.id == mediaMetadata?.id) {

@@ -123,8 +123,7 @@ fun AddToPlaylistDialog(
                     title = stringResource(R.string.create_playlist),
                     thumbnailContent = {
                         Image(
-                            painter = painterResource(R.drawable.add),
-                            contentDescription = null,
+                            painter = painterResource(R.drawable.add), contentDescription = "Add",
                             colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.onBackground),
                             modifier = Modifier.size(ListThumbnailSize)
                         )
@@ -151,7 +150,7 @@ fun AddToPlaylistDialog(
                         leadingIcon = {
                             Icon(
                                 painter = painterResource(R.drawable.search),
-                                contentDescription = null,
+                                contentDescription = "Icon",
                                 tint = MaterialTheme.colorScheme.primary
                             )
                         },
@@ -159,8 +158,7 @@ fun AddToPlaylistDialog(
                             if (searchQuery.isNotEmpty()) {
                                 IconButton(onClick = { searchQuery = "" }) {
                                     Icon(
-                                        painter = painterResource(R.drawable.close),
-                                        contentDescription = null,
+                                        painter = painterResource(R.drawable.close), contentDescription = "Close",
                                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }

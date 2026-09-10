@@ -41,6 +41,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Modifier
+import com.music.echo.extensions.bounceClick
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
@@ -263,13 +264,13 @@ fun HistoryScreen(
                                     }
                                 ) {
                                     Icon(
-                                        painter = painterResource(R.drawable.more_vert),
-                                        contentDescription = null
+                                        painter = painterResource(R.drawable.more_vert), contentDescription = "Options"
                                     )
                                 }
                             },
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .bounceClick()
                                 .combinedClickable(
                                     onClick = {
                                         if (song.id == mediaMetadata?.id) {
@@ -346,14 +347,14 @@ fun HistoryScreen(
                                         }
                                     ) {
                                         Icon(
-                                            painter = painterResource(R.drawable.more_vert),
-                                            contentDescription = null
+                                            painter = painterResource(R.drawable.more_vert), contentDescription = "Options"
                                         )
                                     }
                                 }
                             },
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .bounceClick()
                                 .combinedClickable(
                                     onClick = {
                                         if (inSelectMode) {
@@ -456,8 +457,7 @@ fun HistoryScreen(
             if (inSelectMode) {
                 IconButton(onClick = onExitSelectionMode) {
                     Icon(
-                        painter = painterResource(R.drawable.close),
-                        contentDescription = null,
+                        painter = painterResource(R.drawable.close), contentDescription = "Close",
                     )
                 }
             } else {
@@ -478,7 +478,7 @@ fun HistoryScreen(
                 ) {
                     Icon(
                         painter = painterResource(R.drawable.arrow_back),
-                        contentDescription = null
+                        contentDescription = "Icon"
                     )
                 }
             }
@@ -512,8 +512,7 @@ fun HistoryScreen(
                     }
                 ) {
                     Icon(
-                        painter = painterResource(R.drawable.more_vert),
-                        contentDescription = null
+                        painter = painterResource(R.drawable.more_vert), contentDescription = "Options"
                     )
                 }
             } else if (!isSearching) {
@@ -522,7 +521,7 @@ fun HistoryScreen(
                 ) {
                     Icon(
                         painter = painterResource(R.drawable.search),
-                        contentDescription = null
+                        contentDescription = "Icon"
                     )
                 }
             }

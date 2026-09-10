@@ -45,7 +45,7 @@ fun NavigationTile(
         ) {
             Icon(
                 painter = painterResource(icon),
-                contentDescription = null,
+                contentDescription = "Icon",
             )
         }
 

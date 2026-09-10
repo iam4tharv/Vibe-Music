@@ -150,7 +150,7 @@ fun PlaylistMenu(
 
     if (showEditDialog) {
         TextFieldDialog(
-            icon = { Icon(painter = painterResource(R.drawable.edit), contentDescription = null) },
+            icon = { Icon(painter = painterResource(R.drawable.edit), contentDescription = "Icon") },
             title = { Text(text = stringResource(R.string.edit_playlist)) },
             onDismiss = { showEditDialog = false },
             initialTextFieldValue =
@@ -284,7 +284,7 @@ fun PlaylistMenu(
                     Icon(
                         painter = painterResource(if (dbPlaylist?.playlist?.bookmarkedAt != null) R.drawable.favorite else R.drawable.favorite_border),
                         tint = if (dbPlaylist?.playlist?.bookmarkedAt != null) MaterialTheme.colorScheme.error else LocalContentColor.current,
-                        contentDescription = null
+                        contentDescription = "Play"
                     )
                 }
             }
@@ -313,8 +313,7 @@ fun PlaylistMenu(
                         NewAction(
                             icon = {
                                 Icon(
-                                    painter = painterResource(R.drawable.play),
-                                    contentDescription = null,
+                                    painter = painterResource(R.drawable.play), contentDescription = "Play",
                                     modifier = Modifier.size(28.dp),
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -335,8 +334,7 @@ fun PlaylistMenu(
                         NewAction(
                             icon = {
                                 Icon(
-                                    painter = painterResource(R.drawable.shuffle),
-                                    contentDescription = null,
+                                    painter = painterResource(R.drawable.shuffle), contentDescription = "Shuffle",
                                     modifier = Modifier.size(28.dp),
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -358,8 +356,7 @@ fun PlaylistMenu(
                     NewAction(
                         icon = {
                             Icon(
-                                painter = painterResource(R.drawable.share),
-                                contentDescription = null,
+                                painter = painterResource(R.drawable.share), contentDescription = "Share",
                                 modifier = Modifier.size(28.dp),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -393,7 +390,7 @@ fun PlaylistMenu(
                                     icon = {
                                         Icon(
                                             painter = painterResource(R.drawable.radio),
-                                            contentDescription = null,
+                                            contentDescription = "Icon",
                                         )
                                     },
                                     onClick = {
@@ -420,7 +417,7 @@ fun PlaylistMenu(
                                 icon = {
                                     Icon(
                                         painter = painterResource(R.drawable.playlist_play),
-                                        contentDescription = null,
+                                        contentDescription = "Play",
                                     )
                                 },
                                 onClick = {
@@ -439,8 +436,7 @@ fun PlaylistMenu(
                                 description = { Text(text = stringResource(R.string.add_to_queue_desc)) },
                                 icon = {
                                     Icon(
-                                        painter = painterResource(R.drawable.queue_music),
-                                        contentDescription = null,
+                                        painter = painterResource(R.drawable.queue_music), contentDescription = "Queue",
                                     )
                                 },
                                 onClick = {
@@ -467,7 +463,7 @@ fun PlaylistMenu(
                                 icon = {
                                     Icon(
                                         painter = painterResource(R.drawable.edit),
-                                        contentDescription = null,
+                                        contentDescription = "Icon",
                                     )
                                 },
                                 onClick = {
@@ -486,7 +482,7 @@ fun PlaylistMenu(
                             icon = {
                                 Icon(
                                     painter = painterResource(if (playlist.playlist.isPinned) R.drawable.ic_push_pin else R.drawable.ic_push_pin),
-                                    contentDescription = null,
+                                    contentDescription = "Play",
                                 )
                             },
                             onClick = {
@@ -507,7 +503,7 @@ fun PlaylistMenu(
                             icon = {
                                 Icon(
                                     painter = painterResource(if (isPinned) R.drawable.remove else R.drawable.add),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                 )
                             },
                             onClick = {
@@ -543,7 +539,7 @@ fun PlaylistMenu(
                                         icon = {
                                             Icon(
                                                 painter = painterResource(R.drawable.offline),
-                                                contentDescription = null
+                                                contentDescription = "Icon"
                                             )
                                         },
                                         onClick = {
@@ -571,8 +567,7 @@ fun PlaylistMenu(
                                         description = { Text(text = stringResource(R.string.download_desc)) },
                                         icon = {
                                             Icon(
-                                                painter = painterResource(R.drawable.download),
-                                                contentDescription = null,
+                                                painter = painterResource(R.drawable.download), contentDescription = "Download",
                                             )
                                         },
                                         onClick = {
@@ -603,8 +598,7 @@ fun PlaylistMenu(
                                 description = { Text(text = stringResource(R.string.delete_desc)) },
                                 icon = {
                                     Icon(
-                                        painter = painterResource(R.drawable.delete),
-                                        contentDescription = null,
+                                        painter = painterResource(R.drawable.delete), contentDescription = "Delete",
                                     )
                                 },
                                 onClick = {
@@ -622,7 +616,7 @@ fun PlaylistMenu(
                                 icon = {
                                     Icon(
                                         painter = painterResource(R.drawable.sync),
-                                        contentDescription = null,
+                                        contentDescription = "Play",
                                     )
                                 },
                                 onClick = {
@@ -696,8 +690,7 @@ fun PlaylistMenu(
                                 description = { Text(text = stringResource(R.string.share_desc)) },
                                 icon = {
                                     Icon(
-                                        painter = painterResource(R.drawable.share),
-                                        contentDescription = null,
+                                        painter = painterResource(R.drawable.share), contentDescription = "Share",
                                     )
                                 },
                                 onClick = {
@@ -756,7 +749,7 @@ fun PlaylistMenu(
                         )
                         Icon(
                             painter = painterResource(R.drawable.check),
-                            contentDescription = null,
+                            contentDescription = "Icon",
                             modifier = Modifier.size(36.dp),
                             tint = MaterialTheme.colorScheme.primary
                         )

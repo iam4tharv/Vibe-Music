@@ -279,7 +279,7 @@ fun YouTubeSelectionSongMenu(
                                 painter = painterResource(
                                     if (allInLibrary) R.drawable.library_add_check else R.drawable.library_add
                                 ),
-                                contentDescription = null,
+                                contentDescription = "Icon",
                             )
                         },
                         onClick = {
@@ -326,7 +326,7 @@ fun YouTubeSelectionSongMenu(
                                 icon = {
                                     Icon(
                                         painter = painterResource(R.drawable.offline),
-                                        contentDescription = null
+                                        contentDescription = "Icon"
                                     )
                                 },
                                 onClick = {
@@ -353,8 +353,7 @@ fun YouTubeSelectionSongMenu(
                                 title = { Text(text = stringResource(R.string.action_download)) },
                                 icon = {
                                     Icon(
-                                        painter = painterResource(R.drawable.download),
-                                        contentDescription = null,
+                                        painter = painterResource(R.drawable.download), contentDescription = "Download",
                                     )
                                 },
                                 onClick = {
@@ -391,7 +390,7 @@ fun YouTubeSelectionSongMenu(
                                 painter = painterResource(
                                     if (allLiked) R.drawable.favorite else R.drawable.favorite_border
                                 ),
-                                contentDescription = null,
+                                contentDescription = "Icon",
                             )
                         },
                         onClick = {

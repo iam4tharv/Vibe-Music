@@ -32,7 +32,7 @@ class SleepTimer(
         sleepTimerJob?.cancel()
         sleepTimerJob = null
         isWaitingForTrackEnd = false
-        if (minute == -1) {
+        if (waitEndTrack || minute == -1) {
             pauseWhenSongEnd = true
             triggerTime = -1L
         } else {
@@ -44,13 +44,8 @@ class SleepTimer(
                     if (delayTime > 0) {
                         delay(delayTime)
                     }
-                    if (waitEndTrack) {
-                        isWaitingForTrackEnd = true
-                        triggerTime = -1L
-                    } else {
-                        fadeOutAndPause()
-                        triggerTime = -1L
-                    }
+                    fadeOutAndPause()
+                    triggerTime = -1L
                 }
         }
     }
@@ -93,10 +88,12 @@ class SleepTimer(
     ) {
         if (pauseWhenSongEnd) {
             pauseWhenSongEnd = false
-            scope.launch { fadeOutAndPause() }
+            player.pause()
         } else if (isWaitingForTrackEnd && reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) {
             isWaitingForTrackEnd = false
-            scope.launch { fadeOutAndPause() }
+            player.pause()
+            // optionally skip to previous so they don't resume on the next track?
+            // player.seekToPrevious() // No, pausing at 0:00 of next track is fine
         }
     }
 
@@ -106,10 +103,8 @@ class SleepTimer(
         if (playbackState == Player.STATE_ENDED) {
             if (pauseWhenSongEnd) {
                 pauseWhenSongEnd = false
-                scope.launch { fadeOutAndPause() }
             } else if (isWaitingForTrackEnd) {
                 isWaitingForTrackEnd = false
-                scope.launch { fadeOutAndPause() }
             }
         }
     }

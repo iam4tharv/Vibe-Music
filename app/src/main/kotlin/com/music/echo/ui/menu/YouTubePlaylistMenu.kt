@@ -189,7 +189,7 @@ fun YouTubePlaylistMenu(
                     Icon(
                         painter = painterResource(if (dbPlaylist?.playlist?.bookmarkedAt != null) R.drawable.favorite else R.drawable.favorite_border),
                         tint = if (dbPlaylist?.playlist?.bookmarkedAt != null) MaterialTheme.colorScheme.error else LocalContentColor.current,
-                        contentDescription = null
+                        contentDescription = "Play"
                     )
                 }
             }
@@ -287,8 +287,7 @@ fun YouTubePlaylistMenu(
                     headlineContent = { Text(text = stringResource(R.string.already_in_playlist)) },
                     leadingContent = {
                         Image(
-                            painter = painterResource(R.drawable.close),
-                            contentDescription = null,
+                            painter = painterResource(R.drawable.close), contentDescription = "Close",
                             colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.onBackground),
                             modifier = Modifier.size(ListThumbnailSize),
                         )
@@ -307,7 +306,7 @@ fun YouTubePlaylistMenu(
                         ) {
                             AsyncImage(
                                 model = song.thumbnailUrl,
-                                contentDescription = null,
+                                contentDescription = "Album Art",
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .clip(RoundedCornerShape(ThumbnailCornerRadius)),
@@ -347,8 +346,7 @@ fun YouTubePlaylistMenu(
                                 NewAction(
                                     icon = {
                                         Icon(
-                                            painter = painterResource(R.drawable.play),
-                                            contentDescription = null,
+                                            painter = painterResource(R.drawable.play), contentDescription = "Play",
                                             modifier = Modifier.size(28.dp),
                                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
@@ -366,8 +364,7 @@ fun YouTubePlaylistMenu(
                                 NewAction(
                                     icon = {
                                         Icon(
-                                            painter = painterResource(R.drawable.shuffle),
-                                            contentDescription = null,
+                                            painter = painterResource(R.drawable.shuffle), contentDescription = "Shuffle",
                                             modifier = Modifier.size(28.dp),
                                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
@@ -386,7 +383,7 @@ fun YouTubePlaylistMenu(
                                     icon = {
                                         Icon(
                                             painter = painterResource(R.drawable.radio),
-                                            contentDescription = null,
+                                            contentDescription = "Icon",
                                             modifier = Modifier.size(28.dp),
                                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
@@ -415,7 +412,7 @@ fun YouTubePlaylistMenu(
                             icon = {
                                 Icon(
                                     painter = painterResource(R.drawable.playlist_play),
-                                    contentDescription = null,
+                                    contentDescription = "Play",
                                 )
                             },
                             onClick = {
@@ -447,8 +444,7 @@ fun YouTubePlaylistMenu(
                             description = { Text(text = stringResource(R.string.add_to_queue_desc)) },
                             icon = {
                                 Icon(
-                                    painter = painterResource(R.drawable.queue_music),
-                                    contentDescription = null,
+                                    painter = painterResource(R.drawable.queue_music), contentDescription = "Queue",
                                 )
                             },
                             onClick = {
@@ -477,7 +473,7 @@ fun YouTubePlaylistMenu(
                         icon = {
                             Icon(
                                 painter = painterResource(R.drawable.playlist_add),
-                                contentDescription = null,
+                                contentDescription = "Play",
                             )
                         },
                         onClick = {
@@ -493,7 +489,7 @@ fun YouTubePlaylistMenu(
                         icon = {
                             Icon(
                                 painter = painterResource(if (isPinned) R.drawable.remove else R.drawable.add),
-                                contentDescription = null,
+                                contentDescription = "Icon",
                             )
                         },
                         onClick = {
@@ -529,7 +525,7 @@ fun YouTubePlaylistMenu(
                                         icon = {
                                             Icon(
                                                 painter = painterResource(R.drawable.offline),
-                                                contentDescription = null
+                                                contentDescription = "Icon"
                                             )
                                         },
                                         onClick = {
@@ -557,8 +553,7 @@ fun YouTubePlaylistMenu(
                                         description = { Text(text = stringResource(R.string.download_desc)) },
                                         icon = {
                                             Icon(
-                                                painter = painterResource(R.drawable.download),
-                                                contentDescription = null,
+                                                painter = painterResource(R.drawable.download), contentDescription = "Download",
                                             )
                                         },
                                         onClick = {
@@ -587,8 +582,7 @@ fun YouTubePlaylistMenu(
                             description = { Text(text = stringResource(R.string.share_desc)) },
                             icon = {
                                 Icon(
-                                    painter = painterResource(R.drawable.share),
-                                    contentDescription = null,
+                                    painter = painterResource(R.drawable.share), contentDescription = "Share",
                                 )
                             },
                             onClick = {
@@ -609,7 +603,7 @@ fun YouTubePlaylistMenu(
                                 icon = {
                                     Icon(
                                         painter = painterResource(R.drawable.select_all),
-                                        contentDescription = null,
+                                        contentDescription = "Icon",
                                     )
                                 },
                                 onClick = {

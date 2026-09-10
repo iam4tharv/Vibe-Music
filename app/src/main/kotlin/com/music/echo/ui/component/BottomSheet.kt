@@ -115,7 +115,11 @@ fun BottomSheet(
                 modifier = Modifier
                     .fillMaxSize()
                     .graphicsLayer {
-                        alpha = ((state.progress - 0.15f) * 4).coerceIn(0f, 1f)
+                        val p = state.progress.coerceIn(0f, 1f)
+                        alpha = (p * 1.35f).coerceIn(0f, 1f)
+                        val scale = 0.94f + 0.06f * p
+                        scaleX = scale
+                        scaleY = scale
                     },
                 content = content
             )
@@ -126,7 +130,11 @@ fun BottomSheet(
                 modifier =
                 Modifier
                     .graphicsLayer {
-                        alpha = 1f - (state.progress * 4).coerceAtMost(1f)
+                        val p = state.progress.coerceIn(0f, 1f)
+                        alpha = (1f - p * 2.2f).coerceIn(0f, 1f)
+                        val scale = 1f - 0.05f * p
+                        scaleX = scale
+                        scaleY = scale
                     }.clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
@@ -186,19 +194,19 @@ class BottomSheetState(
     }
 
     private fun collapse() {
-        collapse(SpringSpec())
+        collapse(spring(dampingRatio = 0.86f, stiffness = 420f))
     }
 
     private fun expand() {
-        expand(SpringSpec())
+        expand(spring(dampingRatio = 0.86f, stiffness = 420f))
     }
 
     fun collapseSoft() {
-        collapse(spring(stiffness = Spring.StiffnessMediumLow))
+        collapse(spring(dampingRatio = 0.88f, stiffness = 380f))
     }
 
     fun expandSoft() {
-        expand(spring(stiffness = Spring.StiffnessMediumLow))
+        expand(spring(dampingRatio = 0.88f, stiffness = 380f))
     }
 
     fun dismiss() {
@@ -220,35 +228,18 @@ class BottomSheetState(
     }
 
     fun performFling(velocity: Float, onDismiss: (() -> Unit)?) {
-        if (velocity > 250) {
-            expand()
-        } else if (velocity < -250) {
-            if (value < collapsedBound && onDismiss != null) {
-                dismiss()
-                onDismiss.invoke()
-            } else {
-                collapse()
-            }
-        } else {
-            val l0 = dismissedBound
-            val l1 = (collapsedBound - dismissedBound) / 2
-            val l2 = (expandedBound - collapsedBound) / 2
-            val l3 = expandedBound
-
-            when (value) {
-                in l0..l1 -> {
-                    if (onDismiss != null) {
-                        dismiss()
-                        onDismiss.invoke()
-                    } else {
-                        collapse()
-                    }
-                }
-
-                in l1..l2 -> collapse()
-                in l2..l3 -> expand()
-                else -> Unit
-            }
+        val target = BottomSheetMath.calculateTargetState(
+            velocity = velocity,
+            currentValue = value,
+            collapsedBound = collapsedBound,
+            expandedBound = expandedBound,
+            hasDismiss = onDismiss != null
+        )
+        
+        when (target) {
+            BottomSheetTargetState.EXPANDED -> expand()
+            BottomSheetTargetState.COLLAPSED -> collapse()
+            BottomSheetTargetState.DISMISSED -> dismiss()
         }
     }
 

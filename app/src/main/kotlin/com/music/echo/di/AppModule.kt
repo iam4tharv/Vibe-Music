@@ -70,6 +70,13 @@ object AppModule {
             com.music.echo.db.MIGRATION_38_39,
             com.music.echo.db.MIGRATION_39_40,
             com.music.echo.db.MIGRATION_40_41,
+            com.music.echo.db.MIGRATION_41_42,
+            com.music.echo.db.MIGRATION_42_43,
+            com.music.echo.db.MIGRATION_43_44,
+             
+            com.music.echo.db.MIGRATION_42_43,
+            com.music.echo.db.MIGRATION_43_44,
+            
         )
         .setJournalMode(androidx.room.RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
         .setTransactionExecutor(java.util.concurrent.Executors.newFixedThreadPool(4))
@@ -87,6 +94,7 @@ object AppModule {
                 }
             }
         })
+        .fallbackToDestructiveMigrationOnDowngrade()
         .build()
 
     @Singleton

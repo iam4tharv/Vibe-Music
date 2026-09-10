@@ -37,6 +37,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import com.music.echo.extensions.bounceClick
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -274,12 +275,12 @@ fun OnlineSearchScreen(
                         }
                     ) {
                         Icon(
-                            painter = painterResource(R.drawable.more_vert),
-                            contentDescription = null
+                            painter = painterResource(R.drawable.more_vert), contentDescription = "Options"
                         )
                     }
                 },
                 modifier = Modifier
+                    .bounceClick()
                     .combinedClickable(
                         onClick = {
                             when (item) {
@@ -377,7 +378,7 @@ fun SuggestionItem(
     ) {
         Icon(
             painterResource(if (online) R.drawable.search else R.drawable.history),
-            contentDescription = null,
+            contentDescription = "Icon",
             modifier = Modifier.padding(horizontal = 16.dp).alpha(0.5f)
         )
 
@@ -394,8 +395,7 @@ fun SuggestionItem(
                 modifier = Modifier.alpha(0.5f),
             ) {
                 Icon(
-                    painter = painterResource(R.drawable.close),
-                    contentDescription = null,
+                    painter = painterResource(R.drawable.close), contentDescription = "Close",
                 )
             }
         }
@@ -406,7 +406,7 @@ fun SuggestionItem(
         ) {
             Icon(
                 painter = painterResource(R.drawable.arrow_top_left),
-                contentDescription = null,
+                contentDescription = "Icon",
             )
         }
     }

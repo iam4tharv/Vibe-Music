@@ -98,7 +98,7 @@ fun NavigationTitle(
         if (onClick != null) {
             Icon(
                 painter = painterResource(R.drawable.arrow_forward),
-                contentDescription = null,
+                contentDescription = "Icon",
                 tint = MaterialTheme.colorScheme.primary
             )
         }

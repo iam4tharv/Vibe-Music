@@ -26,7 +26,7 @@ fun Player.toggleRepeatMode() {
             REPEAT_MODE_OFF -> REPEAT_MODE_ALL
             REPEAT_MODE_ALL -> REPEAT_MODE_ONE
             REPEAT_MODE_ONE -> REPEAT_MODE_OFF
-            else -> throw IllegalStateException()
+            else -> REPEAT_MODE_OFF
         }
 }
 
@@ -128,4 +128,25 @@ fun Player.setOffloadEnabled(enabled: Boolean) {
                 )
                 .build()
         ).build()
+}
+
+fun Player.indexOfMediaItem(mediaId: String): Int {
+    for (i in 0 until mediaItemCount) {
+        if (getMediaItemAt(i).mediaId == mediaId) {
+            return i
+        }
+    }
+    return -1
+}
+
+fun Player.indexOfWindowByUid(uid: Any): Int {
+    val timeline = currentTimeline
+    if (timeline.isEmpty) return -1
+    val window = Timeline.Window()
+    for (i in 0 until timeline.windowCount) {
+        if (timeline.getWindow(i, window).uid == uid) {
+            return i
+        }
+    }
+    return -1
 }

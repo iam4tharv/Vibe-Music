@@ -241,7 +241,9 @@ function discoverAndInit() {
                             break;
                         }
                     }
-                } catch(e) {}
+                } catch(e) {
+    com.music.echo.utils.ErrorNotifier.notifyError("An unexpected error occurred")
+}
             }
             info = "brute_force:tested=" + tested + "/" + keys.length;
             if (!nFuncName && candidates.length > 0) {

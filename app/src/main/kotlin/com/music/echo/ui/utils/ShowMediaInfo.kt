@@ -127,7 +127,7 @@ fun ShowMediaInfo(videoId: String) {
 
                 AsyncImage(
                     model = imageUrl,
-                    contentDescription = null,
+                    contentDescription = "Album Art",
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop
                 )

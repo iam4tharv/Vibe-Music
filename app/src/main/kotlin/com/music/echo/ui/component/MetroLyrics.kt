@@ -24,6 +24,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.music.echo.extensions.bounceClick
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
@@ -187,6 +188,7 @@ fun MetroLyricsLine(
     val itemModifier = modifier
         .fillMaxWidth()
         .clip(RoundedCornerShape(16.dp))
+        .bounceClick()
         .combinedClickable(
             enabled = true,
             onClick = onClick,

@@ -91,7 +91,7 @@ fun AccountSettingsScreen(
                     ) {
                         Icon(
                             painterResource(R.drawable.arrow_back),
-                            contentDescription = null
+                            contentDescription = "Icon"
                         )
                     }
                 },
@@ -119,7 +119,7 @@ fun AccountSettingsScreen(
                                 if (isLoggedIn && !accountImageUrl.isNullOrBlank()) {
                                     AsyncImage(
                                         model = accountImageUrl,
-                                        contentDescription = null,
+                                        contentDescription = "Album Art",
                                         contentScale = ContentScale.Crop,
                                         modifier = Modifier
                                             .size(40.dp)
@@ -209,7 +209,7 @@ fun AccountSettingsScreen(
                                             painter = painterResource(
                                                 id = if (useLoginForBrowse) R.drawable.check else R.drawable.close
                                             ),
-                                            contentDescription = null,
+                                            contentDescription = "Icon",
                                             modifier = Modifier.size(SwitchDefaults.IconSize),
                                         )
                                     }
@@ -234,7 +234,7 @@ fun AccountSettingsScreen(
                                             painter = painterResource(
                                                 id = if (ytmSync) R.drawable.check else R.drawable.close
                                             ),
-                                            contentDescription = null,
+                                            contentDescription = "Icon",
                                             modifier = Modifier.size(SwitchDefaults.IconSize),
                                         )
                                     }
@@ -276,7 +276,7 @@ fun AccountSettingsScreen(
                                         painter = painterResource(
                                             id = if (listenBrainzEnabled) R.drawable.check else R.drawable.close
                                         ),
-                                        contentDescription = null,
+                                        contentDescription = "Icon",
                                         modifier = Modifier.size(SwitchDefaults.IconSize),
                                     )
                                 }

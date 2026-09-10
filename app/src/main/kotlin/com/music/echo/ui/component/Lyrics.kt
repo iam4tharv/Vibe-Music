@@ -79,6 +79,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.music.echo.extensions.bounceClick
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
@@ -782,7 +783,7 @@ fun Lyrics(
                         ) {
                             Icon(
                                 painter = painterResource(R.drawable.error),
-                                contentDescription = null,
+                                contentDescription = "Icon",
                                 tint = MaterialTheme.colorScheme.onErrorContainer,
                                 modifier = Modifier.size(16.dp)
                             )
@@ -809,7 +810,7 @@ fun Lyrics(
                         ) {
                             Icon(
                                 painter = painterResource(R.drawable.check),
-                                contentDescription = null,
+                                contentDescription = "Icon",
                                 tint = MaterialTheme.colorScheme.onTertiaryContainer,
                                 modifier = Modifier.size(16.dp)
                             )
@@ -1093,6 +1094,7 @@ fun Lyrics(
                     val itemModifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(8.dp)) 
+                        .bounceClick() 
                         .combinedClickable(
                             enabled = true,
                             onClick = {
@@ -1262,7 +1264,7 @@ fun Lyrics(
                         val romanizedText = romanizedTextState
                         val isRomanizedAvailable = romanizedText != null
                         
-                        val mainText = if (romanizeAsMain && isRomanizedAvailable) romanizedText!! else item.text
+                        val mainText = if (romanizeAsMain && isRomanizedAvailable) romanizedText else item.text
                         val subText = if (romanizeAsMain && isRomanizedAvailable) item.text else romanizedText
                         
                         val hasWordTimings = if (romanizeAsMain && isRomanizedAvailable) false else item.words?.isNotEmpty() == true
@@ -1307,7 +1309,7 @@ fun Lyrics(
                                     withStyle(style = SpanStyle(color = wordColor, fontWeight = wordWeight)) {
                                         append(word.text)
                                     }
-                                    if (wordIndex < (item.words.size ?: 0) - 1) append(" ")
+                                    if (wordIndex < item.words.size - 1) append(" ")
                                 }
                             }
                             Text(
@@ -1364,7 +1366,7 @@ fun Lyrics(
                                     withStyle(style = SpanStyle(color = wordColor, fontWeight = wordWeight, shadow = wordShadow)) {
                                         append(word.text)
                                     }
-                                    if (wordIndex < (item.words.size ?: 0) - 1) append(" ")
+                                    if (wordIndex < item.words.size - 1) append(" ")
                                 }
                             }
                             Text(
@@ -1411,7 +1413,7 @@ fun Lyrics(
                                     withStyle(style = SpanStyle(color = wordColor, fontWeight = wordWeight, shadow = wordShadow)) {
                                         append(word.text)
                                     }
-                                    if (wordIndex < (item.words.size ?: 0) - 1) append(" ")
+                                    if (wordIndex < item.words.size - 1) append(" ")
                                 }
                             }
                             Text(
@@ -1467,7 +1469,7 @@ fun Lyrics(
                                             append(word.text)
                                         }
                                     }
-                                    if (wordIndex < (item.words.size ?: 0) - 1) append(" ")
+                                    if (wordIndex < item.words.size - 1) append(" ")
                                 }
                             }
                             Text(text = styledText, fontSize = lyricsTextSize.sp, textAlign = alignment, lineHeight = (lyricsTextSize * lyricsLineSpacing).sp)
@@ -1534,7 +1536,7 @@ fun Lyrics(
                                             append(word.text)
                                         }
                                     }
-                                    if (wordIndex < (item.words.size ?: 0) - 1) append(" ")
+                                    if (wordIndex < item.words.size - 1) append(" ")
                                 }
                             }
                             Text(text = styledText, fontSize = lyricsTextSize.sp, textAlign = alignment, lineHeight = (lyricsTextSize * lyricsLineSpacing.coerceAtMost(1.3f)).sp)
@@ -1588,7 +1590,7 @@ fun Lyrics(
                                     withStyle(style = SpanStyle(color = wordColor, fontWeight = wordWeight, shadow = wordShadow)) {
                                         append(word.text)
                                     }
-                                    if (wordIndex < (item.words.size ?: 0) - 1) append(" ")
+                                    if (wordIndex < item.words.size - 1) append(" ")
                                 }
                             }
                             Text(text = styledText, fontSize = lyricsTextSize.sp, textAlign = alignment, lineHeight = (lyricsTextSize * lyricsLineSpacing.coerceAtMost(1.3f)).sp)
@@ -1603,7 +1605,7 @@ fun Lyrics(
                             val wordData = remember(item.text, item.words, activeDuration) {
                                 if (item.words?.isNotEmpty() == true) {
                                     
-                                    item.words!!.mapIndexed { wordIndex, word ->
+                                    item.words.mapIndexed { wordIndex, word ->
                                         val wordStart = ((word.startTime * 1000).toLong() - item.time).coerceAtLeast(0L)
                                         val wordEnd = ((word.endTime * 1000).toLong() - item.time).coerceAtLeast(wordStart + 50L)
                                         Triple(word.text, wordStart, wordEnd)
@@ -2021,7 +2023,7 @@ fun Lyrics(
                     ) {
                         Icon(
                             painter = painterResource(id = R.drawable.share), 
-                            contentDescription = null,
+                            contentDescription = "Icon",
                             tint = MaterialTheme.colorScheme.primary
                         )
                         Spacer(modifier = Modifier.width(12.dp))
@@ -2046,7 +2048,7 @@ fun Lyrics(
                     ) {
                         Icon(
                             painter = painterResource(id = R.drawable.share), 
-                            contentDescription = null,
+                            contentDescription = "Icon",
                             tint = MaterialTheme.colorScheme.primary
                         )
                         Spacer(modifier = Modifier.width(12.dp))
@@ -2137,7 +2139,9 @@ fun Lyrics(
                             paletteColors.clear()
                             paletteColors.addAll(colors.take(5))
                         }
-                    } catch (_: Exception) {}
+                    } catch (_: Exception) {
+    com.music.echo.utils.ErrorNotifier.notifyError("An unexpected error occurred")
+}
                 }
             }
         }
@@ -2315,7 +2319,8 @@ fun Lyrics(
                                     context.startActivity(Intent.createChooser(shareIntent, context.getString(R.string.share_lyrics)))
                                 } catch (e: Exception) {
                                     Toast.makeText(context, context.getString(R.string.failed_to_create_image, e.message), Toast.LENGTH_SHORT).show()
-                                } finally {
+                                
+} finally {
                                     showProgressDialog = false
                                 }
                             }

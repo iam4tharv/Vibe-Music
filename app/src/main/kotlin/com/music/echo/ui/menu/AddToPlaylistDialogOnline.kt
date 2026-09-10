@@ -134,7 +134,7 @@ fun AddToPlaylistDialogOnline(
                     thumbnailContent = {
                         Image(
                             painter = painterResource(id = R.drawable.playlist_add),
-                            contentDescription = null,
+                            contentDescription = "Play",
                             colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.onBackground),
                             modifier = Modifier.size(ListThumbnailSize)
                         )
@@ -161,7 +161,7 @@ fun AddToPlaylistDialogOnline(
                         leadingIcon = {
                             Icon(
                                 painter = painterResource(R.drawable.search),
-                                contentDescription = null,
+                                contentDescription = "Icon",
                                 tint = MaterialTheme.colorScheme.primary
                             )
                         },
@@ -169,8 +169,7 @@ fun AddToPlaylistDialogOnline(
                             if (searchQuery.isNotEmpty()) {
                                 IconButton(onClick = { searchQuery = "" }) {
                                     Icon(
-                                        painter = painterResource(R.drawable.close),
-                                        contentDescription = null,
+                                        painter = painterResource(R.drawable.close), contentDescription = "Close",
                                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
@@ -373,7 +372,7 @@ Timber.tag("ERROR").v(e.toString())
                     thumbnailContent = {
                         Image(
                             painter = painterResource(id = R.drawable.favorite), 
-                            contentDescription = null,
+                            contentDescription = "Icon",
                             modifier = Modifier.size(40.dp), 
                             colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.onBackground) 
                         )

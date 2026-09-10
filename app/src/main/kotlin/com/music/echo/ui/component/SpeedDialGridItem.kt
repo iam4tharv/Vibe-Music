@@ -90,7 +90,7 @@ fun SpeedDialGridItem(
             if (item !is SongItem) {
                 Icon(
                     painter = painterResource(R.drawable.navigate_next),
-                    contentDescription = null,
+                    contentDescription = "Icon",
                     tint = Color.White,
                     modifier = Modifier.size(20.dp)
                 )
@@ -100,7 +100,7 @@ fun SpeedDialGridItem(
         if (isPinned) {
             Icon(
                 painter = painterResource(R.drawable.ic_push_pin),
-                contentDescription = null,
+                contentDescription = "Icon",
                 tint = Color.White,
                 modifier = Modifier
                     .align(Alignment.TopEnd)

@@ -39,7 +39,8 @@ class NetworkConnectivityObserver(context: Context) {
         } catch (e: Exception) {
             
             _networkStatus.trySend(true)
-        }
+        
+}
         
         
         val isInitiallyConnected = isCurrentlyConnected()
@@ -66,6 +67,7 @@ class NetworkConnectivityObserver(context: Context) {
             hasInternet && isValidated
         } catch (e: Exception) {
             false
-        }
+        
+}
     }
 }

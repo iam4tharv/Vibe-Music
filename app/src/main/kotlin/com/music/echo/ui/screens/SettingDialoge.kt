@@ -221,6 +221,14 @@ fun SettingDialoge(
                     compact = true,
                     items = listOf(
                         Material3SettingsItem(
+                            title = { Text("Vibe Wrapped (Stats)") },
+                            icon = painterResource(R.drawable.stats),
+                            onClick = {
+                                onDismissRequest()
+                                onNavigate("stats")
+                            }
+                        ),
+                        Material3SettingsItem(
                             title = { Text("Settings") },
                             icon = painterResource(R.drawable.settings),
                             onClick = { onNavigate("settings") }

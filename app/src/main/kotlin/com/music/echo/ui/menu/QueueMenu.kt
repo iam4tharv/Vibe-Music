@@ -174,7 +174,7 @@ fun QueueMenu(
                     ) {
                         AsyncImage(
                             model = null,
-                            contentDescription = null,
+                            contentDescription = "Album Art",
                             modifier = Modifier
                                 .size(ListThumbnailSize)
                                 .clip(CircleShape),
@@ -227,7 +227,7 @@ fun QueueMenu(
                     ),
                     tint = if (librarySong?.song?.liked == true) MaterialTheme.colorScheme.error
                     else LocalContentColor.current,
-                    contentDescription = null,
+                    contentDescription = "Icon",
                 )
             }
         },
@@ -256,7 +256,7 @@ fun QueueMenu(
                         icon = {
                             Icon(
                                 painter = painterResource(R.drawable.radio),
-                                contentDescription = null,
+                                contentDescription = "Icon",
                                 modifier = Modifier.size(28.dp),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -273,7 +273,7 @@ fun QueueMenu(
                         icon = {
                             Icon(
                                 painter = painterResource(R.drawable.playlist_add),
-                                contentDescription = null,
+                                contentDescription = "Play",
                                 modifier = Modifier.size(28.dp),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -284,8 +284,7 @@ fun QueueMenu(
                     NewAction(
                         icon = {
                             Icon(
-                                painter = painterResource(R.drawable.share),
-                                contentDescription = null,
+                                painter = painterResource(R.drawable.share), contentDescription = "Share",
                                 modifier = Modifier.size(28.dp),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -318,7 +317,7 @@ fun QueueMenu(
                         icon = {
                             Icon(
                                 painter = painterResource(R.drawable.playlist_play),
-                                contentDescription = null,
+                                contentDescription = "Play",
                             )
                         },
                         onClick = {
@@ -335,8 +334,7 @@ fun QueueMenu(
                         description = { Text(text = stringResource(R.string.add_to_queue_desc)) },
                         icon = {
                             Icon(
-                                painter = painterResource(R.drawable.queue_music),
-                                contentDescription = null,
+                                painter = painterResource(R.drawable.queue_music), contentDescription = "Queue",
                             )
                         },
                         onClick = {
@@ -367,7 +365,7 @@ fun QueueMenu(
                                 icon = {
                                     Icon(
                                         painter = painterResource(R.drawable.offline),
-                                        contentDescription = null,
+                                        contentDescription = "Icon",
                                         modifier = Modifier.size(24.dp)
                                     )
                                 },
@@ -408,8 +406,7 @@ fun QueueMenu(
                                 description = { Text(text = stringResource(R.string.download_desc)) },
                                 icon = {
                                     Icon(
-                                        painter = painterResource(R.drawable.download),
-                                        contentDescription = null,
+                                        painter = painterResource(R.drawable.download), contentDescription = "Download",
                                         modifier = Modifier.size(24.dp)
                                     )
                                 },
@@ -457,7 +454,7 @@ fun QueueMenu(
                                 icon = {
                                     Icon(
                                         painter = painterResource(R.drawable.artist),
-                                        contentDescription = null,
+                                        contentDescription = "Icon",
                                         modifier = Modifier.size(24.dp)
                                     )
                                 },
@@ -487,7 +484,7 @@ fun QueueMenu(
                                 icon = {
                                     Icon(
                                         painter = painterResource(R.drawable.album),
-                                        contentDescription = null,
+                                        contentDescription = "Icon",
                                         modifier = Modifier.size(24.dp)
                                     )
                                 },
@@ -516,7 +513,7 @@ fun QueueMenu(
                             icon = {
                                 Icon(
                                     painter = painterResource(R.drawable.sync),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                     modifier = Modifier.graphicsLayer(rotationZ = rotationAnimation),
                                 )
                             },
@@ -548,8 +545,7 @@ fun QueueMenu(
                             description = { Text(text = stringResource(R.string.details_desc)) },
                             icon = {
                                 Icon(
-                                    painter = painterResource(R.drawable.info),
-                                    contentDescription = null,
+                                    painter = painterResource(R.drawable.info), contentDescription = "Info",
                                     modifier = Modifier.size(24.dp)
                                 )
                             },

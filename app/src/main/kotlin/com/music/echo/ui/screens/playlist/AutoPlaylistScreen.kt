@@ -58,6 +58,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.music.echo.extensions.bounceClick
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
@@ -411,8 +412,7 @@ fun AutoPlaylistScreen(
                                         },
                                     ) {
                                         Icon(
-                                            painter = painterResource(R.drawable.more_vert),
-                                            contentDescription = null,
+                                            painter = painterResource(R.drawable.more_vert), contentDescription = "Options",
                                         )
                                     }
                                 }
@@ -420,6 +420,7 @@ fun AutoPlaylistScreen(
                             modifier =
                             Modifier
                                 .fillMaxWidth()
+                                .bounceClick()
                                 .combinedClickable(
                                     onClick = {
                                         if (inSelectMode) {
@@ -541,7 +542,7 @@ fun AutoPlaylistScreen(
                         painter = painterResource(
                             if (inSelectMode) R.drawable.close else R.drawable.arrow_back
                         ),
-                        contentDescription = null
+                        contentDescription = "Icon"
                     )
                 }
             },
@@ -571,8 +572,7 @@ fun AutoPlaylistScreen(
                         },
                     ) {
                         Icon(
-                            painter = painterResource(R.drawable.more_vert),
-                            contentDescription = null
+                            painter = painterResource(R.drawable.more_vert), contentDescription = "Options"
                         )
                     }
                 } else if (!isSearching) {
@@ -581,7 +581,7 @@ fun AutoPlaylistScreen(
                     ) {
                         Icon(
                             painter = painterResource(R.drawable.search),
-                            contentDescription = null
+                            contentDescription = "Icon"
                         )
                     }
                 }
@@ -641,7 +641,7 @@ private fun AutoPlaylistHeader(
         ) {
             AsyncImage(
                 model = songs[0].thumbnailUrl,
-                contentDescription = null,
+                contentDescription = "Album Art",
                 modifier = Modifier
                     .then(
                         if (LocalConfiguration.current.screenWidthDp > 600) Modifier.size(300.dp)
@@ -707,8 +707,7 @@ private fun AutoPlaylistHeader(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        painter = painterResource(R.drawable.shuffle),
-                        contentDescription = null,
+                        painter = painterResource(R.drawable.shuffle), contentDescription = "Shuffle",
                         modifier = Modifier.size(20.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -747,8 +746,7 @@ private fun AutoPlaylistHeader(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        painter = painterResource(R.drawable.play),
-                        contentDescription = null,
+                        painter = painterResource(R.drawable.play), contentDescription = "Play",
                         modifier = Modifier.size(20.dp),
                         tint = MaterialTheme.colorScheme.onPrimary
                     )
@@ -814,8 +812,7 @@ private fun AutoPlaylistHeader(
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        painter = painterResource(R.drawable.more_vert),
-                        contentDescription = null,
+                        painter = painterResource(R.drawable.more_vert), contentDescription = "Options",
                         modifier = Modifier.size(20.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )

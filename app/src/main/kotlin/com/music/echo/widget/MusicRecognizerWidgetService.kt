@@ -228,7 +228,8 @@ class MusicRecognizerWidgetService : Service() {
                     .putString(PREF_COVER_ART_PATH, "")
                     .putInt(PREF_PULSE_FRAME, 0)
                     .apply()
-            } finally {
+            
+} finally {
                 updateAllWidgets()
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()

@@ -308,7 +308,8 @@ object LyricsTranslationHelper {
                 val fullLanguageName = LanguageCodeToName[targetLanguage]
                     ?: try {
                         Locale.forLanguageTag(targetLanguage).displayLanguage.takeIf { it.isNotBlank() && it != targetLanguage }
-                    } catch (e: Exception) { null }
+                    } catch (e: Exception) { null 
+}
                     ?: targetLanguage
 
                 val result = if (provider == "DeepL") {

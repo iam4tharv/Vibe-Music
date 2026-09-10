@@ -66,8 +66,7 @@ highlightKey: String? = null) {
 
     Scaffold(
         modifier = Modifier
-            .fillMaxSize()
-            .nestedScroll(scrollBehavior.nestedScrollConnection),
+            .fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.surface,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
@@ -85,15 +84,14 @@ highlightKey: String? = null) {
                         onClick = { onBack?.invoke() ?: navController.navigateUp() },
                         onLongClick = navController::backToMain,
                     ) {
-                        Icon(painterResource(R.drawable.arrow_back), contentDescription = null)
+                        Icon(painterResource(R.drawable.arrow_back), contentDescription = "Icon")
                     }
                 },
                 windowInsets = TopAppBarDefaults.windowInsets,
-                colors = TopAppBarDefaults.largeTopAppBarColors(
+                colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface,
                     scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
                 ),
-                scrollBehavior = scrollBehavior,
             )
         },
     ) { innerPadding ->
@@ -125,7 +123,8 @@ highlightKey: String? = null) {
                                 uriHandler.openUri("https://iam4tharv.cyou")
                             } catch (e: Exception) {
                                 Toast.makeText(context, "Could not open link", Toast.LENGTH_SHORT).show()
-                            }
+                            
+}
                         }
                     )
                     AboutDivider()
@@ -138,7 +137,8 @@ highlightKey: String? = null) {
                                 uriHandler.openUri("https://github.com/iad1tya")
                             } catch (e: Exception) {
                                 Toast.makeText(context, "Could not open link", Toast.LENGTH_SHORT).show()
-                            }
+                            
+}
                         }
                     )
                     AboutDivider()
@@ -163,23 +163,25 @@ highlightKey: String? = null) {
                                 uriHandler.openUri("https://t.me/vibemusicupdates")
                             } catch (e: Exception) {
                                 Toast.makeText(context, "Could not open link", Toast.LENGTH_SHORT).show()
-                            }
+                            
+}
                         }
                     )
                     AboutDivider()
                     AboutActionRow(
                         icon = painterResource(R.drawable.send_chat),
                         title = "Support",
-                        subtitle = "vibemusicsupport@gmail.com",
+                        subtitle = "hello@iam4tharv.cyou",
                         onClick = {
                             try {
                                 val intent = Intent(Intent.ACTION_SENDTO).apply {
-                                    data = Uri.parse("mailto:vibemusicsupport@gmail.com")
+                                    data = Uri.parse("mailto:hello@iam4tharv.cyou")
                                 }
                                 context.startActivity(intent)
                             } catch (e: Exception) {
                                 Toast.makeText(context, "Could not open email app", Toast.LENGTH_SHORT).show()
-                            }
+                            
+}
                         }
                     )
                 }
@@ -255,7 +257,7 @@ private fun AboutAppCard() {
                 } else {
                     coil3.compose.AsyncImage(
                         model = "https://avatars.githubusercontent.com/u/147871321?v=4",
-                        contentDescription = null,
+                        contentDescription = "Album Art",
                         modifier = Modifier
                             .fillMaxSize()
                             .graphicsLayer { rotationY = 180f }, // Un-flip the backside image
@@ -390,7 +392,7 @@ private fun AboutActionRow(
                 Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                     Icon(
                         painter = icon,
-                        contentDescription = null,
+                        contentDescription = "Icon",
                         modifier = Modifier.size(22.dp),
                         tint = tint,
                     )
@@ -420,7 +422,7 @@ private fun AboutActionRow(
             }
             Icon(
                 painter = painterResource(R.drawable.arrow_forward),
-                contentDescription = null,
+                contentDescription = "Icon",
                 modifier = Modifier.size(18.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
             )

@@ -100,7 +100,7 @@ fun <E> ChipsRow(
                     {
                         Icon(
                             imageVector = Icons.Filled.Done,
-                            contentDescription = null,
+                            contentDescription = "Icon",
                             modifier = Modifier.size(FilterChipDefaults.IconSize),
                         )
                     }
@@ -173,14 +173,13 @@ fun <Int> ChoiceChipsRow(
                     leadingIcon = {
                         Icon(
                             imageVector = Icons.Filled.Tune,
-                            contentDescription = null,
+                            contentDescription = "Icon",
                             modifier = Modifier.size(FilterChipDefaults.IconSize),
                         )
                     },
                     trailingIcon = {
                         Icon(
-                            painter = painterResource(R.drawable.expand_more),
-                            contentDescription = null,
+                            painter = painterResource(R.drawable.expand_more), contentDescription = "Expand",
                             modifier = Modifier
                                 .graphicsLayer(rotationZ = rotationAnimation)
                         )
@@ -247,7 +246,7 @@ fun <Int> ChoiceChipsRow(
                         {
                             Icon(
                                 imageVector = Icons.Filled.Done,
-                                contentDescription = null,
+                                contentDescription = "Icon",
                                 modifier = Modifier.size(FilterChipDefaults.IconSize),
                             )
                         }

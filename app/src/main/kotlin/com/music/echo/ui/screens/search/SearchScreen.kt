@@ -55,6 +55,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.music.echo.extensions.bounceClick
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -299,8 +300,7 @@ fun SearchScreen(
                                         if (query.text.isNotEmpty()) {
                                             IconButton(onClick = { query = TextFieldValue("") }) {
                                                 Icon(
-                                                    painter = painterResource(R.drawable.close),
-                                                    contentDescription = null,
+                                                    painter = painterResource(R.drawable.close), contentDescription = "Close",
                                                     tint = MaterialTheme.colorScheme.onSurface
                                                 )
                                             }
@@ -318,7 +318,7 @@ fun SearchScreen(
                                                         SearchSource.ONLINE -> R.drawable.globe_search
                                                     }
                                                 ),
-                                                contentDescription = null,
+                                                contentDescription = "Icon",
                                                 tint = MaterialTheme.colorScheme.onSurface
                                             )
                                         }
@@ -440,8 +440,9 @@ fun SearchScreen(
                         try {
                             focusRequester.requestFocus()
                         } catch (e: Exception) {
-                            
-                        }
+    com.music.echo.utils.ErrorNotifier.notifyError(e.message ?: "An unexpected error occurred")
+    e.printStackTrace()
+}
                         isFirstLaunch = false
                     }
                 }
@@ -514,6 +515,7 @@ fun AlbumsTabContent(
                     coroutineScope = coroutineScope,
                     fillMaxWidth = true,
                     modifier = Modifier
+                        .bounceClick()
                         .combinedClickable(
                             onClick = {
                                 navController.navigate("album/${album.id}")

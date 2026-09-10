@@ -2,7 +2,10 @@
 
 package com.music.echo.ui.component
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -26,6 +29,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ProvideTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -72,16 +76,21 @@ fun Material3SettingsGroup(
                     else -> RoundedCornerShape(6.dp)
                 }
 
+                val animatedContainerColor by animateColorAsState(
+                    targetValue = if (item.isHighlighted)
+                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                    else
+                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                    animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                    label = "settingsItemContainerColor"
+                )
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
                         .animateContentSize(),
                     shape = shape,
                     colors = CardDefaults.cardColors(
-                        containerColor = if (item.isHighlighted)
-                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
-                        else
-                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                        containerColor = animatedContainerColor
                     ),
                     elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
                 ) {
@@ -160,7 +169,7 @@ private fun Material3SettingsItemRow(
                         if (item.tintIcon) {
                             Icon(
                                 painter = icon,
-                                contentDescription = null,
+                                contentDescription = "Icon",
                                 tint = if (!item.enabled)
                                     MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
                                 else if (item.isHighlighted)
@@ -172,7 +181,7 @@ private fun Material3SettingsItemRow(
                         } else {
                             Image(
                                 painter = icon,
-                                contentDescription = null,
+                                contentDescription = "Icon",
                                 modifier = Modifier.size(if (compact) 34.dp else 40.dp),
                                 contentScale = ContentScale.Crop
                             )
@@ -182,7 +191,7 @@ private fun Material3SettingsItemRow(
                     if (item.tintIcon) {
                         Icon(
                             painter = icon,
-                            contentDescription = null,
+                            contentDescription = "Icon",
                             tint = if (!item.enabled)
                                 MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
                             else if (item.isHighlighted)
@@ -194,7 +203,7 @@ private fun Material3SettingsItemRow(
                     } else {
                         Image(
                             painter = icon,
-                            contentDescription = null,
+                            contentDescription = "Icon",
                             modifier = Modifier.size(if (compact) 34.dp else 40.dp),
                             contentScale = ContentScale.Crop
                         )

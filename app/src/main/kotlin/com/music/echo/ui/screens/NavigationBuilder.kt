@@ -13,6 +13,12 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.fadeIn
+import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.runtime.CompositionLocalProvider
+import com.music.echo.LocalSharedTransitionScope
+import com.music.echo.LocalNavAnimatedVisibilityScope
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
@@ -28,6 +34,10 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.dialog
 import androidx.navigation.navArgument
+import com.music.echo.ui.utils.searchResultEnter
+import com.music.echo.ui.utils.searchResultExit
+import com.music.echo.ui.utils.searchResultPopEnter
+import com.music.echo.ui.utils.searchResultPopExit
 import com.music.echo.constants.DarkModeKey
 import com.music.echo.constants.PureBlackKey
 import com.music.echo.ui.screens.artist.ArtistAlbumsScreen
@@ -81,15 +91,9 @@ fun NavGraphBuilder.navigationBuilder(
     snackbarHostState: SnackbarHostState
 ) {
     composable(Screens.Home.route) {
-        HomeScreen(navController = navController, snackbarHostState = snackbarHostState)
-    }
-
-    composable("settings/vibe_extractor") {
-        VibeExtractorSettings(navController, scrollBehavior)
-    }
-
-    composable("settings/vibe_extractor") {
-        VibeExtractorSettings(navController, scrollBehavior)
+        CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this) {
+            HomeScreen(navController = navController, snackbarHostState = snackbarHostState)
+        }
     }
 
     composable("settings/vibe_extractor") {
@@ -106,10 +110,12 @@ fun NavGraphBuilder.navigationBuilder(
         val pureBlack = remember(pureBlackEnabled, useDarkTheme) {
             pureBlackEnabled && useDarkTheme
         }
-        SearchScreen(
-            navController = navController,
-            pureBlack = pureBlack
-        )
+        CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this) {
+            SearchScreen(
+                navController = navController,
+                pureBlack = pureBlack
+            )
+        }
     }
 
     composable(Screens.Library.route) {
@@ -184,26 +190,10 @@ fun NavGraphBuilder.navigationBuilder(
                 type = NavType.StringType
             },
         ),
-        enterTransition = {
-            fadeIn(spring(stiffness = Spring.StiffnessMediumLow))
-        },
-        exitTransition = {
-            if (targetState.destination.route?.startsWith("search/") == true) {
-                fadeOut(spring(stiffness = Spring.StiffnessMediumLow))
-            } else {
-                fadeOut(spring(stiffness = Spring.StiffnessMediumLow)) + slideOutHorizontally { -it / 2 }
-            }
-        },
-        popEnterTransition = {
-            if (initialState.destination.route?.startsWith("search/") == true) {
-                fadeIn(spring(stiffness = Spring.StiffnessMediumLow))
-            } else {
-                fadeIn(spring(stiffness = Spring.StiffnessMediumLow)) + slideInHorizontally { -it / 2 }
-            }
-        },
-        popExitTransition = {
-            fadeOut(spring(stiffness = Spring.StiffnessMediumLow))
-        },
+        enterTransition = { searchResultEnter() },
+        exitTransition = { searchResultExit() },
+        popEnterTransition = { searchResultPopEnter() },
+        popExitTransition = { searchResultPopExit() },
     ) {
         OnlineSearchResult(navController)
     }

@@ -1,6 +1,9 @@
 
 
+
 package com.music.echo.ui.player
+import com.music.echo.extensions.indexOfWindowByUid
+
 
 import android.annotation.SuppressLint
 import androidx.activity.compose.BackHandler
@@ -91,6 +94,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.music.echo.extensions.bounceClick
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -158,6 +162,7 @@ import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 import android.widget.Toast
 import coil3.compose.AsyncImage
+import com.music.echo.ui.component.shimmer.ShimmeringAsyncImage
 import kotlin.math.roundToInt
 
 @SuppressLint("UnrememberedMutableState")
@@ -250,7 +255,8 @@ fun Queue(
             playerConnection.service.castConnectionHandler
         } catch (e: Exception) {
             null
-        }
+        
+}
     }
     val isCasting by castHandler?.isCasting?.collectAsState() ?: remember { mutableStateOf(false) }
     val castIsPlaying by castHandler?.castIsPlaying?.collectAsState() ?: remember { mutableStateOf(false) }
@@ -473,7 +479,7 @@ fun Queue(
                     ) {
                         Icon(
                             painter = painterResource(id = R.drawable.more_vert),
-                            contentDescription = null,
+                            contentDescription = "Icon",
                             modifier = Modifier.size(iconSize),
                             tint = iconButtonColor
                         )
@@ -502,7 +508,7 @@ fun Queue(
                         ) {
                             Icon(
                                 painter = painterResource(id = R.drawable.apple_queue),
-                                contentDescription = null,
+                                contentDescription = "Icon",
                                 modifier = Modifier.size(40.dp),
                                 tint = TextBackgroundColor
                             )
@@ -542,7 +548,7 @@ fun Queue(
                                 painter = painterResource(
                                     if (isBluetoothConnected) R.drawable.headset_applemusic else R.drawable.speaker_apple
                                 ),
-                                contentDescription = null,
+                                contentDescription = "Bluetooth Device",
                                 modifier = Modifier.size(30.dp)
                             )
                         }
@@ -575,7 +581,7 @@ fun Queue(
                             ) {
                                 Icon(
                                     painter = painterResource(id = R.drawable.sleep_timer),
-                                    contentDescription = null,
+                                    contentDescription = "Icon",
                                     modifier = Modifier.size(30.dp)
                                 )
                                 if (sleepTimerEnabled) {
@@ -603,7 +609,7 @@ fun Queue(
                         ) {
                             Icon(
                                 painter = painterResource(id = R.drawable.apple_music_me),
-                                contentDescription = null,
+                                contentDescription = "Icon",
                                 modifier = Modifier.size(40.dp),
                                 tint = TextBackgroundColor
                             )
@@ -742,19 +748,35 @@ fun Queue(
                 dragInfo?.let { (from, to) ->
                     val safeFrom = (from - headerItems).coerceIn(0, queueWindows.lastIndex)
                     val safeTo = (to - headerItems).coerceIn(0, queueWindows.lastIndex)
+                    
+                    val itemToMove = queueWindows.getOrNull(safeFrom)
+                    val targetItem = queueWindows.getOrNull(safeTo)
 
-                    if (!playerConnection.player.shuffleModeEnabled) {
-                        playerConnection.player.moveMediaItem(safeFrom, safeTo)
-                    } else {
-                        playerConnection.player.setShuffleOrder(
-                            DefaultShuffleOrder(
-                                queueWindows.map { it.firstPeriodIndex }
-                                    .toMutableList()
-                                    .move(safeFrom, safeTo)
-                                    .toIntArray(),
-                                System.currentTimeMillis()
-                            )
-                        )
+                    if (itemToMove != null && targetItem != null) {
+                        val realFrom = playerConnection.player.indexOfWindowByUid(itemToMove.uid)
+                        val realTo = playerConnection.player.indexOfWindowByUid(targetItem.uid)
+
+                        if (realFrom != -1 && realTo != -1) {
+                            if (!playerConnection.player.shuffleModeEnabled) {
+                                playerConnection.player.moveMediaItem(realFrom, realTo)
+                            } else {
+                                // UI shows shuffled order. We just want to shift the shuffle order array.
+                                val realIndicesInVisualOrder = queueWindows.mapNotNull { 
+                                    val idx = playerConnection.player.indexOfWindowByUid(it.uid)
+                                    if (idx != -1) idx else null
+                                }.toMutableList()
+                                
+                                if (realIndicesInVisualOrder.size == queueWindows.size) {
+                                    val newShuffleOrder = DefaultShuffleOrder(
+                                        realIndicesInVisualOrder
+                                            .move(safeFrom, safeTo)
+                                            .toIntArray(),
+                                        System.currentTimeMillis()
+                                    )
+                                    playerConnection.player.setShuffleOrder(newShuffleOrder)
+                                }
+                            }
+                        }
                     }
                     dragInfo = null
                 }
@@ -798,9 +820,9 @@ fun Queue(
                         .fillMaxWidth()
                         .padding(horizontal = 12.dp, vertical = 8.dp)
                 ) {
-                    AsyncImage(
+                    ShimmeringAsyncImage(
                         model = mediaMetadata?.thumbnailUrl,
-                        contentDescription = null,
+                        contentDescription = "Album Art",
                         modifier = Modifier
                             .size(48.dp)
                             .clip(RoundedCornerShape(8.dp))
@@ -920,8 +942,7 @@ fun Queue(
                             .height(56.dp),
                     ) {
                         Icon(
-                            painter = painterResource(R.drawable.shuffle),
-                            contentDescription = null,
+                            painter = painterResource(R.drawable.shuffle), contentDescription = "Shuffle",
                             modifier = Modifier.size(22.dp)
                         )
                         Spacer(Modifier.size(ToggleButtonDefaults.IconSpacing))
@@ -958,7 +979,7 @@ fun Queue(
                                     else -> R.drawable.repeat
                                 }
                             ),
-                            contentDescription = null,
+                            contentDescription = "Play",
                             modifier = Modifier.size(22.dp)
                         )
                         Spacer(Modifier.size(ToggleButtonDefaults.IconSpacing))
@@ -991,7 +1012,7 @@ fun Queue(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
                                 painter = painterResource(R.drawable.radio),
-                                contentDescription = null,
+                                contentDescription = "Icon",
                                 modifier = Modifier.size(22.dp)
                             )
                             Spacer(Modifier.size(ToggleButtonDefaults.IconSpacing))
@@ -1073,8 +1094,7 @@ fun Queue(
                             onClick = onExitSelectionMode,
                         ) {
                             Icon(
-                                painter = painterResource(R.drawable.close),
-                                contentDescription = null,
+                                painter = painterResource(R.drawable.close), contentDescription = "Close",
                             )
                         }
                         Text(
@@ -1108,8 +1128,7 @@ fun Queue(
                             },
                         ) {
                             Icon(
-                                painter = painterResource(R.drawable.more_vert),
-                                contentDescription = null,
+                                painter = painterResource(R.drawable.more_vert), contentDescription = "Options",
                                 tint = LocalContentColor.current,
                             )
                         }
@@ -1166,7 +1185,7 @@ fun Queue(
                                             )
                                 ) {
                                     processedDismiss = true
-                                    playerConnection.player.removeMediaItem(currentItem.firstPeriodIndex)
+                                    val actualIndex = playerConnection.player.indexOfWindowByUid(currentItem.uid); if (actualIndex != -1) playerConnection.player.removeMediaItem(actualIndex)
                                     dismissJob?.cancel()
                                     dismissJob = coroutineScope.launch {
                                         val snackbarResult = snackbarHostState.showSnackbar(
@@ -1179,10 +1198,13 @@ fun Queue(
                                         )
                                         if (snackbarResult == SnackbarResult.ActionPerformed) {
                                             playerConnection.player.addMediaItem(currentItem.mediaItem)
-                                            playerConnection.player.moveMediaItem(
-                                                mutableQueueWindows.size,
-                                                currentItem.firstPeriodIndex,
-                                            )
+                                            val newActualIndex = playerConnection.player.mediaItemCount - 1
+                                            if (actualIndex != -1 && newActualIndex >= 0) {
+                                                playerConnection.player.moveMediaItem(
+                                                    newActualIndex,
+                                                    actualIndex,
+                                                )
+                                            }
                                         }
                                     }
                                 }
@@ -1238,8 +1260,7 @@ fun Queue(
                                                         }
                                                     ) {
                                                         Icon(
-                                                            painter = painterResource(R.drawable.more_vert),
-                                                            contentDescription = null,
+                                                            painter = painterResource(R.drawable.more_vert), contentDescription = "Options",
                                                         )
                                                     }
                                                 }
@@ -1250,7 +1271,7 @@ fun Queue(
                                                     ) {
                                                         Icon(
                                                             painter = painterResource(R.drawable.drag_handle),
-                                                            contentDescription = null,
+                                                            contentDescription = "Icon",
                                                         )
                                                     }
                                                 }
@@ -1260,6 +1281,7 @@ fun Queue(
                                             Modifier
                                                 .fillMaxWidth()
                                                 .background(background)
+                                                .bounceClick()
                                                 .combinedClickable(
                                                     onClick = {
                                                         if (inSelectMode) {
@@ -1356,7 +1378,7 @@ fun Queue(
                                             ) {
                                                 Icon(
                                                     painter = painterResource(R.drawable.playlist_play),
-                                                    contentDescription = null,
+                                                    contentDescription = "Play",
                                                 )
                                             }
                                             IconButton(
@@ -1368,8 +1390,7 @@ fun Queue(
                                                 },
                                             ) {
                                                 Icon(
-                                                    painter = painterResource(R.drawable.queue_music),
-                                                    contentDescription = null,
+                                                    painter = painterResource(R.drawable.queue_music), contentDescription = "Queue",
                                                 )
                                             }
                                         }
@@ -1377,6 +1398,7 @@ fun Queue(
                                     modifier =
                                         Modifier
                                             .fillMaxWidth()
+                                            .bounceClick()
                                             .combinedClickable(
                                                 onClick = {},
                                                 onLongClick = {
@@ -1492,7 +1514,7 @@ private fun PlayerQueueButton(
             val finalTint = if (enabled) baseTint else baseTint.copy(alpha = 0.5f)
             Icon(
                 painter = painterResource(id = icon),
-                contentDescription = null,
+                contentDescription = "Icon",
                 modifier = Modifier.size(iconSize),
                 tint = finalTint
             )

@@ -111,3 +111,24 @@ fun <T : YTItem> List<T>.filterYoutubeShorts(enabled: Boolean = false) =
     } else {
         this
     }
+
+fun com.music.innertube.pages.SearchSummaryPage.filterExplicit(enabled: Boolean = true): com.music.innertube.pages.SearchSummaryPage =
+    if (enabled) {
+        copy(summaries = summaries.mapNotNull { it.copy(items = it.items.filter { item -> !item.explicit }).takeIf { s -> s.items.isNotEmpty() } })
+    } else {
+        this
+    }
+
+fun com.music.innertube.pages.SearchSummaryPage.filterVideoSongs(disableVideos: Boolean = false): com.music.innertube.pages.SearchSummaryPage =
+    if (disableVideos) {
+        copy(summaries = summaries.mapNotNull { it.copy(items = it.items.filterNot { item -> item is SongItem && item.isVideoSong }).takeIf { s -> s.items.isNotEmpty() } })
+    } else {
+        this
+    }
+
+fun com.music.innertube.pages.SearchSummaryPage.filterYoutubeShorts(enabled: Boolean = false): com.music.innertube.pages.SearchSummaryPage =
+    if (enabled) {
+        copy(summaries = summaries.mapNotNull { it.copy(items = it.items.filterNot { item -> item is PlaylistItem && item.id.startsWith("SS") }).takeIf { s -> s.items.isNotEmpty() } })
+    } else {
+        this
+    }
