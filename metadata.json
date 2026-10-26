@@ -1,0 +1,6 @@
+{
+  "name": "Vibe Music",
+  "description": "Modern music client featuring lossless audio playback, animated album canvas, and synced lyrics.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

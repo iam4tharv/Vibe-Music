@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1098359739443",
+    "project_id": "vibe-music-5d936",
+    "storage_bucket": "vibe-music-5d936.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1098359739443:android:c89ee9136c31c0c8e13f46",
+        "android_client_info": {
+          "package_name": "com.music.vibe"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC3oGzd5Cgw1wd0Vj3impyFDHSHnqzpwKA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
