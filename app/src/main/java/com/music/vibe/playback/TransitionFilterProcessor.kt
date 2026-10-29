@@ -118,7 +118,8 @@ class TransitionFilterProcessor : BaseAudioProcessor() {
 
     val isFiltering: Boolean
         get() = targetLowPassHz < OPEN_HZ || targetHighPassHz > OFF_HZ ||
-            currentLowPassHz < OPEN_HZ - SETTLED_HZ || currentHighPassHz > OFF_HZ + SETTLED_HZ
+            currentLowPassHz < OPEN_HZ - SETTLED_HZ || currentHighPassHz > OFF_HZ + SETTLED_HZ ||
+            echoEngaged
 
     /**
      * Engages the echo out, or moves it: [delaySeconds] between repeats, [send]
@@ -268,7 +269,8 @@ class TransitionFilterProcessor : BaseAudioProcessor() {
         if (bytesPerFrame == 0) return
         val frameCount = inputBuffer.remaining() / bytesPerFrame
         if (frameCount == 0) return
-        val outputBuffer = replaceOutputBuffer(frameCount * bytesPerFrame)
+        val byteCount = frameCount * bytesPerFrame
+        val outputBuffer = replaceOutputBuffer(byteCount)
 
         val targetLow = targetLowPassHz
         val targetHigh = targetHighPassHz
@@ -276,7 +278,10 @@ class TransitionFilterProcessor : BaseAudioProcessor() {
             currentLowPassHz >= OPEN_HZ - SETTLED_HZ && currentHighPassHz <= OFF_HZ + SETTLED_HZ
         if (parked) {
             clearStateIfNeeded()
+            val savedLimit = inputBuffer.limit()
+            inputBuffer.limit(inputBuffer.position() + byteCount)
             outputBuffer.put(inputBuffer)
+            inputBuffer.limit(savedLimit)
             outputBuffer.flip()
             return
         }

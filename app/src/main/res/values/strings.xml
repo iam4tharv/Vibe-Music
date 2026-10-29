@@ -743,6 +743,8 @@
     <string name="replay_summary_start">Your </string>
     <string name="saved">Saved</string>
     <string name="saved_bang">Saved!</string>
+    <string name="copy_text">Copy text</string>
+    <string name="copied_bang">Copied!</string>
     <string name="share_my_replay">Share my Replay</string>
     <string name="share_your_lyrics">Send your lyrics card</string>
     <string name="share_your_replay">Share your Replay</string>
@@ -1150,4 +1152,6 @@
     <string name="up_next_prompt_body" translatable="false">You have %1$d tracks queued in Up Next. How would you like to play \"%2$s\"?</string>
     <string name="keep_queue" translatable="false">Play &amp; Keep Queue</string>
     <string name="clear_queue" translatable="false">Start Fresh</string>
+    <string name="lyrics_original_title">Search lyrics with original title</string>
+    <string name="lyrics_original_title_desc">Restore the original YouTube title before searching lyrics so translated titles still match</string>
 </resources>

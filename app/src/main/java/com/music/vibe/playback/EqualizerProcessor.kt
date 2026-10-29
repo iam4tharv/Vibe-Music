@@ -99,7 +99,7 @@ class EqualizerProcessor : BaseAudioProcessor() {
     }
 
     val isEnabled: Boolean
-        get() = target !== Tuning.OFF
+        get() = target !== Tuning.OFF || !isSettled(Tuning.OFF) || running.any { it }
 
     /**
      * Configures the Float32 DSP engine for [sampleRate] and [channelCount].
@@ -128,6 +128,7 @@ class EqualizerProcessor : BaseAudioProcessor() {
 
         val tuning = target
         if (isFlat(tuning) && isSettled(tuning)) {
+            clearRunningSlots()
             return
         }
 
@@ -191,11 +192,16 @@ class EqualizerProcessor : BaseAudioProcessor() {
         if (bytesPerFrame == 0) return
         val frameCount = inputBuffer.remaining() / bytesPerFrame
         if (frameCount == 0) return
-        val outputBuffer = replaceOutputBuffer(frameCount * bytesPerFrame)
+        val byteCount = frameCount * bytesPerFrame
+        val outputBuffer = replaceOutputBuffer(byteCount)
 
         val tuning = target
         if (isFlat(tuning) && isSettled(tuning)) {
+            clearRunningSlots()
+            val savedLimit = inputBuffer.limit()
+            inputBuffer.limit(inputBuffer.position() + byteCount)
             outputBuffer.put(inputBuffer)
+            inputBuffer.limit(savedLimit)
             outputBuffer.flip()
             return
         }
@@ -354,6 +360,15 @@ class EqualizerProcessor : BaseAudioProcessor() {
             val i = (channel * EqLayout.SLOTS + slot) * 2
             state[i] = 0f
             state[i + 1] = 0f
+        }
+    }
+
+    private fun clearRunningSlots() {
+        for (slot in 0 until EqLayout.SLOTS) {
+            if (running[slot]) {
+                clearState(slot)
+                running[slot] = false
+            }
         }
     }
 

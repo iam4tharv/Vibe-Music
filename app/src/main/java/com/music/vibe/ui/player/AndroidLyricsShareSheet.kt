@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.IosShare
 import androidx.compose.material.icons.rounded.PhoneIphone
@@ -33,8 +34,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.music.vibe.R
@@ -68,12 +71,14 @@ internal fun AndroidLyricsShareSheet(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
+    val clipboard = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
     val haptics = rememberHaptics()
 
     var image by remember(request) { mutableStateOf<Bitmap?>(null) }
     var failed by remember(request) { mutableStateOf(false) }
     var saved by remember(request) { mutableStateOf(false) }
+    var copied by remember(request) { mutableStateOf(false) }
     // Same picture, cut to the 9:16 frame a story wants instead of to its lines.
     var story by remember(request) { mutableStateOf(false) }
 
@@ -135,17 +140,50 @@ internal fun AndroidLyricsShareSheet(
                 )
             }
 
-            ShareAction(
-                label = stringResource(if (story) R.string.lyrics_share_story_revert else R.string.lyrics_share_story),
-                icon = if (story) Icons.Rounded.Undo else Icons.Rounded.PhoneIphone,
-                accent = false,
-                enabled = image != null,
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-                onClick = {
-                    haptics.play(Haptic.Tap)
-                    story = !story
-                },
-            )
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                ShareAction(
+                    label = stringResource(if (story) R.string.lyrics_share_story_revert else R.string.lyrics_share_story),
+                    icon = if (story) Icons.Rounded.Undo else Icons.Rounded.PhoneIphone,
+                    accent = false,
+                    enabled = image != null,
+                    modifier = Modifier.weight(1f),
+                    onClick = {
+                        haptics.play(Haptic.Tap)
+                        story = !story
+                    },
+                )
+                ShareAction(
+                    label = stringResource(R.string.copy_text),
+                    icon = Icons.Rounded.ContentCopy,
+                    accent = false,
+                    enabled = true,
+                    modifier = Modifier.weight(1f),
+                    saved = copied,
+                    savedLabel = stringResource(R.string.copied_bang),
+                    onClick = {
+                        haptics.play(Haptic.Tap)
+                        val body = request.lines.joinToString("\n") { line ->
+                            if (line.isGap) "…"
+                            else if (!line.subText.isNullOrBlank()) "${line.text}\n(${line.subText})"
+                            else line.text
+                        }
+                        val formatted = buildString {
+                            append(body)
+                            append("\n— ")
+                            append(request.song.title)
+                            if (request.song.artist.isNotBlank()) {
+                                append(" · ")
+                                append(request.song.artist)
+                            }
+                        }
+                        clipboard.setText(AnnotatedString(formatted))
+                        copied = true
+                    },
+                )
+            }
 
             if (failed) {
                 Text(

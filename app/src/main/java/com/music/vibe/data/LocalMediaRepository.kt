@@ -409,7 +409,8 @@ object LocalMediaRepository {
             lower.endsWith(".flac") || lower.endsWith(".wav") ||
             lower.endsWith(".ogg") || lower.endsWith(".opus") ||
             lower.endsWith(".aac") || lower.endsWith(".webm") ||
-            lower.endsWith(".3gp") || lower.endsWith(".alac")
+            lower.endsWith(".3gp") || lower.endsWith(".alac") ||
+            lower.endsWith(".dsf") || lower.endsWith(".dff")
     }
 
     /**
@@ -431,21 +432,24 @@ object LocalMediaRepository {
         var durationText: String? = null
         var trackNumber: Int? = null
 
-        runCatching {
-            val retriever = MediaMetadataRetriever()
-            retriever.setDataSource(context, Uri.parse(uriStr))
-            val metaTitle = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE)
-            val metaArtist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST)
-            val metaAlbum = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM)
-            val metaDur = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull()
-            val metaTrack = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_CD_TRACK_NUMBER)
+        val retriever = MediaMetadataRetriever()
+        try {
+            runCatching {
+                retriever.setDataSource(context, Uri.parse(uriStr))
+                val metaTitle = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE)
+                val metaArtist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST)
+                val metaAlbum = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM)
+                val metaDur = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull()
+                val metaTrack = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_CD_TRACK_NUMBER)
 
-            if (!metaTitle.isNullOrBlank()) title = metaTitle
-            if (!metaArtist.isNullOrBlank()) artist = metaArtist
-            albumName = metaAlbum.cleanTag()
-            if (metaDur != null && metaDur > 0) durationText = formatDuration(metaDur)
-            trackNumber = parseTrackNumber(metaTrack)
-            retriever.release()
+                if (!metaTitle.isNullOrBlank()) title = metaTitle
+                if (!metaArtist.isNullOrBlank()) artist = metaArtist
+                albumName = metaAlbum.cleanTag()
+                if (metaDur != null && metaDur > 0) durationText = formatDuration(metaDur)
+                trackNumber = parseTrackNumber(metaTrack)
+            }
+        } finally {
+            runCatching { retriever.release() }
         }
 
         return Song(

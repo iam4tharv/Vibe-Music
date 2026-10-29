@@ -178,6 +178,8 @@ fun SongActionsSheet(
     onCopyLog: (() -> Unit)? = null,
     /** Opens the timing control offered only by the main player's menu. */
     onLyricsOffset: (() -> Unit)? = null,
+    /** Opens the lyrics share picker offered from the main player's menu when lyrics are loaded. */
+    onShareLyrics: (() -> Unit)? = null,
     /**
      * True while a lookup for this track's album/artist ids is still in
      * flight, so it isn't yet known whether "Open album" and "Open artist"
@@ -350,6 +352,14 @@ fun SongActionsSheet(
             ActionRow(
                 icon = Icons.Rounded.Tune,
                 label = stringResource(R.string.lyrics_offset),
+                accent = palette.accent,
+                onClick = it,
+            )
+        }
+        onShareLyrics?.let {
+            ActionRow(
+                icon = VibeMusicIcons.LyricsQuote,
+                label = stringResource(R.string.lyrics_share_title),
                 accent = palette.accent,
                 onClick = it,
             )

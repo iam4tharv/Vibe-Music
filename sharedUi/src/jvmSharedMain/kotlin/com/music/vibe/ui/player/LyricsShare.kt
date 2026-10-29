@@ -126,6 +126,8 @@ internal class LyricsPicker(
     val overBudget: Boolean,
     /** Long-press on a line: start picking, or fold that line into the pick. */
     val pick: (Int) -> Unit,
+    /** Explicit entry into pick mode (e.g. from Share lyrics button/menu), optionally pre-selecting a line. */
+    val startPicking: (Int?) -> Unit,
     /** Tap while picking: add or drop that line. */
     val toggle: (Int) -> Unit,
     val cancel: () -> Unit,
@@ -222,6 +224,18 @@ internal fun rememberLyricsPicker(
             toggle(index)
         }
     }
+    val startPicking: (Int?) -> Unit = { initialIndex ->
+        haptics.play(Haptic.Select)
+        picking = true
+        picks = emptySet()
+        overBudget = false
+        if (initialIndex != null) {
+            val text = lines.orEmpty().getOrNull(initialIndex)?.text
+            if (!text.isNullOrBlank() && fitsOnCard(0, text)) {
+                picks = setOf(initialIndex)
+            }
+        }
+    }
     val cancel: () -> Unit = {
         picking = false
         picks = emptySet()
@@ -261,6 +275,7 @@ internal fun rememberLyricsPicker(
         picks = picks,
         overBudget = overBudget,
         pick = pick,
+        startPicking = startPicking,
         toggle = toggle,
         cancel = cancel,
         share = share,

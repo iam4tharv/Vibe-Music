@@ -291,7 +291,6 @@ fun SearchScreen(
                             is SearchResult.TopTrack -> row.song
                             is SearchResult.Track -> row.song
                             is SearchResult.Browse -> null
-                            else -> null
                         } }
                     val topResult = results.data.filterIsInstance<SearchResult.TopTrack>().firstOrNull()
                     if (filter == SearchFilter.ALL && topResult != null) {

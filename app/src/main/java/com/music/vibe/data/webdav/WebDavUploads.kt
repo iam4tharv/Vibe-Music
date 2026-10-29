@@ -178,7 +178,9 @@ object WebDavUploads {
      * because a missing cover must never fail an upload.
      */
     private suspend fun prepareUpload(context: Context, song: Song, ext: String): Sendable {
-        val direct = { source: UploadSource -> Sendable(source) {} }
+        val direct = { source: UploadSource ->
+            Sendable(source) { runCatching { source.stream.close() } }
+        }
         val original = openSource(context, song) ?: throw WebDavException("Could not read this file")
         if (!com.music.vibe.download.MediaTagger.carriesTags(ext)) return direct(original)
         if (hasEmbeddedPicture(context, song)) return direct(original)
@@ -188,8 +190,10 @@ object WebDavUploads {
         }.getOrNull() ?: return direct(original)
         // Staging consumes the original stream, so a failure here re-opens
         // rather than re-sending a spent one.
+        var tmpFile: File? = null
         val staged = runCatching {
             val tmp = File.createTempFile("webdav-upload", ".tmp", context.cacheDir)
+            tmpFile = tmp
             original.stream.use { input -> tmp.outputStream().use { input.copyTo(it) } }
             com.music.vibe.download.MediaTagger.embed(
                 context,
@@ -199,6 +203,8 @@ object WebDavUploads {
                 artwork = artwork,
             )
             tmp
+        }.onFailure {
+            tmpFile?.delete()
         }.getOrNull() ?: return direct(openSource(context, song) ?: throw WebDavException("Could not read this file"))
         val stream = runCatching { staged.inputStream() }.getOrNull()
             ?: run { staged.delete(); return direct(openSource(context, song) ?: throw WebDavException("Could not read this file")) }

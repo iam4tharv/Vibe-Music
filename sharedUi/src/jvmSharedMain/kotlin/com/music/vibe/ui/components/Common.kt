@@ -20,8 +20,8 @@ import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.PlayArrow
-import androidx.compose.material.icons.rounded.PlaylistAdd
-import androidx.compose.material.icons.rounded.PlaylistPlay
+import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
+import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.SwipeToDismissBox
@@ -453,7 +453,7 @@ private fun QueueSwipeBackground(swipeState: SwipeToDismissBoxState) {
 private fun QueueSwipeLabel(playNext: Boolean) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Icon(
-            if (playNext) Icons.Rounded.PlaylistPlay else Icons.Rounded.PlaylistAdd,
+            if (playNext) Icons.AutoMirrored.Rounded.PlaylistPlay else Icons.AutoMirrored.Rounded.PlaylistAdd,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.size(20.dp),

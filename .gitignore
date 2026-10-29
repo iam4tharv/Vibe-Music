@@ -16,7 +16,5 @@
 local.properties
 .env
 debug.keystore
-google-services.json
-app/google-services.json
 .aistudio/
 public/assets/aistudio/

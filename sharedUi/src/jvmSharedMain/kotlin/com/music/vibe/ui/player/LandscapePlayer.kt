@@ -9,6 +9,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -501,6 +502,7 @@ internal fun LandscapeLyricsPane(
     pickBar: @Composable () -> Unit = {},
     romanizationToggle: @Composable () -> Unit,
     translationToggle: @Composable () -> Unit,
+    shareToggle: (@Composable () -> Unit)? = null,
     modifier: Modifier = Modifier,
     panel: @Composable (Modifier) -> Unit,
 ) {
@@ -553,7 +555,15 @@ internal fun LandscapeLyricsPane(
                     onStatusClick = onStatusClick,
                 )
             }
-            Box(Modifier.size(34.dp)) { if (hasLyrics) translationToggle() }
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (shareToggle != null) {
+                    Box(Modifier.size(34.dp)) { if (hasLyrics) shareToggle() }
+                }
+                Box(Modifier.size(34.dp)) { if (hasLyrics) translationToggle() }
+            }
         }
         }
     }

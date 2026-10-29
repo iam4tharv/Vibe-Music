@@ -1378,6 +1378,35 @@ internal fun RomanizationToggleButton(
     }
 }
 
+/** Companion disc that opens lyrics line-pick mode for sharing a lyrics quote card. */
+@Composable
+internal fun LyricsShareToggleButton(
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    val tint = if (enabled) Color.White.copy(alpha = 0.78f) else Color.White.copy(alpha = 0.42f)
+    Box(
+        modifier = Modifier
+            .size(34.dp)
+            .clip(CircleShape)
+            .background(Color.White.copy(alpha = 0.18f))
+            .clickable(
+                enabled = enabled,
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = com.music.vibe.ui.icons.VibeMusicIcons.LyricsQuote,
+            contentDescription = stringResource(Res.string.share_lyrics),
+            tint = tint,
+            modifier = Modifier.size(18.dp),
+        )
+    }
+}
+
 /**
  * A short text-material transition: the list and its playback clock stay in
  * place while a field of tiny glyph-like particles resolves into the new text.

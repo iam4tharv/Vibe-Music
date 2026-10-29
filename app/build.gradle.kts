@@ -4,7 +4,10 @@ plugins {
   id("org.jetbrains.kotlin.plugin.compose")
   id("org.jetbrains.kotlin.plugin.serialization")
   alias(libs.plugins.secrets)
-  alias(libs.plugins.google.services)
+}
+
+if (file("google-services.json").exists()) {
+  apply(plugin = "com.google.gms.google-services")
 }
 
 android {
@@ -133,7 +136,7 @@ val newPipeExtractorStripped = tasks.register<org.gradle.api.tasks.bundling.Jar>
   "stripNewPipeExtractorUtils") {
   archiveFileName.set("NewPipeExtractor-v0.26.3-noutils.jar")
   destinationDirectory.set(layout.buildDirectory.dir("stripped-libs"))
-  from(provider { newPipeExtractorRaw.map { zipTree(it) } }) {
+  from(newPipeExtractorRaw.elements.map { files -> files.map { zipTree(it.asFile) } }) {
     exclude("org/schabi/newpipe/extractor/utils/Utils.class")
     exclude("org/schabi/newpipe/extractor/utils/Utils\$*.class")
   }

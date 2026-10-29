@@ -203,10 +203,13 @@ fun Song.toSongBundle(): Bundle = bundleOf(
     "playbackSource" to playbackSource,
     "playbackSourceType" to playbackSourceType?.name,
     "playbackSourceId" to playbackSourceId,
-    "isExplicit" to (isExplicit ?: false),
+    "queueTier" to queueTier.name,
+    "queueEntryId" to queueEntryId,
     // `bundleOf` has no overload for a list of strings, so the two halves of
     // the credits go in afterwards.
 ).apply {
+    isExplicit?.let { putBoolean("isExplicit", it) }
+    trackNumber?.let { putInt("trackNumber", it) }
     putStringArrayList(ARTISTS_NAMES, ArrayList(artists.map { it.name }))
     putStringArrayList(ARTISTS_IDS, ArrayList(artists.map { it.browseId.orEmpty() }))
 }
@@ -224,7 +227,9 @@ fun songFromBundle(b: Bundle): Song = Song(
     isVideo = b.getBoolean("isVideo"),
     isVideoOrigin = b.getBoolean("isVideoOrigin"),
     setVideoId = b.getString("setVideoId"),
-    fromAutoplay = b.getBoolean("fromAutoplay"),
+    queueTier = b.getString("queueTier")?.let { runCatching { QueueTier.valueOf(it) }.getOrNull() }
+        ?: if (b.getBoolean("fromAutoplay")) QueueTier.AUTOPLAY else QueueTier.CONTEXT,
+    queueEntryId = b.getString("queueEntryId"),
     radioName = b.getString("radioName"),
     localUri = b.getString("localUri"),
     downloadFormat = b.getString("downloadFormat"),
@@ -234,6 +239,7 @@ fun songFromBundle(b: Bundle): Song = Song(
     playbackSourceType = b.getString("playbackSourceType")?.let { runCatching { com.music.vibe.data.model.PlaybackSourceType.valueOf(it) }.getOrNull() },
     playbackSourceId = b.getString("playbackSourceId"),
     isExplicit = if (b.containsKey("isExplicit")) b.getBoolean("isExplicit") else null,
+    trackNumber = if (b.containsKey("trackNumber")) b.getInt("trackNumber") else null,
 )
 
 /** Flushes the current radio queue to disk before reporting that it started. */
@@ -668,10 +674,10 @@ fun Song.toMediaItem(): MediaItem {
                         EXTRA_ARTIST_ID to artistId,
                         EXTRA_ALBUM_ID to albumId,
                         EXTRA_SET_VIDEO_ID to setVideoId,
-                        EXTRA_EXPLICIT to isExplicit,
                         EXTRA_IS_VIDEO to isVideo,
                         EXTRA_VIDEO_ORIGIN to isVideoOrigin,
                     )
+                    this@toMediaItem.isExplicit?.let { extrasBundle.putBoolean(EXTRA_EXPLICIT, it) }
                     this@toMediaItem.trackNumber?.let { extrasBundle.putInt(EXTRA_TRACK_NUMBER, it) }
                     setExtras(extrasBundle)
                 }

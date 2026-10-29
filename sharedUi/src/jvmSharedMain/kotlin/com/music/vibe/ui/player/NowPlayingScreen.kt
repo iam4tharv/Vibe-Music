@@ -35,6 +35,7 @@ import androidx.compose.foundation.gestures.awaitVerticalTouchSlopOrCancellation
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.verticalDrag
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -719,6 +720,8 @@ fun NowPlayingScreen(
     lyricsUnavailable: Boolean,
     lyricsOffsetOpen: Boolean,
     onDismissLyricsOffset: () -> Unit,
+    lyricsShareRequested: Boolean = false,
+    onConsumeLyricsShareRequest: () -> Unit = {},
     /** The width of the window the player is in — see [fullBleedArtworkAvailable]. */
     windowWidth: Dp,
     /**
@@ -929,7 +932,9 @@ fun NowPlayingScreen(
         if (opening) closeLyrics()
     }
     val lyricsLoadingLines = stringArrayResource(Res.array.lyrics_loading_lines)
-    val lyricsLoadingText = remember(song.videoId) { lyricsLoadingLines.random() }
+    val lyricsLoadingText = remember(song.videoId, lyricsLoadingLines) {
+        lyricsLoadingLines.randomOrNull().orEmpty()
+    }
     val lyricsTranslation = rememberLyricsTranslation(
         trackId = song.videoId,
         lyrics = lyrics,
@@ -952,6 +957,23 @@ fun NowPlayingScreen(
         haptics = haptics,
         onCard = { lyricsShare = it },
     )
+    val startLyricsSharePick: () -> Unit = {
+        openLyrics()
+        val allLines = lyrics.orEmpty()
+        val initialIndex = if (allLines.isEmpty()) {
+            null
+        } else {
+            activeLyricRows(allLines, lyricsPlayhead.positionMs).firstOrNull()
+                ?: allLines.indexOfFirst { it.text.isNotBlank() }.takeIf { it >= 0 }
+        }
+        lyricPicker.startPicking(initialIndex)
+    }
+    LaunchedEffect(lyricsShareRequested) {
+        if (lyricsShareRequested) {
+            onConsumeLyricsShareRequest()
+            startLyricsSharePick()
+        }
+    }
     // Nothing here resets [lyricsOpen] on a track change, deliberately. The
     // panel is a place, not a property of the track: someone reading along who
     // skips — or who simply lets the queue run on — means to carry on reading,
@@ -1919,8 +1941,7 @@ fun NowPlayingScreen(
                         picking = lyricPicker.picking,
                         pickBar = {
                             LyricsPickBar(
-                                shareEnabled = lyricPicker.picks.isNotEmpty() &&
-                                    !lyricPicker.overBudget,
+                                shareEnabled = lyricPicker.picks.isNotEmpty(),
                                 onCancel = lyricPicker.cancel,
                                 onShare = lyricPicker.share,
                             )
@@ -1940,6 +1961,16 @@ fun NowPlayingScreen(
                                 enabled = !lyrics.isNullOrEmpty(),
                                 onClick = lyricsTranslation.toggleTranslation,
                             )
+                        },
+                        shareToggle = if (lyricsShareEnabled) {
+                            {
+                                LyricsShareToggleButton(
+                                    enabled = !lyrics.isNullOrEmpty(),
+                                    onClick = startLyricsSharePick,
+                                )
+                            }
+                        } else {
+                            null
                         },
                     ) { panelModifier ->
                         LyricsTranslationMotion(
@@ -3319,11 +3350,19 @@ fun NowPlayingScreen(
                                 onClick = lyricsTranslation.toggleRomanization,
                             )
                         }
-                        Box(
+                        Row(
                             modifier = Modifier
                                 .align(Alignment.BottomEnd)
                                 .graphicsLayer { alpha = translateFade },
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
+                            if (lyricsShareEnabled) {
+                                LyricsShareToggleButton(
+                                    enabled = translateShown && !lyrics.isNullOrEmpty(),
+                                    onClick = startLyricsSharePick,
+                                )
+                            }
                             TranslationToggleButton(
                                 state = lyricsTranslation.translationState,
                                 showingTranslation = lyricsTranslation.showingTranslation,
@@ -3340,8 +3379,7 @@ fun NowPlayingScreen(
                     // would be over the reader's first pick anyway.
                     if (lyricPicker.picking) {
                         LyricsPickBar(
-                            shareEnabled = lyricPicker.picks.isNotEmpty() &&
-                                !lyricPicker.overBudget,
+                            shareEnabled = lyricPicker.picks.isNotEmpty(),
                             onCancel = lyricPicker.cancel,
                             onShare = lyricPicker.share,
                             modifier = Modifier.align(Alignment.BottomCenter),

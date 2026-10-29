@@ -619,6 +619,7 @@ private fun VibeMusicApp(
     var discordDialog by remember { mutableStateOf<DiscordDialog?>(null) }
     var songActions by remember { mutableStateOf<Song?>(null) }
     var showLyricsOffset by remember { mutableStateOf(false) }
+    var requestLyricsShare by remember { mutableStateOf(false) }
     /**
      * Whether the track menu that is up was opened from the player.
      *
@@ -2466,6 +2467,8 @@ private fun VibeMusicApp(
             lyricsUnavailable = lyricsChecked && lyrics.isNullOrEmpty(),
             lyricsOffsetOpen = showLyricsOffset,
             onDismissLyricsOffset = { showLyricsOffset = false },
+            lyricsShareRequested = requestLyricsShare,
+            onConsumeLyricsShareRequest = { requestLyricsShare = false },
             onListenTogether = {
                 // The player is a sheet over the page, so it has to come down
                 // for the page to be read at all.
@@ -4379,6 +4382,14 @@ private fun VibeMusicApp(
                     {
                         songActions = null
                         showLyricsOffset = true
+                    }
+                } else {
+                    null
+                },
+                onShareLyrics = if (fromPlayer && !viewModel.lyrics.collectAsStateWithLifecycle().value.isNullOrEmpty()) {
+                    {
+                        songActions = null
+                        requestLyricsShare = true
                     }
                 } else {
                     null

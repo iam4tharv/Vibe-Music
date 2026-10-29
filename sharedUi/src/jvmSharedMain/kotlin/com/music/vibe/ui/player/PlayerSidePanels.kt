@@ -68,6 +68,31 @@ fun LyricsSidePanel(
     // The provider drawer frosts this column, not the page beside it.
     val haze = remember { HazeState() }
     var showLyricsProviders by remember { mutableStateOf(false) }
+    val remoteArt = rememberRemoteArtworkUrl(song)
+    var lyricsShare by remember { mutableStateOf<LyricsShareRequest?>(null) }
+    val lyricsShareEnabled = lyricsShareAvailable
+    val lyricPicker = rememberLyricsPicker(
+        song = song,
+        lines = lyrics,
+        subLines = lyricsTranslation.subLines,
+        artworkUrl = remoteArt,
+        haptics = haptics,
+        onCard = { lyricsShare = it },
+    )
+    val startLyricsSharePick: () -> Unit = {
+        val allLines = lyrics.orEmpty()
+        val initialIndex = if (allLines.isEmpty()) {
+            null
+        } else {
+            activeLyricRows(allLines, lyricsPlayhead.positionMs).firstOrNull()
+                ?: allLines.indexOfFirst { it.text.isNotBlank() }.takeIf { it >= 0 }
+        }
+        lyricPicker.startPicking(initialIndex)
+    }
+
+    PlayerBackHandler(enabled = showLyricsProviders) { showLyricsProviders = false }
+    PlayerBackHandler(enabled = lyricsShare != null) { lyricsShare = null }
+    PlayerBackHandler(enabled = lyricPicker.picking) { lyricPicker.cancel() }
 
     Box(modifier) {
         Box(Modifier.fillMaxSize().hazeSource(haze)) {
@@ -80,6 +105,14 @@ fun LyricsSidePanel(
                 },
                 status = lyricsTranslation.status,
                 onStatusClick = { showLyricsProviders = true },
+                picking = lyricPicker.picking,
+                pickBar = {
+                    LyricsPickBar(
+                        shareEnabled = lyricPicker.picks.isNotEmpty(),
+                        onCancel = lyricPicker.cancel,
+                        onShare = lyricPicker.share,
+                    )
+                },
                 romanizationToggle = {
                     RomanizationToggleButton(
                         state = lyricsTranslation.romanizationState,
@@ -95,6 +128,16 @@ fun LyricsSidePanel(
                         enabled = !lyrics.isNullOrEmpty(),
                         onClick = lyricsTranslation.toggleTranslation,
                     )
+                },
+                shareToggle = if (lyricsShareEnabled) {
+                    {
+                        LyricsShareToggleButton(
+                            enabled = !lyrics.isNullOrEmpty(),
+                            onClick = startLyricsSharePick,
+                        )
+                    }
+                } else {
+                    null
                 },
             ) { panelModifier ->
                 LyricsTranslationMotion(
@@ -117,6 +160,11 @@ fun LyricsSidePanel(
                         onRevealControls = {},
                         onHideControls = {},
                         translationProgress = particleProgress,
+                        canPick = lyricsShareEnabled,
+                        picking = lyricPicker.picking,
+                        picked = lyricPicker.picks,
+                        onPickLine = lyricPicker.pick,
+                        onTogglePick = lyricPicker.toggle,
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
@@ -129,6 +177,13 @@ fun LyricsSidePanel(
                 states = lyricsProviderStates,
                 onSelect = onSelectLyricsProvider,
                 onDismiss = { showLyricsProviders = false },
+            )
+        }
+        lyricsShare?.let { request ->
+            PlayerPlatform.host.LyricsShareSheet(
+                hazeState = haze,
+                request = request,
+                onDismiss = { lyricsShare = null },
             )
         }
     }
