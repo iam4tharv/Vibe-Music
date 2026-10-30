@@ -6726,527 +6726,10 @@ class PlaybackService : MediaLibraryService() {
 
         if (subtitleText != lastPublishedSubtitle) {
             lastPublishedSubtitle = subtitleText
-            // buildUpon() off the metadata that's already playing, not a fresh
-            // Builder() — a synced lyric line can advance every second or two,
-            // and re-stating setArtworkUri() on every tick made media3 treat
-            // the cover as newly changed that often, racing its own artwork
-            // decode/cache against the legacy MediaSession broadcast and
-            // crashing with "cannot use a recycled source in createBitmap".
-            // Carrying the existing artwork field forward keeps that field
-            // untouched while still firing onMediaMetadataChanged for the
-            // subtitle itself.
             exoPlayer.playlistMetadata = exoPlayer.mediaMetadata
                 .buildUpon()
                 .setSubtitle(subtitleText)
                 .build()
-        }
-    }
-
-    /**
-     * What the MediaSession, and so every control surface, actually talks to.
-     *
-     * Two behaviours are grafted onto the player here rather than left to
-     * ExoPlayer's defaults:
-     *
-     * **Back restarts the track.** ExoPlayer already implements
-     * restart-then-skip in [Player.seekToPrevious], gated on
-     * `maxSeekToPreviousPosition`. External surfaces don't use it:
-     * [DefaultMediaNotificationProvider] binds its previous button to
-     * `COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM`, which skips unconditionally. So
-     * that command is redirected rather than left to behave differently
-     * depending on which back button was pressed.
-     *
-     * **A skip cancels the crossfade.** Blending is for a track running out,
-     * not for one being changed: told to move on, the listener wants the song
-     * they were on to stop, not to keep playing over the one they asked for.
-     * So every skip tells [CrossfadeController] to drop whatever is in flight
-     * and then moves the queue plainly.
-     *
-     * Command availability is deliberately untouched — mutating it through a
-     * [ForwardingPlayer] means intercepting listener callbacks too. The one
-     * consequence is the first track of a queue, where ExoPlayer withholds
-     * `COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM` for want of a previous item: back
-     * stays inert on those surfaces, exactly as it already was. In the app it
-     * restarts, since that path asks for `COMMAND_SEEK_TO_PREVIOUS`.
-     */
-    private class SessionPlayer(
-        player: Player,
-        private val crossfade: CrossfadeController,
-        /**
-         * Reports that what just came through here was the *user's* doing.
-         *
-         * This wrapper is the door every external surface knocks on — the
-         * app, the notification, a headset button, Android Auto — while the
-         * service's own programmatic moves go straight to the ExoPlayer
-         * underneath it. That asymmetry is the whole reason a party can tell
-         * a listener's action from its own corrections. See [PartySync].
-         */
-        private val onUserIntent: () -> Unit,
-        /** @see PartySync.shouldDeferPlay */
-        private val deferPlayToParty: () -> Boolean,
-        /** @see PartySync.onLockedTransport */
-        private val lockedTransport: (Boolean) -> Boolean,
-        /** What plays on a Cast receiver, whose clock this reports while it is the speaker. */
-        private val cast: CastPlayback,
-        private val getSubtitle: () -> String?,
-    ) : ForwardingPlayer(player), CastSink {
-
-        // The listeners registered through this wrapper, kept so the receiver's
-        // changes can be announced to them. The phone's own player never
-        // announces them — it is paused, and as far as it knows nothing is
-        // happening.
-        private val listeners = CopyOnWriteArraySet<Player.Listener>()
-        private var reportedPlayWhenReady = false
-        private var reportedPlaybackState = Player.STATE_IDLE
-        private var reportedIsPlaying = false
-
-        init {
-            cast.sink = this
-        }
-
-        private companion object {
-            val CAST_DEVICE: DeviceInfo = DeviceInfo.Builder(DeviceInfo.PLAYBACK_TYPE_REMOTE)
-                .setMinVolume(0)
-                .setMaxVolume(100)
-                .build()
-
-            /** A hardware key press, as a share of the receiver's range. */
-            const val VOLUME_STEP = 0.05f
-        }
-
-        override fun addListener(listener: Player.Listener) {
-            listeners += listener
-            super.addListener(listener)
-        }
-
-        override fun removeListener(listener: Player.Listener) {
-            listeners -= listener
-            super.removeListener(listener)
-        }
-
-        // While a receiver is the speaker the phone's player is paused and its
-        // clock is stale, so everything that describes playback is the
-        // receiver's. The queue, the metadata and the commands stay the
-        // phone's.
-        override fun getPlayWhenReady() = if (cast.active) cast.playWhenReady else super.getPlayWhenReady()
-
-        override fun isPlaying() = if (cast.active) cast.isPlaying else super.isPlaying()
-
-        override fun getPlaybackState() = if (cast.active) cast.playbackState else super.getPlaybackState()
-
-        override fun getCurrentPosition() = if (cast.active) cast.positionMs else super.getCurrentPosition()
-
-        override fun getContentPosition() = if (cast.active) cast.positionMs else super.getContentPosition()
-
-        override fun getBufferedPosition() = if (cast.active) cast.positionMs else super.getBufferedPosition()
-
-        override fun getContentBufferedPosition() =
-            if (cast.active) cast.positionMs else super.getContentBufferedPosition()
-
-        override fun getDuration(): Long =
-            if (cast.active && cast.durationMs != C.TIME_UNSET) cast.durationMs else super.getDuration()
-
-        override fun getContentDuration(): Long =
-            if (cast.active && cast.durationMs != C.TIME_UNSET) cast.durationMs else super.getContentDuration()
-
-        // The receiver is a remote output with a volume of its own, which is
-        // what makes the hardware keys move it instead of the phone's.
-        override fun getDeviceInfo(): DeviceInfo = if (cast.active) CAST_DEVICE else super.getDeviceInfo()
-
-        override fun getDeviceVolume(): Int = if (cast.active) cast.deviceVolume else super.getDeviceVolume()
-
-        override fun isDeviceMuted(): Boolean = if (cast.active) false else super.isDeviceMuted()
-
-        override fun setDeviceVolume(volume: Int, flags: Int) {
-            if (cast.active) CastController.setVolume(volume / 100f) else super.setDeviceVolume(volume, flags)
-        }
-
-        @Suppress("DEPRECATION")
-        override fun setDeviceVolume(volume: Int) {
-            if (cast.active) CastController.setVolume(volume / 100f) else super.setDeviceVolume(volume)
-        }
-
-        override fun increaseDeviceVolume(flags: Int) {
-            if (cast.active) nudgeReceiverVolume(+VOLUME_STEP) else super.increaseDeviceVolume(flags)
-        }
-
-        @Suppress("DEPRECATION")
-        override fun increaseDeviceVolume() {
-            if (cast.active) nudgeReceiverVolume(+VOLUME_STEP) else super.increaseDeviceVolume()
-        }
-
-        override fun decreaseDeviceVolume(flags: Int) {
-            if (cast.active) nudgeReceiverVolume(-VOLUME_STEP) else super.decreaseDeviceVolume(flags)
-        }
-
-        @Suppress("DEPRECATION")
-        override fun decreaseDeviceVolume() {
-            if (cast.active) nudgeReceiverVolume(-VOLUME_STEP) else super.decreaseDeviceVolume()
-        }
-
-        override fun setDeviceMuted(muted: Boolean, flags: Int) {
-            if (!cast.active) super.setDeviceMuted(muted, flags)
-        }
-
-        @Suppress("DEPRECATION")
-        override fun setDeviceMuted(muted: Boolean) {
-            if (!cast.active) super.setDeviceMuted(muted)
-        }
-
-        private fun nudgeReceiverVolume(delta: Float) =
-            CastController.setVolume(CastController.volume.value + delta)
-
-        override fun onRemotePlaybackChanged() {
-            val flags = FlagSet.Builder()
-            val playWhenReady = getPlayWhenReady()
-            val state = getPlaybackState()
-            val playing = isPlaying()
-            if (playWhenReady != reportedPlayWhenReady) {
-                reportedPlayWhenReady = playWhenReady
-                flags.add(Player.EVENT_PLAY_WHEN_READY_CHANGED)
-                listeners.forEach {
-                    it.onPlayWhenReadyChanged(playWhenReady, Player.PLAY_WHEN_READY_CHANGE_REASON_REMOTE)
-                }
-            }
-            if (state != reportedPlaybackState) {
-                reportedPlaybackState = state
-                flags.add(Player.EVENT_PLAYBACK_STATE_CHANGED)
-                listeners.forEach { it.onPlaybackStateChanged(state) }
-            }
-            if (playing != reportedIsPlaying) {
-                reportedIsPlaying = playing
-                flags.add(Player.EVENT_IS_PLAYING_CHANGED)
-                listeners.forEach { it.onIsPlayingChanged(playing) }
-            }
-            // Always: a controller extrapolates the position from the last one
-            // it was given, and has to be re-anchored whenever the receiver
-            // has been seeked, stalled or resumed.
-            flags.add(Player.EVENT_POSITION_DISCONTINUITY)
-            val position = Player.PositionInfo(
-                null,
-                currentMediaItemIndex,
-                currentMediaItem,
-                null,
-                currentPeriodIndex,
-                currentPosition,
-                contentPosition,
-                C.INDEX_UNSET,
-                C.INDEX_UNSET,
-            )
-            listeners.forEach {
-                it.onPositionDiscontinuity(position, position, Player.DISCONTINUITY_REASON_INTERNAL)
-            }
-            val events = Player.Events(flags.build())
-            listeners.forEach { it.onEvents(this, events) }
-        }
-
-        override fun onRemoteRouteChanged() {
-            val info = getDeviceInfo()
-            listeners.forEach { it.onDeviceInfoChanged(info) }
-            val events = Player.Events(FlagSet.Builder().add(Player.EVENT_DEVICE_INFO_CHANGED).build())
-            listeners.forEach { it.onEvents(this, events) }
-            onRemoteVolumeChanged()
-        }
-
-        override fun onRemoteVolumeChanged() {
-            val volume = getDeviceVolume()
-            val muted = isDeviceMuted()
-            listeners.forEach { it.onDeviceVolumeChanged(volume, muted) }
-            val events = Player.Events(FlagSet.Builder().add(Player.EVENT_DEVICE_VOLUME_CHANGED).build())
-            listeners.forEach { it.onEvents(this, events) }
-        }
-
-        /** Back, on a receiver: restart past the first seconds, else the previous track. */
-        private fun castPrevious() {
-            if (cast.positionMs > wrappedPlayer.maxSeekToPreviousPosition || !wrappedPlayer.hasPreviousMediaItem()) {
-                cast.seekTo(0L)
-            } else {
-                wrappedPlayer.seekToPreviousMediaItem()
-            }
-        }
-
-        /**
-         * Whether this device is a listener in a party its host has taken
-         * control of — see [ListenTogether.State.controlsLocked].
-         *
-         * Checked here, at the door, rather than only in the app: the
-         * notification, a headset button and Android Auto all arrive through
-         * this wrapper too, and a listener who can skip the party's track from
-         * their lock screen is not restricted at all.
-         *
-         * What this is not is the enforcement. The server refuses these actions
-         * from a listener independently; this is what stops a surface from
-         * appearing to work and then being silently overruled.
-         */
-        private fun locked(): Boolean = ListenTogether.state.value.controlsLocked
-
-        override fun play() {
-            // Locked, this plays only here — the party carries on untouched and
-            // this device rejoins it wherever it has got to. See
-            // [PartySync.onLockedTransport], which owns that catch-up.
-            if (lockedTransport(true)) return
-            onUserIntent()
-            // Held back only when a party will schedule the start for everyone
-            // at once — see [PartySync.shouldDeferPlay], which starts the player
-            // itself on the party's instant, and starts it anyway if the party
-            // never answers. Outside a party this is an ordinary play().
-            if (deferPlayToParty()) return
-            if (cast.active) {
-                cast.play()
-                return
-            }
-            super.play()
-        }
-
-        override fun pause() {
-            if (lockedTransport(false)) return
-            onUserIntent()
-            if (cast.active) {
-                cast.pause()
-                return
-            }
-            super.pause()
-        }
-
-        // Not blocked when locked: stopping is this device going quiet, which
-        // is the listener's own business, and the lifecycle paths that call it
-        // are not asking to move the party.
-        override fun stop() {
-            if (locked()) { super.stop(); return }
-            onUserIntent()
-            super.stop()
-        }
-
-        override fun setPlayWhenReady(playWhenReady: Boolean) {
-            if (lockedTransport(playWhenReady)) return
-            onUserIntent()
-            if (playWhenReady && deferPlayToParty()) return
-            if (cast.active) {
-                if (playWhenReady) cast.play() else cast.pause()
-                return
-            }
-            super.setPlayWhenReady(playWhenReady)
-        }
-
-        // The playhead belongs to the party while locked: it goes where the
-        // host puts it, and a local seek would only be dragged back by the next
-        // reconcile anyway.
-        override fun seekTo(positionMs: Long) {
-            if (locked()) return
-            onUserIntent()
-            if (cast.active) {
-                cast.seekTo(positionMs)
-                return
-            }
-            super.seekTo(positionMs)
-        }
-
-        override fun seekBack() {
-            if (locked()) return
-            onUserIntent()
-            if (cast.active) {
-                cast.seekTo(cast.positionMs - seekBackIncrement)
-                return
-            }
-            super.seekBack()
-        }
-
-        override fun seekForward() {
-            if (locked()) return
-            onUserIntent()
-            if (cast.active) {
-                cast.seekTo(cast.positionMs + seekForwardIncrement)
-                return
-            }
-            super.seekForward()
-        }
-
-        override fun seekToPrevious() {
-            if (locked()) return
-            onUserIntent()
-            if (cast.active) {
-                castPrevious()
-                return
-            }
-            super.seekToPrevious()
-        }
-
-        override fun seekToDefaultPosition() {
-            if (locked()) return
-            onUserIntent()
-            if (cast.active) {
-                cast.seekTo(0L)
-                return
-            }
-            super.seekToDefaultPosition()
-        }
-
-        override fun seekToDefaultPosition(mediaItemIndex: Int) {
-            if (locked()) return
-            onUserIntent()
-            super.seekToDefaultPosition(mediaItemIndex)
-        }
-
-        override fun setMediaItems(mediaItems: List<MediaItem>, resetPosition: Boolean) {
-            if (locked()) return
-            onUserIntent()
-            super.setMediaItems(mediaItems, resetPosition)
-        }
-
-        override fun setMediaItems(
-            mediaItems: List<MediaItem>,
-            startIndex: Int,
-            startPositionMs: Long,
-        ) {
-            if (locked()) return
-            onUserIntent()
-            super.setMediaItems(mediaItems, startIndex, startPositionMs)
-        }
-
-        // Every other way the running order can change from outside: Play next,
-        // Add to queue, removing a row, dragging one. None of these move the
-        // playhead, so before they were reported the party's copy of the queue
-        // silently went stale and only caught up at the next track change.
-        //
-        // All refused while locked: the queue is what plays next, so a listener
-        // who can reorder it is still choosing the music.
-        override fun addMediaItems(index: Int, mediaItems: List<MediaItem>) {
-            if (locked()) return
-            onUserIntent()
-            super.addMediaItems(index, mediaItems)
-        }
-
-        override fun addMediaItems(mediaItems: List<MediaItem>) {
-            if (locked()) return
-            onUserIntent()
-            super.addMediaItems(mediaItems)
-        }
-
-        override fun removeMediaItem(index: Int) {
-            if (locked()) return
-            onUserIntent()
-            super.removeMediaItem(index)
-        }
-
-        override fun removeMediaItems(fromIndex: Int, toIndex: Int) {
-            if (locked()) return
-            onUserIntent()
-            super.removeMediaItems(fromIndex, toIndex)
-        }
-
-        override fun moveMediaItem(currentIndex: Int, newIndex: Int) {
-            if (locked()) return
-            onUserIntent()
-            super.moveMediaItem(currentIndex, newIndex)
-        }
-
-        override fun moveMediaItems(fromIndex: Int, toIndex: Int, newIndex: Int) {
-            if (locked()) return
-            onUserIntent()
-            super.moveMediaItems(fromIndex, toIndex, newIndex)
-        }
-
-        override fun replaceMediaItems(
-            fromIndex: Int,
-            toIndex: Int,
-            mediaItems: List<MediaItem>,
-        ) {
-            if (locked()) return
-            onUserIntent()
-            super.replaceMediaItems(fromIndex, toIndex, mediaItems)
-        }
-
-        override fun clearMediaItems() {
-            if (locked()) return
-            onUserIntent()
-            super.clearMediaItems()
-        }
-
-        override fun getMediaMetadata(): MediaMetadata {
-            val base = wrappedPlayer.mediaMetadata
-            val subtitle = getSubtitle()
-            return if (!subtitle.isNullOrBlank()) {
-                base.buildUpon().setSubtitle(subtitle).build()
-            } else {
-                base
-            }
-        }
-
-        override fun seekTo(mediaItemIndex: Int, positionMs: Long) {
-            if (locked()) return
-            onUserIntent()
-            crossfade.onSkipRequested()
-            if (mediaItemIndex !in 0 until wrappedPlayer.mediaItemCount) return
-            // The track already on the receiver: a position in it is the
-            // receiver's to seek, not the paused phone's.
-            if (cast.active && mediaItemIndex == wrappedPlayer.currentMediaItemIndex) {
-                cast.seekTo(positionMs)
-                return
-            }
-            val skipped = skippedByQueueJump(currentMediaItemIndex, mediaItemIndex)
-            if (skipped == null) {
-                wrappedPlayer.seekTo(mediaItemIndex, positionMs)
-                return
-            }
-
-            // A direct choice of a later queue row bypasses items between current and target.
-            // Invariant: A queue jump may consume/delete USER_QUEUE items only when jumping within
-            // USER_QUEUE. Jumps to any other tier (CONTEXT or AUTOPLAY) must NEVER delete USER_QUEUE items.
-            val targetTier = wrappedPlayer.getMediaItemAt(mediaItemIndex).queueTier
-            val removableIndices = mutableListOf<Int>()
-            for (i in skipped) {
-                val tier = wrappedPlayer.getMediaItemAt(i).queueTier
-                val isRemovable = if (targetTier == QueueTier.USER_QUEUE) {
-                    tier == QueueTier.USER_QUEUE
-                } else {
-                    tier != QueueTier.USER_QUEUE
-                }
-                if (isRemovable) {
-                    removableIndices.add(i)
-                }
-            }
-
-            // Remove in reverse order so preceding indices remain valid during removal
-            for (i in removableIndices.asReversed()) {
-                wrappedPlayer.removeMediaItem(i)
-            }
-            var newTargetIndex = mediaItemIndex - removableIndices.count { it < mediaItemIndex }
-            // Whatever was kept still sits between here and the target. Seeking
-            // past it would leave it behind the playhead, where
-            // [QueueCoordinator.consumePlayedUserQueue] deletes it on the next
-            // transition — so the target moves up to play next instead, with
-            // the kept rows following it, the same order an in-app tap gives.
-            val nextIndex = wrappedPlayer.currentMediaItemIndex + 1
-            if (newTargetIndex > nextIndex) {
-                wrappedPlayer.moveMediaItem(newTargetIndex, nextIndex)
-                newTargetIndex = nextIndex
-            }
-            wrappedPlayer.seekTo(newTargetIndex, positionMs)
-        }
-
-        override fun seekToPreviousMediaItem() {
-            if (locked()) return
-            onUserIntent()
-            crossfade.onSkipRequested()
-            if (cast.active) {
-                castPrevious()
-                return
-            }
-            wrappedPlayer.seekToPrevious()
-        }
-
-        override fun seekToNextMediaItem() {
-            if (locked()) return
-            onUserIntent()
-            crossfade.onSkipRequested()
-            wrappedPlayer.seekToNextMediaItem()
-        }
-
-        override fun seekToNext() {
-            if (locked()) return
-            onUserIntent()
-            crossfade.onSkipRequested()
-            wrappedPlayer.seekToNext()
         }
     }
 
@@ -7864,30 +7347,10 @@ class PlaybackService : MediaLibraryService() {
     }
 
     private fun buildContentStyleBundle(browsableHint: Int, playableHint: Int): Bundle =
-        Bundle().apply {
-            putInt(EXTRA_CONTENT_STYLE_BROWSABLE_HINT, browsableHint)
-            putInt(EXTRA_CONTENT_STYLE_PLAYABLE_HINT, playableHint)
-            putInt(EXTRA_CONTENT_STYLE_BROWSABLE_HINT_AX, browsableHint)
-            putInt(EXTRA_CONTENT_STYLE_PLAYABLE_HINT_AX, playableHint)
-            putInt(EXTRA_CONTENT_STYLE_BROWSABLE_HINT_LEGACY, browsableHint)
-            putInt(EXTRA_CONTENT_STYLE_PLAYABLE_HINT_LEGACY, playableHint)
-            putInt("android.media.extras.CONTENT_STYLE_BROWSABLE_HINT", browsableHint)
-            putInt("android.media.extras.CONTENT_STYLE_PLAYABLE_HINT", playableHint)
-            putInt("android.media.browse.CONTENT_STYLE_BROWSABLE_HINT", browsableHint)
-            putInt("android.media.browse.CONTENT_STYLE_PLAYABLE_HINT", playableHint)
-            putBoolean(EXTRA_CONTENT_STYLE_SUPPORTED, true)
-            putBoolean(EXTRA_CONTENT_STYLE_SUPPORTED_AX, true)
-        }
+        PlaybackMediaBrowseTree.buildContentStyleBundle(browsableHint, playableHint)
 
-    private fun <T> paginate(items: List<T>, page: Int, pageSize: Int): List<T> {
-        if (page < 0 || pageSize <= 0 || items.isEmpty()) return emptyList()
-        val safePageSize = pageSize.coerceAtMost(MAX_AUTO_PAGE_SIZE)
-        val fromLong = page.toLong() * safePageSize.toLong()
-        if (fromLong >= items.size.toLong()) return emptyList()
-        val from = fromLong.toInt()
-        val to = (fromLong + safePageSize).coerceAtMost(items.size.toLong()).toInt()
-        return items.subList(from, to)
-    }
+    private fun <T> paginate(items: List<T>, page: Int, pageSize: Int): List<T> =
+        PlaybackMediaBrowseTree.paginate(items, page, pageSize)
 
     private fun createGridPlaylistItem(
         mediaId: String,
@@ -7895,53 +7358,13 @@ class PlaybackService : MediaLibraryService() {
         subtitle: String? = null,
         artworkUrl: String? = null,
         folderType: Int = MediaMetadata.FOLDER_TYPE_PLAYLISTS,
-    ): MediaItem = MediaItem.Builder()
-        .setMediaId(mediaId)
-        .setMediaMetadata(
-            MediaMetadata.Builder()
-                .setTitle(title)
-                .setSubtitle(subtitle)
-                .setArtworkUri(artworkUrl?.artworkAt(NOTIFICATION_ART_PX)?.let(Uri::parse))
-                .setIsBrowsable(true)
-                .setIsPlayable(false)
-                .setFolderType(folderType)
-                .setExtras(buildContentStyleBundle(CONTENT_STYLE_GRID_ITEM_HINT_VALUE, CONTENT_STYLE_LIST_ITEM_HINT_VALUE))
-                .build(),
-        )
-        .build()
+    ): MediaItem = PlaybackMediaBrowseTree.createGridPlaylistItem(mediaId, title, subtitle, artworkUrl, folderType)
 
-    private fun shelfToGridPlaylistItem(playlist: ShelfItem): MediaItem {
-        val browseId = playlist.browseId ?: "VL${playlist.videoId}"
-        val mediaId = if (browseId.startsWith("VL")) "playlist:${browseId.removePrefix("VL")}" else "browse:$browseId"
-        return createGridPlaylistItem(
-            mediaId = mediaId,
-            title = playlist.title,
-            subtitle = playlist.subtitle,
-            artworkUrl = playlist.thumbnailUrl,
-        )
-    }
+    private fun shelfToGridPlaylistItem(playlist: ShelfItem): MediaItem =
+        PlaybackMediaBrowseTree.shelfToGridPlaylistItem(playlist)
 
-    private suspend fun searchAll(query: String): Pair<List<Song>, List<BrowseItem>> {
-        val safeQuery = query.trim().take(MAX_AUTO_SEARCH_QUERY_CHARS)
-        if (safeQuery.isEmpty()) return emptyList<Song>() to emptyList()
-        val results = try {
-            withTimeoutOrNull(3_500L) {
-                YtMusicRepository.search(safeQuery, SearchFilter.ALL).getOrNull()
-            } ?: emptyList()
-        } catch (_: Exception) {
-            emptyList()
-        }
-        val songs = results.mapNotNull {
-            when (it) {
-                is SearchResult.Track -> it.song
-                is SearchResult.TopTrack -> it.song
-                else -> null
-            }
-        }.distinctBy { it.videoId }
-        val browses = results.mapNotNull { (it as? SearchResult.Browse)?.item }
-            .distinctBy { it.browseId }
-        return songs to browses
-    }
+    private suspend fun searchAll(query: String): Pair<List<Song>, List<BrowseItem>> =
+        PlaybackMediaBrowseTree.searchAll(query)
 
     private fun storeSearchResults(query: String, songs: List<Song>, browses: List<BrowseItem>) {
         while (searchResults.size >= MAX_AUTO_SEARCH_CACHE_ENTRIES) {
@@ -7954,13 +7377,8 @@ class PlaybackService : MediaLibraryService() {
         songs.forEach { songCache[it.videoId] = it }
     }
 
-    private fun browseItemToGridItem(item: BrowseItem): MediaItem = createGridPlaylistItem(
-        mediaId = "browse:${item.browseId}",
-        title = item.title,
-        subtitle = item.subtitle,
-        artworkUrl = item.thumbnailUrl,
-        folderType = if (item.browseId.startsWith("MPREb_")) MediaMetadata.FOLDER_TYPE_ALBUMS else MediaMetadata.FOLDER_TYPE_PLAYLISTS,
-    )
+    private fun browseItemToGridItem(item: BrowseItem): MediaItem =
+        PlaybackMediaBrowseTree.browseItemToGridItem(item)
 
     private fun createFolderItem(
         mediaId: String,
@@ -7968,156 +7386,44 @@ class PlaybackService : MediaLibraryService() {
         subtitle: String? = null,
         folderType: Int = MediaMetadata.FOLDER_TYPE_MIXED,
         isGrid: Boolean = false,
-    ): MediaItem {
-        val style = if (isGrid) CONTENT_STYLE_GRID_ITEM_HINT_VALUE else CONTENT_STYLE_LIST_ITEM_HINT_VALUE
-        val extras = buildContentStyleBundle(style, CONTENT_STYLE_LIST_ITEM_HINT_VALUE)
-        return MediaItem.Builder()
-            .setMediaId(mediaId)
-            .setMediaMetadata(
-                MediaMetadata.Builder()
-                    .setTitle(title)
-                    .setSubtitle(subtitle)
-                    .setIsBrowsable(true)
-                    .setIsPlayable(false)
-                    .setFolderType(if (isGrid && folderType == MediaMetadata.FOLDER_TYPE_MIXED) MediaMetadata.FOLDER_TYPE_ALBUMS else folderType)
-                    .setExtras(extras)
-                    .build(),
-            )
-            .build()
-    }
+    ): MediaItem = PlaybackMediaBrowseTree.createFolderItem(mediaId, title, subtitle, folderType, isGrid)
 
-    private fun MediaItem.withGridStyle(): MediaItem {
-        val currentExtras = mediaMetadata.extras ?: Bundle()
-        val newExtras = Bundle(currentExtras).apply {
-            putInt(EXTRA_CONTENT_STYLE_BROWSABLE_HINT, CONTENT_STYLE_GRID_ITEM_HINT_VALUE)
-            putInt(EXTRA_CONTENT_STYLE_PLAYABLE_HINT, CONTENT_STYLE_GRID_ITEM_HINT_VALUE)
-            putInt(EXTRA_CONTENT_STYLE_BROWSABLE_HINT_AX, CONTENT_STYLE_GRID_ITEM_HINT_VALUE)
-            putInt(EXTRA_CONTENT_STYLE_PLAYABLE_HINT_AX, CONTENT_STYLE_GRID_ITEM_HINT_VALUE)
-            putInt(EXTRA_CONTENT_STYLE_BROWSABLE_HINT_LEGACY, CONTENT_STYLE_GRID_ITEM_HINT_VALUE)
-            putInt(EXTRA_CONTENT_STYLE_PLAYABLE_HINT_LEGACY, CONTENT_STYLE_GRID_ITEM_HINT_VALUE)
-            putInt("android.media.extras.CONTENT_STYLE_BROWSABLE_HINT", CONTENT_STYLE_GRID_ITEM_HINT_VALUE)
-            putInt("android.media.extras.CONTENT_STYLE_PLAYABLE_HINT", CONTENT_STYLE_GRID_ITEM_HINT_VALUE)
-            putInt("android.media.browse.CONTENT_STYLE_BROWSABLE_HINT", CONTENT_STYLE_GRID_ITEM_HINT_VALUE)
-            putInt("android.media.browse.CONTENT_STYLE_PLAYABLE_HINT", CONTENT_STYLE_GRID_ITEM_HINT_VALUE)
-            putBoolean(EXTRA_CONTENT_STYLE_SUPPORTED, true)
-            putBoolean(EXTRA_CONTENT_STYLE_SUPPORTED_AX, true)
-        }
-        return buildUpon()
-            .setMediaMetadata(
-                mediaMetadata.buildUpon()
-                    .setIsBrowsable(true)
-                    .setIsPlayable(true)
-                    .setFolderType(MediaMetadata.FOLDER_TYPE_ALBUMS)
-                    .setExtras(newExtras)
-                    .build(),
-            )
-            .build()
-    }
+    private fun MediaItem.withGridStyle(): MediaItem =
+        with(PlaybackMediaBrowseTree) { this@withGridStyle.withGridStyle() }
 
-    private fun ShelfItem.toMediaItemOrNull(): MediaItem? {
-        val vid = videoId
-        if (vid != null) {
-            val song = Song(
-                videoId = vid,
-                title = title,
-                artist = InnertubeParser.artistFromSubtitle(subtitle),
-                thumbnailUrl = thumbnailUrl,
-            )
-            songCache[vid] = song
-            return song.toMediaItem()
-        }
-        val bid = browseId
-        if (bid != null) {
-            return MediaItem.Builder()
-                .setMediaId("browse:$bid")
-                .setMediaMetadata(
-                    MediaMetadata.Builder()
-                        .setTitle(title)
-                        .setSubtitle(subtitle)
-                        .setArtworkUri(thumbnailUrl.artworkAt(NOTIFICATION_ART_PX)?.let { Uri.parse(it) })
-                        .setIsBrowsable(true)
-                        .setIsPlayable(false)
-                        .setFolderType(MediaMetadata.FOLDER_TYPE_ALBUMS)
-                        .build(),
-                )
-                .build()
-        }
-        return null
-    }
+    private fun ShelfItem.toMediaItemOrNull(): MediaItem? =
+        with(PlaybackMediaBrowseTree) { this@toMediaItemOrNull.toMediaItemOrNull(songCache) }
 
-    private fun ShelfItem.toSongOrNull(): Song? {
-        val id = videoId ?: return null
-        return Song(
-            videoId = id,
-            title = title,
-            artist = InnertubeParser.artistFromSubtitle(subtitle),
-            thumbnailUrl = thumbnailUrl,
-        )
-    }
+    private fun ShelfItem.toSongOrNull(): Song? =
+        with(PlaybackMediaBrowseTree) { this@toSongOrNull.toSongOrNull() }
 
     private fun createLoginPromptItem(): MediaItem =
-        MediaItem.Builder()
-            .setMediaId("msg:login_required")
-            .setMediaMetadata(
-                MediaMetadata.Builder()
-                    .setTitle(getString(R.string.auto_login_title))
-                    .setSubtitle(getString(R.string.auto_login_subtitle))
-                    .setIsBrowsable(false)
-                    .setIsPlayable(false)
-                    .build(),
-            )
-            .build()
+        PlaybackMediaBrowseTree.createLoginPromptItem(this)
 
     private fun createInfoItem(mediaId: String, title: String, subtitle: String? = null): MediaItem =
-        MediaItem.Builder()
-            .setMediaId(mediaId)
-            .setMediaMetadata(
-                MediaMetadata.Builder()
-                    .setTitle(title)
-                    .setSubtitle(subtitle)
-                    .setIsBrowsable(false)
-                    .setIsPlayable(false)
-                    .setExtras(buildContentStyleBundle(CONTENT_STYLE_LIST_ITEM_HINT_VALUE, CONTENT_STYLE_LIST_ITEM_HINT_VALUE))
-                    .build(),
-            )
-            .build()
+        PlaybackMediaBrowseTree.createInfoItem(mediaId, title, subtitle)
 
     private companion object {
-        const val MEDIA_ROOT_ID = "root"
-        const val MEDIA_RECENTS_ID = "recents"
-        const val MEDIA_QUICK_PICKS_ID = "quick_picks"
-        const val MEDIA_PLAYLISTS_ID = "playlists"
-        const val MEDIA_MORE_ID = "more"
-        const val MEDIA_LIKED_ID = "liked"
+        const val MEDIA_ROOT_ID = PlaybackMediaBrowseTree.MEDIA_ROOT_ID
+        const val MEDIA_RECENTS_ID = PlaybackMediaBrowseTree.MEDIA_RECENTS_ID
+        const val MEDIA_QUICK_PICKS_ID = PlaybackMediaBrowseTree.MEDIA_QUICK_PICKS_ID
+        const val MEDIA_PLAYLISTS_ID = PlaybackMediaBrowseTree.MEDIA_PLAYLISTS_ID
+        const val MEDIA_MORE_ID = PlaybackMediaBrowseTree.MEDIA_MORE_ID
+        const val MEDIA_LIKED_ID = PlaybackMediaBrowseTree.MEDIA_LIKED_ID
         /** See [scheduleForeignCachePurge]: comfortably past the longest crossfade. */
         const val FOREIGN_CACHE_PURGE_DELAY_MS = 30_000L
         /** How many upcoming tracks [scheduleForeignCachePurge] leaves alone for read-ahead and Automix. */
         const val FOREIGN_CACHE_KEEP_AHEAD = 3
-        const val MEDIA_DOWNLOADS_ID = "downloads"
-        const val MEDIA_LOCAL_MUSIC_ID = "local_music"
-        const val MAX_AUTO_PAGE_SIZE = 50
-        const val MAX_AUTO_SEARCH_QUERY_CHARS = 200
-        const val MAX_AUTO_SEARCH_CACHE_ENTRIES = 20
+        const val MEDIA_DOWNLOADS_ID = PlaybackMediaBrowseTree.MEDIA_DOWNLOADS_ID
+        const val MEDIA_LOCAL_MUSIC_ID = PlaybackMediaBrowseTree.MEDIA_LOCAL_MUSIC_ID
+        const val MAX_AUTO_PAGE_SIZE = PlaybackMediaBrowseTree.MAX_AUTO_PAGE_SIZE
+        const val MAX_AUTO_SEARCH_QUERY_CHARS = PlaybackMediaBrowseTree.MAX_AUTO_SEARCH_QUERY_CHARS
+        const val MAX_AUTO_SEARCH_CACHE_ENTRIES = PlaybackMediaBrowseTree.MAX_AUTO_SEARCH_CACHE_ENTRIES
 
-        val ROOT_CHILDREN: List<String> = listOf(
-            MEDIA_QUICK_PICKS_ID,
-            MEDIA_RECENTS_ID,
-            MEDIA_PLAYLISTS_ID,
-            MEDIA_LIKED_ID,
-            MEDIA_MORE_ID,
-        )
+        val ROOT_CHILDREN: List<String> = PlaybackMediaBrowseTree.ROOT_CHILDREN
 
-        // Android Auto Content Style Hints
-        const val EXTRA_CONTENT_STYLE_SUPPORTED = "android.media.browse.extra.CONTENT_STYLE_SUPPORTED"
-        const val EXTRA_CONTENT_STYLE_SUPPORTED_AX = "androidx.media.contentstyle.CONTENT_STYLE_SUPPORTED"
-        const val EXTRA_CONTENT_STYLE_BROWSABLE_HINT = "android.media.browse.extra.CONTENT_STYLE_BROWSABLE_HINT"
-        const val EXTRA_CONTENT_STYLE_PLAYABLE_HINT = "android.media.browse.extra.CONTENT_STYLE_PLAYABLE_HINT"
-        const val EXTRA_CONTENT_STYLE_BROWSABLE_HINT_AX = "androidx.media.contentstyle.CONTENT_STYLE_BROWSABLE_HINT"
-        const val EXTRA_CONTENT_STYLE_PLAYABLE_HINT_AX = "androidx.media.contentstyle.CONTENT_STYLE_PLAYABLE_HINT"
-        const val EXTRA_CONTENT_STYLE_BROWSABLE_HINT_LEGACY = "androidx.media.utils.CONTENT_STYLE_BROWSABLE_HINT"
-        const val EXTRA_CONTENT_STYLE_PLAYABLE_HINT_LEGACY = "androidx.media.utils.CONTENT_STYLE_PLAYABLE_HINT"
-        const val CONTENT_STYLE_LIST_ITEM_HINT_VALUE = 1
-        const val CONTENT_STYLE_GRID_ITEM_HINT_VALUE = 4
+        const val CONTENT_STYLE_LIST_ITEM_HINT_VALUE = PlaybackMediaBrowseTree.CONTENT_STYLE_LIST_ITEM_HINT_VALUE
+        const val CONTENT_STYLE_GRID_ITEM_HINT_VALUE = PlaybackMediaBrowseTree.CONTENT_STYLE_GRID_ITEM_HINT_VALUE
         /**
          * Shared by both players. Identical on purpose: they take turns being
          * the session, and a difference here would be an audible change of

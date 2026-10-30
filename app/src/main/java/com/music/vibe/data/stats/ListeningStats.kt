@@ -106,16 +106,24 @@ object ListeningStats {
         val summary: ReplaySummary,
     )
 
+    @Volatile
+    private var database: com.music.vibe.data.db.VibeDatabase? = null
+
     fun init(context: Context) {
-        directory = File(context.filesDir, DIRECTORY)
+        val appContext = context.applicationContext
+        directory = File(appContext.filesDir, DIRECTORY)
+        database = com.music.vibe.data.db.VibeDatabase.getInstance(appContext)
         // Opening a month means reading and parsing it, and the first thing to
         // ask for one is the playback sampler — on the main thread, a few
         // seconds into the first track. Done here instead, it has happened long
         // before anything is playing.
-        writer.launch { synchronized(lock) { bucketFor(YearMonth.now()) } }
+        writer.launch {
+            database?.backfillV2MetadataIfNeeded()
+            synchronized(lock) { bucketFor(YearMonth.now()) }
+        }
     }
 
-    private val ready: Boolean get() = this::directory.isInitialized
+    private val ready: Boolean get() = this::directory.isInitialized || database != null
 
     // ── Writing ─────────────────────────────────────────────────────────────
 
@@ -145,6 +153,7 @@ object ListeningStats {
                     albumId = song.albumId,
                     artistId = song.artistId,
                     art = song.thumbnailUrl,
+                    durationText = song.durationText,
                 )
             }
             track.ms += playedMs
@@ -156,6 +165,7 @@ object ListeningStats {
             if (track.albumId == null) track.albumId = song.albumId
             if (track.artistId == null) track.artistId = song.artistId
             if (track.art == null) track.art = song.thumbnailUrl
+            if (track.durationText == null) track.durationText = song.durationText
             if (countsAsPlay) track.plays++
 
             // The lead artist, not the credit as a string. A track billed
@@ -243,14 +253,36 @@ object ListeningStats {
      */
     private suspend fun write(key: String, snapshot: StoredBucket) = writeLock.withLock {
         runCatching {
-            directory.mkdirs()
-            val file = File(directory, "$key.json")
-            val temporary = File(directory, "$key.json.tmp")
-            temporary.writeText(json.encodeToString(StoredBucket.serializer(), snapshot))
-            if (!temporary.renameTo(file)) {
-                // renameTo will not replace on some filesystems; the delete is
-                // the only thing standing between that and a .tmp per flush.
-                if (file.delete() && temporary.renameTo(file)) Unit else temporary.delete()
+            val encoded = json.encodeToString(StoredBucket.serializer(), snapshot)
+            val db = database
+            db?.listeningStatsDao?.saveMonthBucket(
+                monthKey = key,
+                bucketJson = encoded,
+                tracks = snapshot.tracks.map { t ->
+                    com.music.vibe.data.db.VibeDatabase.TrackStatRow(
+                        videoId = t.id,
+                        title = t.title,
+                        artist = t.artist,
+                        album = t.album,
+                        thumbnailUrl = t.art,
+                        albumId = t.albumId,
+                        artistId = t.artistId,
+                        durationText = t.durationText,
+                        playedMs = t.ms,
+                        playCount = t.plays,
+                        lastPlayedMs = t.last,
+                    )
+                },
+            )
+            val skipLegacyWrite = db != null && com.music.vibe.data.db.LegacyDataMigrator.isV1MigrationDone
+            if (!skipLegacyWrite && this@ListeningStats::directory.isInitialized) {
+                directory.mkdirs()
+                val file = File(directory, "$key.json")
+                val temporary = File(directory, "$key.json.tmp")
+                temporary.writeText(encoded)
+                if (!temporary.renameTo(file)) {
+                    if (file.delete() && temporary.renameTo(file)) Unit else temporary.delete()
+                }
             }
             version++
         }.onFailure { Log.w(TAG, "Could not write listening bucket $key", it) }
@@ -304,17 +336,31 @@ object ListeningStats {
         }
     }
 
-    /** Every month with a file, oldest first. */
+    /** Every month with a record, oldest first. */
     fun months(): List<YearMonth> {
         if (!ready) return emptyList()
-        val files = directory.listFiles() ?: return emptyList()
-        return files.mapNotNull { file ->
-            file.name.removeSuffix(".json").takeIf { it != file.name }
-                ?.let { runCatching { YearMonth.parse(it) }.getOrNull() }
-        }.sorted()
+        val dbMonths = database?.listeningStatsDao?.listMonthKeys().orEmpty()
+            .mapNotNull { runCatching { YearMonth.parse(it) }.getOrNull() }
+        val fileMonths = if (this::directory.isInitialized) {
+            directory.listFiles()?.mapNotNull { file ->
+                file.name.removeSuffix(".json").takeIf { it != file.name }
+                    ?.let { runCatching { YearMonth.parse(it) }.getOrNull() }
+            }.orEmpty()
+        } else {
+            emptyList()
+        }
+        return (dbMonths + fileMonths).distinct().sorted()
     }
 
     private fun read(key: String): StoredBucket? {
+        val rawFromDb = database?.listeningStatsDao?.loadMonthBucketJson(key)
+        if (!rawFromDb.isNullOrBlank()) {
+            val parsed = runCatching { json.decodeFromString(StoredBucket.serializer(), rawFromDb) }
+                .onFailure { Log.w(TAG, "Discarding unreadable DB listening bucket $key", it) }
+                .getOrNull()
+            if (parsed != null) return parsed
+        }
+        if (!this::directory.isInitialized) return null
         val file = File(directory, "$key.json")
         if (!file.exists()) return null
         return runCatching { json.decodeFromString(StoredBucket.serializer(), file.readText()) }
@@ -336,7 +382,10 @@ object ListeningStats {
         val existing = months()
         if (existing.size > KEEP_MONTHS) {
             existing.take(existing.size - KEEP_MONTHS).forEach {
-                File(directory, "$it.json").delete()
+                database?.listeningStatsDao?.deleteMonthBucket(it.toString())
+                if (this::directory.isInitialized) {
+                    File(directory, "$it.json").delete()
+                }
             }
         }
         val bucket = open ?: return
@@ -399,16 +448,42 @@ object ListeningStats {
         synchronized(lock) {
             open = null
             dirty = false
-            directory.listFiles()?.forEach { it.delete() }
-            directory.mkdirs()
+            val db = database
+            db?.listeningStatsDao?.clearAllBuckets()
+            val skipLegacyWrite = db != null && com.music.vibe.data.db.LegacyDataMigrator.isV1MigrationDone
+            if (!skipLegacyWrite && this::directory.isInitialized) {
+                directory.listFiles()?.forEach { it.delete() }
+                directory.mkdirs()
+            }
             version++
             cached = null
             buckets.forEach { bucket ->
                 val key = runCatching { YearMonth.parse(bucket.month).toString() }.getOrNull()
                     ?: return@forEach
                 runCatching {
-                    File(directory, "$key.json")
-                        .writeText(json.encodeToString(StoredBucket.serializer(), bucket))
+                    val encoded = json.encodeToString(StoredBucket.serializer(), bucket)
+                    db?.listeningStatsDao?.saveMonthBucket(
+                        monthKey = key,
+                        bucketJson = encoded,
+                        tracks = bucket.tracks.map { t ->
+                            com.music.vibe.data.db.VibeDatabase.TrackStatRow(
+                                videoId = t.id,
+                                title = t.title,
+                                artist = t.artist,
+                                album = t.album,
+                                thumbnailUrl = t.art,
+                                albumId = t.albumId,
+                                artistId = t.artistId,
+                                durationText = t.durationText,
+                                playedMs = t.ms,
+                                playCount = t.plays,
+                                lastPlayedMs = t.last,
+                            )
+                        },
+                    )
+                    if (!skipLegacyWrite && this::directory.isInitialized) {
+                        File(directory, "$key.json").writeText(encoded)
+                    }
                 }.onFailure { Log.w(TAG, "Could not import bucket $key", it) }
             }
         }
@@ -671,6 +746,7 @@ data class TrackEntry(
     var albumId: String? = null,
     var artistId: String? = null,
     var art: String? = null,
+    var durationText: String? = null,
     var ms: Long = 0L,
     var plays: Int = 0,
     var last: Long = 0L,
@@ -683,6 +759,7 @@ data class TrackEntry(
         if (albumId == null) albumId = other.albumId
         if (artistId == null) artistId = other.artistId
         if (art == null) art = other.art
+        if (durationText == null) durationText = other.durationText
     }
 }
 

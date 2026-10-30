@@ -94,6 +94,65 @@ object LocalPlaylistStore {
         return _playlists.value.firstOrNull { it.id == cleanId || it.id == id || it.browseId == id }
     }
 
+    fun isLocalPlaylist(browseId: String?): Boolean {
+        if (browseId.isNullOrBlank()) return false
+        return browseId.startsWith("local:playlist:") || browseId.startsWith("sp_local_") || getPlaylist(browseId) != null
+    }
+
+    /**
+     * Appends [newSongs] to the local playlist identified by [id], deduplicating by [Song.videoId].
+     * Returns `(addedCount, skippedDuplicateCount)`.
+     */
+    fun addSongsToPlaylist(id: String, newSongs: List<Song>): Pair<Int, Int> {
+        val cleanId = id.removePrefix("local:playlist:").removePrefix("VL")
+        val target = _playlists.value.firstOrNull { it.id == cleanId || it.id == id || it.browseId == id }
+            ?: return 0 to 0
+        val existingIds = target.songs.mapTo(HashSet()) { it.videoId }
+        val toAdd = mutableListOf<Song>()
+        var duplicates = 0
+        for (song in newSongs) {
+            if (existingIds.add(song.videoId)) {
+                toAdd.add(song)
+            } else {
+                duplicates++
+            }
+        }
+        if (toAdd.isNotEmpty()) {
+            val updated = _playlists.value.map {
+                if (it.id == target.id) it.copy(songs = it.songs + toAdd) else it
+            }
+            _playlists.value = updated
+            persist(updated)
+        }
+        return toAdd.size to duplicates
+    }
+
+    /**
+     * Removes songs from the local playlist identified by [id].
+     * When [indicesToRemove] is non-empty, removes those exact indices; otherwise removes all matching [videoIds].
+     */
+    fun removeSongsFromPlaylist(
+        id: String,
+        videoIds: Set<String>,
+        indicesToRemove: Set<Int> = emptySet(),
+    ): LocalPlaylist? {
+        val cleanId = id.removePrefix("local:playlist:").removePrefix("VL")
+        val target = _playlists.value.firstOrNull { it.id == cleanId || it.id == id || it.browseId == id }
+            ?: return null
+        val remaining = if (indicesToRemove.isNotEmpty()) {
+            target.songs.filterIndexed { index, _ -> index !in indicesToRemove }
+        } else {
+            target.songs.filterNot { it.videoId in videoIds }
+        }
+        val updatedPlaylist = target.copy(songs = remaining)
+        val updated = _playlists.value.map {
+            if (it.id == target.id) updatedPlaylist else it
+        }
+        _playlists.value = updated
+        persist(updated)
+        return updatedPlaylist
+    }
+
     private fun persist(list: List<LocalPlaylist>) {
         if (!this::prefs.isInitialized) return
         runCatching {

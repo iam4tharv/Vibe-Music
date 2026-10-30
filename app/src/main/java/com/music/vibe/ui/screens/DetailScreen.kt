@@ -48,6 +48,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
+import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.ui.graphics.luminance
 import com.music.vibe.data.model.LibraryState
 import androidx.compose.material.icons.rounded.Close
@@ -57,20 +61,27 @@ import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.StarBorder
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.draw.clip
@@ -132,6 +143,7 @@ import com.music.vibe.data.model.artworkAt
 import com.music.vibe.data.model.durationMillis
 import com.music.vibe.data.model.isSameTrackAs
 import com.music.vibe.data.settings.AppSettings
+import com.music.vibe.download.Downloads
 import com.music.vibe.ui.components.DownloadedBadge
 import com.music.vibe.ui.components.ExplicitSongTitle
 import com.music.vibe.ui.components.LIBRARY_GRID_SPACING
@@ -157,6 +169,11 @@ import com.music.vibe.ui.theme.ArtworkPalette
 import com.music.vibe.ui.theme.rememberArtworkPalette
 import kotlin.math.roundToInt
 import java.util.Locale
+
+private val StringSetSaver: Saver<Set<String>, ArrayList<String>> = Saver(
+    save = { ArrayList(it) },
+    restore = { it.toSet() },
+)
 
 private const val MAX_ARTIST_SONGS = 20
 private const val SONGS_PER_COLUMN = 4
@@ -293,9 +310,55 @@ fun DetailScreen(
      * photo, not in this header.
      */
     songSort: SongSort = SongSort.DEFAULT,
+    onBatchAddToQueue: ((List<Song>) -> Unit)? = null,
+    onBatchAddToPlaylist: ((List<Song>) -> Unit)? = null,
+    onBatchDownload: ((List<Song>) -> Unit)? = null,
+    onBatchRemove: ((List<Song>, Set<Int>) -> Unit)? = null,
+    selectionTriggerSong: Song? = null,
+    selectionTriggerPage: Boolean = false,
+    onSelectionTriggerHandled: () -> Unit = {},
 ) {
     val rawSongs = (page.songs as? UiState.Success)?.data.orEmpty()
     val songs = remember(rawSongs, songSort) { rawSongs.sortedForDetail(songSort) }
+    val hasDuplicateVideoIds = remember(songs) {
+        val seen = HashSet<String>(songs.size)
+        songs.any { !seen.add(it.videoId) }
+    }
+    fun rowSelectionKey(index: Int, song: Song): String =
+        rowSelectionKey(index = index, song = song, hasDuplicateVideoIds = hasDuplicateVideoIds)
+
+    var isSelectionMode by rememberSaveable(page.browseId) { mutableStateOf(false) }
+    var selectedRowKeys by rememberSaveable(page.browseId, stateSaver = StringSetSaver) {
+        mutableStateOf(emptySet())
+    }
+    var showDeleteDownloadsConfirm by rememberSaveable(page.browseId) { mutableStateOf(false) }
+
+    LaunchedEffect(selectionTriggerPage, selectionTriggerSong, songs) {
+        if (selectionTriggerPage) {
+            isSelectionMode = true
+            onSelectionTriggerHandled()
+        } else if (selectionTriggerSong != null && songs.isNotEmpty()) {
+            isSelectionMode = true
+            val matchIndex = songs.indexOfFirst {
+                if (!selectionTriggerSong.setVideoId.isNullOrBlank()) {
+                    it.setVideoId == selectionTriggerSong.setVideoId
+                } else {
+                    it.videoId == selectionTriggerSong.videoId
+                }
+            }
+            if (matchIndex >= 0) {
+                selectedRowKeys = selectedRowKeys + rowSelectionKey(matchIndex, songs[matchIndex])
+            }
+            onSelectionTriggerHandled()
+        }
+    }
+
+    val exitSelectionMode = {
+        isSelectionMode = false
+        selectedRowKeys = emptySet()
+    }
+    BackHandler(enabled = isSelectionMode) { exitSelectionMode() }
+
     // What a numbered row shows regardless of [songSort] — an album's track
     // numbers are the sleeve's own and must not relabel themselves to match
     // wherever a sort put the row.
@@ -357,6 +420,23 @@ fun DetailScreen(
         page.suggestedSongs.matching(query).map { it.value }
     }
 
+    val selectedEntries = remember(songs, selectedRowKeys, hasDuplicateVideoIds) {
+        songs.withIndex().filter { (idx, s) -> rowSelectionKey(idx, s) in selectedRowKeys }
+    }
+    val selectedSongs = remember(selectedEntries) { selectedEntries.map { it.value } }
+    val selectedIndices = remember(selectedEntries) { selectedEntries.mapTo(linkedSetOf()) { it.index } }
+    val allRowKeys = remember(matches, hasDuplicateVideoIds) {
+        matches.mapTo(linkedSetOf()) { (idx, s) -> rowSelectionKey(idx, s) }
+    }
+    val allVisibleSelected = allRowKeys.isNotEmpty() && selectedRowKeys.containsAll(allRowKeys)
+    val savedDownloads by Downloads.saved.collectAsStateWithLifecycle()
+    val isDownloadedCollectionPage = remember(page.browseId) {
+        page.browseId == "local:downloads" || Downloads.recordIdOf(page.browseId) != null
+    }
+    val downloadableSongs = remember(selectedSongs, savedDownloads) {
+        selectedSongs.filter { it.videoId !in savedDownloads }
+    }
+
     // What marks a row as already downloaded, tinted from the sleeve like the
     // rest of the page. Null on any page that is itself a reading of this
     // device — the Downloads folder, one downloaded playlist — where every row
@@ -401,6 +481,42 @@ fun DetailScreen(
         if (searching) listState.animateScrollToItem(SEARCH_ITEM_INDEX, -searchStop)
     }
 
+    if (showDeleteDownloadsConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDownloadsConfirm = false },
+            title = { Text(stringResource(R.string.confirm_delete_downloads_title)) },
+            text = {
+                Text(
+                    pluralStringResource(
+                        R.plurals.confirm_delete_downloads_body,
+                        selectedSongs.size,
+                        selectedSongs.size,
+                    ),
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val toRemove = selectedSongs
+                        val indices = selectedIndices
+                        showDeleteDownloadsConfirm = false
+                        exitSelectionMode()
+                        onBatchRemove?.invoke(toRemove, indices)
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                    modifier = Modifier.testTag("confirm_delete_downloads_button"),
+                ) {
+                    Text(stringResource(R.string.delete))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDownloadsConfirm = false }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            },
+        )
+    }
+
     AnimatedContent(
         targetState = activeShelf,
         transitionSpec = {
@@ -442,7 +558,10 @@ fun DetailScreen(
                     modifier = Modifier.fillMaxSize(),
                     // Both artist photos and release artwork run edge-to-edge up under
                     // the glass bar — the image is the top of the page, not a card on it.
-                    contentPadding = PaddingValues(bottom = contentPadding.calculateBottomPadding()),
+                    contentPadding = PaddingValues(
+                        bottom = contentPadding.calculateBottomPadding() +
+                            if (isSelectionMode && !isArtist) 76.dp else 0.dp,
+                    ),
                 ) {
             item(key = "header") {
                 if (isArtist) {
@@ -465,9 +584,35 @@ fun DetailScreen(
                                 focusSearch = true
                             }
                         },
+                        isSelectionMode = isSelectionMode,
+                        onToggleSelectionMode = {
+                            if (isSelectionMode) {
+                                exitSelectionMode()
+                            } else {
+                                isSelectionMode = true
+                            }
+                        },
                         onMore = onMore,
                         onArtistClick = onArtistClick,
                         onToggleLibrary = onToggleLibrary,
+                    )
+                }
+            }
+
+            if (isSelectionMode && !isArtist) {
+                item(key = "selection_bar") {
+                    DetailSelectionHeaderBar(
+                        selectedCount = selectedSongs.size,
+                        allSelected = allVisibleSelected,
+                        onToggleSelectAll = {
+                            selectedRowKeys = if (allVisibleSelected) {
+                                selectedRowKeys - allRowKeys
+                            } else {
+                                selectedRowKeys + allRowKeys
+                            }
+                        },
+                        onCancel = exitSelectionMode,
+                        palette = palette,
                     )
                 }
             }
@@ -613,6 +758,8 @@ fun DetailScreen(
                         contentType = { _, _ -> "detail_song_row" },
                     ) { position, entry ->
                         val song = entry.value
+                        val rowKey = rowSelectionKey(entry.index, song)
+                        val isRowSelected = isSelectionMode && rowKey in selectedRowKeys
                         val isCurrent = song.isSameTrackAs(currentSong)
                         SongRow(
                             song = if (numbered) {
@@ -620,10 +767,30 @@ fun DetailScreen(
                             } else {
                                 song.copy(thumbnailUrl = song.thumbnailUrl ?: page.thumbnailUrl)
                             },
+                            selected = isRowSelected,
                             onClick = {
-                                onSongClick(queue, position)
+                                if (isSelectionMode) {
+                                    selectedRowKeys = if (rowKey in selectedRowKeys) {
+                                        selectedRowKeys - rowKey
+                                    } else {
+                                        selectedRowKeys + rowKey
+                                    }
+                                } else {
+                                    onSongClick(queue, position)
+                                }
                             },
-                            onLongPress = { onSongLongPress(song) },
+                            onLongPress = {
+                                if (isSelectionMode) {
+                                    selectedRowKeys = if (rowKey in selectedRowKeys) {
+                                        selectedRowKeys - rowKey
+                                    } else {
+                                        selectedRowKeys + rowKey
+                                    }
+                                } else {
+                                    onSongLongPress(song)
+                                }
+                            },
+                            onMore = if (isSelectionMode) { { onSongLongPress(song) } } else null,
                             onSwipeToQueue = { onSongSwipe(song) },
                             rowBackground = Color.Transparent,
                             // The track's place on the release, not its place in
@@ -719,6 +886,56 @@ fun DetailScreen(
             if (isArtist) aboutItem()
         }
 
+                if (isSelectionMode && !isArtist) {
+                    DetailBatchActionBar(
+                        selectedCount = selectedSongs.size,
+                        canDownload = !isDownloadedCollectionPage && onBatchDownload != null && downloadableSongs.isNotEmpty(),
+                        showDownload = !isDownloadedCollectionPage && onBatchDownload != null,
+                        showRemove = onBatchRemove != null,
+                        removeIsDeleteFile = isDownloadedCollectionPage,
+                        onQueue = {
+                            if (selectedSongs.isNotEmpty()) {
+                                val chosen = selectedSongs
+                                exitSelectionMode()
+                                onBatchAddToQueue?.invoke(chosen)
+                            }
+                        },
+                        onPlaylist = {
+                            if (selectedSongs.isNotEmpty()) {
+                                val chosen = selectedSongs
+                                exitSelectionMode()
+                                onBatchAddToPlaylist?.invoke(chosen)
+                            }
+                        },
+                        onDownload = {
+                            if (downloadableSongs.isNotEmpty()) {
+                                val chosen = downloadableSongs
+                                exitSelectionMode()
+                                onBatchDownload?.invoke(chosen)
+                            }
+                        },
+                        onRemove = {
+                            if (selectedSongs.isNotEmpty()) {
+                                if (isDownloadedCollectionPage) {
+                                    showDeleteDownloadsConfirm = true
+                                } else {
+                                    val chosen = selectedSongs
+                                    val indices = selectedIndices
+                                    exitSelectionMode()
+                                    onBatchRemove?.invoke(chosen, indices)
+                                }
+                            }
+                        },
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(
+                                start = PAGE_GUTTER,
+                                end = PAGE_GUTTER,
+                                bottom = contentPadding.calculateBottomPadding() + 8.dp,
+                            ),
+                    )
+                }
+
     }
 } else {
     ArtistShelfGridPage(
@@ -730,6 +947,136 @@ fun DetailScreen(
     )
 }
 }
+}
+
+@Composable
+private fun DetailSelectionHeaderBar(
+    selectedCount: Int,
+    allSelected: Boolean,
+    onToggleSelectAll: () -> Unit,
+    onCancel: () -> Unit,
+    palette: ArtworkPalette,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = HEADER_GUTTER, vertical = 6.dp)
+            .height(44.dp)
+            .clip(PILL_SHAPE)
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.72f))
+            .border(0.5.dp, Color.White.copy(alpha = 0.12f), PILL_SHAPE)
+            .padding(horizontal = 8.dp)
+            .testTag("detail_selection_bar"),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        TextButton(
+            onClick = onToggleSelectAll,
+            modifier = Modifier.testTag("batch_select_all_button"),
+        ) {
+            Text(
+                text = stringResource(if (allSelected) R.string.deselect_all else R.string.select_all),
+                color = palette.accent,
+            )
+        }
+        Text(
+            text = stringResource(R.string.selected_count, selectedCount),
+            style = MaterialTheme.typography.titleSmall,
+            color = palette.onBackground,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.weight(1f),
+        )
+        TextButton(
+            onClick = onCancel,
+            modifier = Modifier.testTag("batch_cancel_button"),
+        ) {
+            Text(
+                text = stringResource(R.string.cancel),
+                color = palette.onBackgroundVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun DetailBatchActionBar(
+    selectedCount: Int,
+    canDownload: Boolean,
+    showDownload: Boolean,
+    showRemove: Boolean,
+    removeIsDeleteFile: Boolean,
+    onQueue: () -> Unit,
+    onPlaylist: () -> Unit,
+    onDownload: () -> Unit,
+    onRemove: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.96f),
+        tonalElevation = 6.dp,
+        shadowElevation = 8.dp,
+        modifier = modifier
+            .fillMaxWidth()
+            .testTag("detail_batch_action_bar"),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            TextButton(
+                onClick = onQueue,
+                enabled = selectedCount > 0,
+                modifier = Modifier.testTag("batch_queue_button"),
+            ) {
+                Icon(Icons.AutoMirrored.Rounded.QueueMusic, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(4.dp))
+                Text(stringResource(R.string.batch_queue), maxLines = 1)
+            }
+            TextButton(
+                onClick = onPlaylist,
+                enabled = selectedCount > 0,
+                modifier = Modifier.testTag("batch_playlist_button"),
+            ) {
+                Icon(Icons.AutoMirrored.Rounded.PlaylistAdd, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(4.dp))
+                Text(stringResource(R.string.batch_playlist), maxLines = 1)
+            }
+            if (showDownload) {
+                TextButton(
+                    onClick = onDownload,
+                    enabled = selectedCount > 0 && canDownload,
+                    modifier = Modifier.testTag("batch_download_button"),
+                ) {
+                    Icon(Icons.Rounded.Download, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text(stringResource(R.string.batch_download), maxLines = 1)
+                }
+            }
+            if (showRemove) {
+                TextButton(
+                    onClick = onRemove,
+                    enabled = selectedCount > 0,
+                    modifier = Modifier.testTag("batch_remove_button"),
+                ) {
+                    Icon(
+                        Icons.Rounded.Delete,
+                        contentDescription = null,
+                        tint = if (selectedCount > 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        text = stringResource(if (removeIsDeleteFile) R.string.delete else R.string.batch_remove),
+                        color = if (selectedCount > 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                    )
+                }
+            }
+        }
+    }
 }
 
 /**
@@ -752,6 +1099,8 @@ private fun ReleaseHeader(
     onShuffle: () -> Unit,
     searching: Boolean,
     onSearch: () -> Unit,
+    isSelectionMode: Boolean,
+    onToggleSelectionMode: () -> Unit,
     onMore: ((List<Song>) -> Unit)?,
     onArtistClick: (String, String) -> Unit,
     onToggleLibrary: (() -> Unit)?,
@@ -831,9 +1180,9 @@ private fun ReleaseHeader(
                 // All release actions are circles. On a 360dp screen a full
                 // five-control row comes down 4dp so it stays inside the shared
                 // header gutter instead of running off the edge.
-                val circles = listOfNotNull(library, onMore).size + 2 // + Shuffle, Search
-                val full = circles >= 4
-                val circleSize = if (full) 46.dp else 50.dp
+                val circles = listOfNotNull(library, onMore).size + 3 // + Shuffle, Search, Select
+                val full = circles >= 5
+                val circleSize = if (full) 44.dp else 48.dp
                 Spacer(Modifier.height(14.dp))
                 Row(
                     modifier = Modifier
@@ -887,6 +1236,16 @@ private fun ReleaseHeader(
                         palette = palette,
                         onClick = onSearch,
                         size = circleSize,
+                    )
+                    CircleIconButton(
+                        icon = if (isSelectionMode) Icons.Rounded.Close else Icons.Rounded.Check,
+                        contentDescription = stringResource(
+                            if (isSelectionMode) R.string.cancel else R.string.select_tracks,
+                        ),
+                        palette = palette,
+                        onClick = onToggleSelectionMode,
+                        size = circleSize,
+                        modifier = Modifier.testTag("detail_select_button"),
                     )
                     onMore?.let { more ->
                         CircleIconButton(
@@ -1423,10 +1782,11 @@ private fun CircleIconButton(
     size: Dp = 50.dp,
     /** Whiter veil in place of the dark glass — the artist page's Apple look. */
     lightFill: Boolean = false,
+    modifier: Modifier = Modifier,
 ) {
     val haptics = rememberHaptics()
     Box(
-        modifier = Modifier
+        modifier = modifier
             .size(size)
             .then(
                 if (lightFill) {
@@ -2018,3 +2378,14 @@ private fun List<Song>.playtime(): String? {
         else -> stringResource(R.string.hours_minutes_short, (minutes / 60).toInt(), (minutes % 60).toInt())
     }
 }
+
+internal fun rowSelectionKey(
+    index: Int,
+    song: Song,
+    hasDuplicateVideoIds: Boolean,
+): String = when {
+    !song.setVideoId.isNullOrBlank() -> "set:${song.setVideoId}"
+    !hasDuplicateVideoIds -> "vid:${song.videoId}"
+    else -> "idx:$index:${song.videoId}"
+}
+

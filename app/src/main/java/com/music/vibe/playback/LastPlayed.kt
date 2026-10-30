@@ -2,208 +2,204 @@ package com.music.vibe.playback
 
 import android.content.Context
 import android.content.SharedPreferences
+import androidx.media3.common.Player
+import com.music.vibe.data.db.LegacyDataMigrator
+import com.music.vibe.data.db.VibeDatabase
 import com.music.vibe.data.model.Song
+import com.music.vibe.data.model.SongJsonCodec
+import com.music.vibe.data.runCatchingLogged
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 
 /**
- * A bounded queue snapshot for restoring playback after process death.
+ * The queue as it stood when the app last stopped playing, and where in it the
+ * playhead was.
  *
- * Queue contents are serialized only when Media3 reports that the playlist
- * changed. The frequently changing index and position are stored separately as
- * primitives, so progress sampling never walks or serializes the song list.
+ * Backed by [VibeDatabase] (`queue_snapshots` + `queue_items`) using canonical
+ * [SongJsonCodec] serialization so every [Song] property is preserved across
+ * restarts without rewriting an entire SharedPreferences XML blob on every
+ * playhead tick.
  */
 object LastPlayed {
 
-    class Snapshot(val songs: List<Song>, val index: Int, val positionMs: Long)
+    private const val TAG = "LastPlayed"
+    private const val SNAPSHOT_KEY = LegacyDataMigrator.SNAPSHOT_LAST_PLAYED
 
-    private lateinit var prefs: SharedPreferences
-    private val json = Json { ignoreUnknownKeys = true }
+    /** Maximum number of tracks persisted around the playhead for cold-start resume. */
+    private const val MAX_PERSISTED_QUEUE_ITEMS = 200
+    private const val BACK_WINDOW_ITEMS = 50
+
+    data class Queue(val songs: List<Song>, val index: Int, val positionMs: Long = 0L)
+
+    @Volatile
+    private var database: VibeDatabase? = null
+
+    @Volatile
+    private var testPrefs: SharedPreferences? = null
 
     fun init(context: Context) {
-        prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val appContext = context.applicationContext
+        val db = VibeDatabase.getInstance(appContext)
+        database = db
+        testPrefs = null
     }
 
-    internal fun window(size: Int, index: Int): IntRange {
-        if (size <= 0) return IntRange.EMPTY
-        val safeIndex = index.coerceIn(0, size - 1)
-        val start = (safeIndex - MAX_QUEUE_HISTORY).coerceAtLeast(0)
-        return start until (safeIndex + 1 + KEEP_AHEAD).coerceAtMost(size)
+    internal fun initForTesting(prefs: SharedPreferences, db: VibeDatabase? = null) {
+        testPrefs = prefs
+        database = db
     }
 
-    /** Persist at most 25 previous entries, the current one, and 50 upcoming entries. */
-    fun saveQueue(songs: List<Song>, index: Int) {
-        if (songs.isEmpty()) {
-            clear()
-            return
-        }
-        val safeIndex = index.coerceIn(songs.indices)
-        val bounds = window(songs.size, safeIndex)
-        val stored = StoredQueue(
-            tracks = songs.subList(bounds.first, bounds.last + 1).map { StoredTrack.from(it) },
-        )
-        val encoded = runCatching {
-            json.encodeToString(StoredQueue.serializer(), stored)
-        }.getOrNull() ?: return
-        prefs.edit()
-            .putString(KEY_QUEUE, encoded)
-            .putInt(KEY_INDEX, safeIndex - bounds.first)
-            .apply()
+    internal fun initForTesting(db: VibeDatabase) {
+        database = db
+        testPrefs = null
     }
 
     /**
-     * Atomically replaces the restart snapshot and waits until it reaches disk.
-     * Used at an explicit queue boundary, where restoring the queue from before
-     * that boundary would be worse than the small cost of a synchronous write.
+     * Bounded window around [currentIndex] so huge queues do not serialize thousands
+     * of tracks on every queue change.
      */
-    fun saveQueueImmediately(songs: List<Song>, index: Int, positionMs: Long) {
-        if (songs.isEmpty()) {
+    fun window(count: Int, currentIndex: Int): IntRange {
+        if (count <= 0) return IntRange.EMPTY
+        if (count <= MAX_PERSISTED_QUEUE_ITEMS) return 0 until count
+        val safeCurrent = currentIndex.coerceIn(0, count - 1)
+        val start = (safeCurrent - BACK_WINDOW_ITEMS)
+            .coerceAtMost(count - MAX_PERSISTED_QUEUE_ITEMS)
+            .coerceAtLeast(0)
+        val endExclusive = (start + MAX_PERSISTED_QUEUE_ITEMS).coerceAtMost(count)
+        return start until endExclusive
+    }
+
+    fun saveQueue(songs: List<Song>, index: Int) {
+        val currentPos = load()?.positionMs ?: 0L
+        saveQueueImmediately(songs = songs, index = index, positionMs = currentPos)
+    }
+
+    fun saveQueueImmediately(songs: List<Song>, index: Int, positionMs: Long = 0L) {
+        val db = database
+        val prefs = testPrefs
+        if (db == null && prefs == null) return
+        val kept = songs.mapIndexedNotNull { idx, song ->
+            if (song.isDeviceFile()) null else (idx to song)
+        }
+        if (kept.isEmpty()) {
             clearImmediately()
             return
         }
-        val safeIndex = index.coerceIn(songs.indices)
-        val bounds = window(songs.size, safeIndex)
-        val stored = StoredQueue(
-            tracks = songs.subList(bounds.first, bounds.last + 1).map { StoredTrack.from(it) },
-        )
-        val encoded = runCatching {
-            json.encodeToString(StoredQueue.serializer(), stored)
-        }.getOrNull() ?: return
-        prefs.edit()
-            .putString(KEY_QUEUE, encoded)
-            .putInt(KEY_INDEX, safeIndex - bounds.first)
-            .putLong(KEY_POSITION, positionMs.coerceAtLeast(0L))
-            .commit()
+        val safeTarget = index.coerceIn(0, (songs.size - 1).coerceAtLeast(0))
+        val savedIndex = kept.indexOfFirst { (originalIndex, _) -> originalIndex >= safeTarget }
+            .let { if (it >= 0) it else kept.lastIndex }
+        val filteredSongs = kept.map { (_, song) -> song }
+        val safePos = positionMs.coerceAtLeast(0L)
+
+        if (db != null) {
+            db.queueSnapshotDao.saveSnapshot(
+                snapshotKey = SNAPSHOT_KEY,
+                songs = filteredSongs,
+                currentIndex = savedIndex,
+                positionMs = safePos,
+                wasPlaying = false,
+            )
+        } else if (prefs != null) {
+            val encoded = runCatchingLogged(TAG, "encodeTestSnapshot") {
+                SongJsonCodec.json.encodeToString(
+                    TestStoredSnapshot.serializer(),
+                    TestStoredSnapshot(songs = filteredSongs, index = savedIndex, positionMs = safePos),
+                )
+            }.getOrNull() ?: return
+            prefs.edit().putString(KEY_QUEUE, encoded).commit()
+        }
     }
 
-    /** Update only cheap scalar state; this performs no queue conversion or JSON work. */
     fun savePlaybackState(index: Int, positionMs: Long) {
-        if (!prefs.contains(KEY_QUEUE)) return
-        prefs.edit()
-            .putInt(KEY_INDEX, index.coerceAtLeast(0))
-            .putLong(KEY_POSITION, positionMs.coerceAtLeast(0L))
-            .apply()
+        updatePlayhead(currentIndex = index.coerceAtLeast(0), positionMs = positionMs.coerceAtLeast(0L))
     }
 
-    fun load(): Snapshot? {
-        val raw = prefs.getString(KEY_QUEUE, null) ?: return null
-        val stored = runCatching { json.decodeFromString<StoredQueue>(raw) }.getOrNull()
-            ?: return null
-        if (stored.tracks.isEmpty()) return null
-        val songs = stored.tracks.map(StoredTrack::toSong)
-        val index = if (prefs.contains(KEY_INDEX)) {
-            prefs.getInt(KEY_INDEX, 0)
-        } else {
-            stored.legacyIndex ?: 0
+    fun save(player: Player) {
+        if (player.mediaItemCount == 0) return
+        val songs = (0 until player.mediaItemCount).map { idx ->
+            player.getMediaItemAt(idx).toSong()
         }
-        val positionMs = if (prefs.contains(KEY_POSITION)) {
-            prefs.getLong(KEY_POSITION, 0L)
-        } else {
-            stored.legacyPositionMs ?: 0L
-        }
-        return Snapshot(
+        saveQueueImmediately(
             songs = songs,
-            index = index.coerceIn(songs.indices),
+            index = player.currentMediaItemIndex,
+            positionMs = player.currentPosition,
+        )
+    }
+
+    /**
+     * Fast path for periodic playhead updates when the queue items themselves
+     * have not changed. Updates only the snapshot header row in SQLite.
+     */
+    fun updatePlayhead(currentIndex: Int, positionMs: Long) {
+        val db = database
+        if (db != null) {
+            db.queueSnapshotDao.updatePlayhead(SNAPSHOT_KEY, currentIndex, positionMs)
+            return
+        }
+        val prefs = testPrefs ?: return
+        val existing = load() ?: return
+        val updated = TestStoredSnapshot(
+            songs = existing.songs,
+            index = currentIndex.coerceIn(existing.songs.indices),
             positionMs = positionMs.coerceAtLeast(0L),
         )
+        val encoded = runCatchingLogged(TAG, "encodeTestPlayhead") {
+            SongJsonCodec.json.encodeToString(TestStoredSnapshot.serializer(), updated)
+        }.getOrNull() ?: return
+        prefs.edit().putString(KEY_QUEUE, encoded).apply()
     }
 
     fun clear() {
-        prefs.edit().clear().apply()
+        clearImmediately()
     }
 
-    /** Remove a stale queue before another one is installed. */
     fun clearImmediately() {
-        prefs.edit().clear().commit()
+        database?.queueSnapshotDao?.deleteSnapshot(SNAPSHOT_KEY)
+        testPrefs?.edit()?.remove(KEY_QUEUE)?.commit()
+    }
+
+    fun load(): Queue? {
+        val db = database
+        if (db != null) {
+            val snap = db.queueSnapshotDao.loadSnapshot(SNAPSHOT_KEY) ?: return null
+            if (snap.songs.isEmpty()) return null
+            return Queue(
+                songs = snap.songs,
+                index = snap.index.coerceIn(snap.songs.indices),
+                positionMs = snap.positionMs.coerceAtLeast(0L),
+            )
+        }
+        val prefs = testPrefs ?: return null
+        val raw = prefs.getString(KEY_QUEUE, null) ?: return null
+        val stored = runCatchingLogged(TAG, "decodeTestSnapshot") {
+            SongJsonCodec.json.decodeFromString(TestStoredSnapshot.serializer(), raw)
+        }.getOrNull() ?: runCatchingLogged(TAG, "decodeLegacySnapshot") {
+            SongJsonCodec.json.decodeFromString(LegacyDataMigrator.LegacyStoredQueue.serializer(), raw)
+                .let { legacy ->
+                    val tracks = legacy.tracks.ifEmpty { legacy.songs }
+                    TestStoredSnapshot(
+                        songs = tracks.map { it.toSong() },
+                        index = legacy.index,
+                        positionMs = legacy.positionMs,
+                    )
+                }
+        }.getOrNull() ?: return null
+        if (stored.songs.isEmpty()) return null
+        return Queue(
+            songs = stored.songs,
+            index = stored.index.coerceIn(stored.songs.indices),
+            positionMs = stored.positionMs.coerceAtLeast(0L),
+        )
     }
 
     @Serializable
-    private data class StoredQueue(
-        val tracks: List<StoredTrack>,
-        /** Compatibility with queue snapshots written before scalar state was separated. */
-        val index: Int? = null,
-        /** Compatibility with queue snapshots written before scalar state was separated. */
-        val positionMs: Long? = null,
-    ) {
-        val legacyIndex: Int? get() = index
-        val legacyPositionMs: Long? get() = positionMs
-    }
+    private data class TestStoredSnapshot(
+        val songs: List<Song>,
+        val index: Int = 0,
+        val positionMs: Long = 0L,
+    )
 
-    @Serializable
-    private data class StoredTrack(
-        val id: String,
-        val title: String,
-        val artist: String,
-        val artwork: String? = null,
-        val auto: Boolean = false,
-        val tier: String? = null,
-        val entryId: String? = null,
-        val local: String? = null,
-        val path: String? = null,
-        val duration: String? = null,
-        val album: String? = null,
-        val explicit: Boolean? = null,
-        val video: Boolean = false,
-        val radio: String? = null,
-        val source: String? = null,
-        val sourceType: String? = null,
-        val sourceId: String? = null,
-    ) {
-        fun toSong(): Song {
-            val resolvedTier = when (tier) {
-                "USER_QUEUE" -> com.music.vibe.data.model.QueueTier.USER_QUEUE
-                "CONTEXT" -> com.music.vibe.data.model.QueueTier.CONTEXT
-                "AUTOPLAY" -> com.music.vibe.data.model.QueueTier.AUTOPLAY
-                else -> if (auto) com.music.vibe.data.model.QueueTier.AUTOPLAY else com.music.vibe.data.model.QueueTier.CONTEXT
-            }
-            return Song(
-                videoId = id,
-                title = title,
-                artist = artist,
-                thumbnailUrl = artwork,
-                durationText = duration,
-                albumName = album,
-                isExplicit = explicit,
-                isVideo = video,
-                queueTier = resolvedTier,
-                queueEntryId = entryId,
-                radioName = radio,
-                playbackSource = source,
-                playbackSourceType = sourceType?.let {
-                    runCatching { com.music.vibe.data.model.PlaybackSourceType.valueOf(it) }.getOrNull()
-                },
-                playbackSourceId = sourceId,
-                localUri = local,
-                localPath = path,
-            )
-        }
+    private fun Song.isDeviceFile(): Boolean =
+        videoId.startsWith("content://") || videoId.startsWith("file://")
 
-        companion object {
-            fun from(song: Song) = StoredTrack(
-                id = song.videoId,
-                title = song.title,
-                artist = song.artist,
-                artwork = song.thumbnailUrl,
-                auto = song.fromAutoplay,
-                tier = song.queueTier.name,
-                entryId = song.queueEntryId,
-                local = song.localUri,
-                path = song.localPath,
-                duration = song.durationText,
-                album = song.albumName,
-                explicit = song.isExplicit,
-                video = song.isVideo,
-                radio = song.radioName,
-                source = song.playbackSource,
-                sourceType = song.playbackSourceType?.name,
-                sourceId = song.playbackSourceId,
-            )
-        }
-    }
-
-    private const val KEEP_AHEAD = 50
-    private const val PREFS_NAME = "vibemusic_last_played"
     private const val KEY_QUEUE = "queue"
-    private const val KEY_INDEX = "index"
-    private const val KEY_POSITION = "position"
 }

@@ -160,6 +160,12 @@ import com.music.vibe.data.settings.LibrarySort
 import com.music.vibe.data.settings.ThemeMode
 import com.music.vibe.ui.components.AccountProfileSelector
 import com.music.vibe.ui.components.SpotifyImportAlert
+import com.music.vibe.ui.components.SpotifyImportBanner
+import com.music.vibe.data.spotify.SpotifyImportManager
+import com.music.vibe.data.spotify.SpotifyImportState
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.music.vibe.ui.screens.AccountAndScrobblingScreen
 import com.music.vibe.ui.screens.DiscordDialog
 import com.music.vibe.ui.screens.DiscordDialogHost
@@ -345,6 +351,12 @@ internal fun shouldSkipAfterDislike(
 
 
 class MainActivity : ComponentActivity() {
+    override fun onStart() {
+        super.onStart()
+        DownloadStore.markSafIndexDirty()
+        Downloads.scheduleFolderValidation(applicationContext, allowReset = true)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -356,6 +368,7 @@ class MainActivity : ComponentActivity() {
         MusicLink.consume(intent)
         com.music.vibe.data.firebase.FirebaseAuthManager.init(applicationContext)
         com.music.vibe.data.firebase.FirebaseAnalyticsManager.init(applicationContext)
+        SpotifyImportManager.init(applicationContext)
         com.music.vibe.playback.audio.aaudio.AAudioDirectEngine.queryHardwareParams(applicationContext)
         com.music.vibe.playback.audio.AudioNativeBridge.queryHardwareParams(applicationContext)
         setContent {
@@ -652,6 +665,9 @@ private fun VibeMusicApp(
     // Separate from [songActions] so the menu can close behind it — the picker
     // is the next step, not a second sheet stacked on the first.
     var playlistTarget by remember { mutableStateOf<Song?>(null) }
+    var batchPlaylistTarget by remember { mutableStateOf<List<Song>?>(null) }
+    var selectionTriggerSong by remember { mutableStateOf<Song?>(null) }
+    var selectionTriggerPage by remember { mutableStateOf(false) }
     // The picker opened from the Library tab, where there is no track and
     // creating the playlist is the whole errand.
     var creatingPlaylist by remember { mutableStateOf(false) }
@@ -802,6 +818,18 @@ private fun VibeMusicApp(
     val qualityUpgradesInFlight by NerdStats.racingLossless.collectAsStateWithLifecycle()
     val playlists by viewModel.playlists.collectAsStateWithLifecycle()
     val playlistsLoading by viewModel.playlistsLoading.collectAsStateWithLifecycle()
+    val smartMixes by viewModel.smartMixes.collectAsStateWithLifecycle()
+    val spotifyImportState by SpotifyImportManager.state.collectAsStateWithLifecycle()
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                viewModel.refreshSmartMixes()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     // Settings has no tab of its own — it sits on top of whatever tab was
     // selected. A pushed album/artist page (from the player, search, etc.)
@@ -909,6 +937,44 @@ private fun VibeMusicApp(
         val shown = queueNotice ?: return@LaunchedEffect
         delay(3_000)
         if (queueNotice?.id == shown.id) queueNotice = null
+    }
+    LaunchedEffect(Unit) {
+        SpotifyImportManager.events.collect { event ->
+            viewModel.loadPlaylists()
+            viewModel.loadLibrary()
+            val message = when {
+                event.isPartial -> context.getString(
+                    R.string.spotify_import_partial_done,
+                    event.matchedCount,
+                    event.totalCount,
+                    event.title,
+                )
+                event.savedLocally && signedIn -> context.getString(
+                    R.string.spotify_import_local_fallback,
+                    event.title,
+                )
+                else -> context.getString(
+                    R.string.spotify_import_done,
+                    event.title,
+                )
+            }
+            showQueueNotice(message)
+            val currentImportState = SpotifyImportManager.state.value
+            val hasUnmatched = (currentImportState as? SpotifyImportState.Completed)
+                ?.unmatchedTracks?.isNotEmpty() == true
+            if (showSpotifyImportDialog && !hasUnmatched) {
+                showSpotifyImportDialog = false
+                event.browseId?.let { id ->
+                    viewModel.openDetail(
+                        id,
+                        event.title,
+                        "${event.songs.size} songs",
+                        event.songs.firstOrNull()?.thumbnailUrl,
+                    )
+                }
+                SpotifyImportManager.dismissCompleted()
+            }
+        }
     }
     // Why a control did nothing, on the same strip above the mini player that
     // already answers "added to queue". Reached from every surface that had a
@@ -2900,6 +2966,17 @@ private fun VibeMusicApp(
                                 } else {
                                     null
                                 },
+                            onBatchAddToQueue = addSongsToQueue,
+                            onBatchAddToPlaylist = { songs ->
+                                viewModel.loadPlaylists()
+                                batchPlaylistTarget = songs
+                            },
+                            selectionTriggerSong = selectionTriggerSong,
+                            selectionTriggerPage = selectionTriggerPage,
+                            onSelectionTriggerHandled = {
+                                selectionTriggerSong = null
+                                selectionTriggerPage = false
+                            },
                             onSongClick = { songs, index ->
                                 playFrom(
                                     songs,
@@ -2959,6 +3036,10 @@ private fun VibeMusicApp(
                                 song
                             }
                         }
+                        val canRemoveFromPage = viewModel.editablePlaylist(page.browseId) != null ||
+                            com.music.vibe.data.spotify.LocalPlaylistStore.isLocalPlaylist(page.browseId) ||
+                            Downloads.recordIdOf(page.browseId) != null ||
+                            page.browseId == "local:downloads"
                         DetailScreen(
                             page = page,
                             currentSong = player.song,
@@ -2966,6 +3047,27 @@ private fun VibeMusicApp(
                             listState = pageDetailListState,
                             activeShelf = detailActiveShelf,
                             onActiveShelfChange = { detailActiveShelf = it },
+                            onBatchAddToQueue = { songs -> addSongsToQueue(songs.map(withAlbum)) },
+                            onBatchAddToPlaylist = { songs ->
+                                viewModel.loadPlaylists()
+                                batchPlaylistTarget = songs.map(withAlbum)
+                            },
+                            onBatchDownload = { songs ->
+                                startDownload(songs.map(withAlbum), null)
+                            },
+                            onBatchRemove = if (canRemoveFromPage) {
+                                { songs, indices ->
+                                    viewModel.removeSongsFromPlaylist(page.browseId, songs, indices)
+                                }
+                            } else {
+                                null
+                            },
+                            selectionTriggerSong = selectionTriggerSong,
+                            selectionTriggerPage = selectionTriggerPage,
+                            onSelectionTriggerHandled = {
+                                selectionTriggerSong = null
+                                selectionTriggerPage = false
+                            },
                             onSongClick = { songs, index ->
                                 playFrom(
                                     songs,
@@ -3326,6 +3428,7 @@ private fun VibeMusicApp(
                             contentPadding = listPadding,
                             links = libraryLinks(),
                             deviceItems = libraryDeviceItems(downloadedReleases) + localPlaylistItems,
+                            smartMixes = smartMixes,
                         )
                     }
                 }
@@ -3834,6 +3937,13 @@ private fun VibeMusicApp(
                         .fillMaxWidth()
                         .onSizeChanged { floatingBarsHeight.intValue = it.height },
                 ) {
+                    if (!showSpotifyImportDialog) {
+                        SpotifyImportBanner(
+                            state = spotifyImportState,
+                            signedIn = signedIn,
+                            onExpandDialog = { showSpotifyImportDialog = true },
+                        )
+                    }
                     QueueActionNoticeHost(queueNotice)
                     // Liquid glass replaces the two stacked bars with the single
                     // component they are stacked to imitate: the now playing
@@ -3877,6 +3987,13 @@ private fun VibeMusicApp(
                         .onSizeChanged { floatingBarsHeight.intValue = it.height },
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
+                    if (!showSpotifyImportDialog) {
+                        SpotifyImportBanner(
+                            state = spotifyImportState,
+                            signedIn = signedIn,
+                            onExpandDialog = { showSpotifyImportDialog = true },
+                        )
+                    }
                     QueueActionNoticeHost(queueNotice)
                     player.song?.let { song ->
                         MiniPlayer(
@@ -4274,6 +4391,19 @@ private fun VibeMusicApp(
                         songActions = null
                         viewModel.removeFromPlaylist(it.browseId, song)
                     }
+                } ?: detail?.browseId?.takeIf { !fromPlayer && com.music.vibe.data.spotify.LocalPlaylistStore.isLocalPlaylist(it) }?.let { localId ->
+                    {
+                        songActions = null
+                        viewModel.removeSongsFromPlaylist(localId, listOf(song))
+                    }
+                },
+                onSelectTrack = if (!fromPlayer && detail != null && detail.type != BrowseType.ARTIST) {
+                    {
+                        songActions = null
+                        selectionTriggerSong = song
+                    }
+                } else {
+                    null
                 },
                 onOpenAlbum = { id ->
                     openPage(
@@ -4453,45 +4583,72 @@ private fun VibeMusicApp(
         // One sheet for both, because they are one decision: the list of
         // playlists with a way to make another. `creatingPlaylist` opens it
         // straight onto the form, which is what the Library tile means.
-        if (playlistTarget != null || creatingPlaylist) {
+        if (playlistTarget != null || batchPlaylistTarget != null || creatingPlaylist) {
             val target = playlistTarget
+            val batchTarget = batchPlaylistTarget
             val dismiss = {
                 playlistTarget = null
+                batchPlaylistTarget = null
                 creatingPlaylist = false
+            }
+            val localUserPlaylists = remember(localPlaylists) {
+                localPlaylists.map { lp ->
+                    UserPlaylist(
+                        playlistId = lp.id,
+                        title = lp.title,
+                        subtitle = "${lp.songs.size} songs",
+                        thumbnailUrl = lp.songs.firstOrNull { !it.thumbnailUrl.isNullOrBlank() }?.thumbnailUrl,
+                    )
+                }
+            }
+            val combinedPlaylists = remember(localUserPlaylists, playlists) {
+                localUserPlaylists + playlists
+            }
+            val headerSong = when {
+                target != null -> target
+                batchTarget != null && batchTarget.size == 1 -> batchTarget.first()
+                batchTarget != null && batchTarget.isNotEmpty() -> batchTarget.first().copy(
+                    title = context.resources.getQuantityString(
+                        R.plurals.song_count_plural,
+                        batchTarget.size,
+                        batchTarget.size,
+                    ),
+                    artist = batchTarget.joinToString(", ") { it.title }.take(60),
+                )
+                else -> null
             }
             ModalBottomSheet(
                 onDismissRequest = dismiss,
                 containerColor = MaterialTheme.colorScheme.background,
             ) {
                 PlaylistPickerSheet(
-                    playlists = playlists,
+                    playlists = combinedPlaylists,
                     loading = playlistsLoading,
-                    song = target,
-                    startCreating = target == null,
+                    song = headerSong,
+                    startCreating = target == null && batchTarget == null,
                     onAdd = { picked ->
-                        target?.let { song ->
-                            viewModel.addToPlaylists(picked, song) { added, alreadyThere, failed ->
-                                // One line for the whole batch, saying the
-                                // outcome that matters most: what went in, else
-                                // that it was all there already, else that it
-                                // didn't work.
-                                showQueueNotice(
-                                    when {
-                                        added > 1 -> context.resources.getQuantityString(
-                                            R.plurals.added_to_playlists_notice, added, added,
-                                        )
-                                        added == 1 -> context.getString(R.string.song_added_to_playlist)
-                                        alreadyThere > 0 && failed == 0 ->
-                                            context.getString(R.string.song_already_in_playlist)
-                                        else -> context.getString(R.string.failed)
-                                    },
-                                )
+                        if (batchTarget != null) {
+                            viewModel.addSongsToPlaylists(picked, batchTarget) { notice ->
+                                showQueueNotice(notice)
+                            }
+                        } else if (target != null) {
+                            viewModel.addSongsToPlaylists(picked, listOf(target)) { notice ->
+                                showQueueNotice(notice)
                             }
                         }
                         dismiss()
                     },
                     onCreate = { title, privacy ->
-                        viewModel.createPlaylist(title, privacy, target)
+                        if (batchTarget != null) {
+                            viewModel.createPlaylistWithVideoIds(
+                                title = title,
+                                privacy = privacy,
+                                videoIds = batchTarget.map { it.videoId },
+                                songs = batchTarget,
+                            )
+                        } else {
+                            viewModel.createPlaylist(title, privacy, target)
+                        }
                         dismiss()
                     },
                 )
@@ -4694,6 +4851,14 @@ private fun VibeMusicApp(
                         browseActions = null
                         scope.launch { Downloads.deleteCollection(context, id) }
                     }
+                },
+                onSelectTracks = if (!target.fromCard && detail != null && detail.type != BrowseType.ARTIST) {
+                    {
+                        browseActions = null
+                        selectionTriggerPage = true
+                    }
+                } else {
+                    null
                 },
             )
         }
@@ -5383,228 +5548,3 @@ private fun VibeMusicApp(
     }
 }
 
-private fun tween(durationMillis: Int) =
-    androidx.compose.animation.core.tween<Float>(durationMillis)
-
-@Composable
-private fun LibrarySort.localizedLabel(): String = when (this) {
-    LibrarySort.DEFAULT -> stringResource(R.string.sort_default)
-    LibrarySort.TITLE_ASC -> stringResource(R.string.sort_title_ascending)
-    LibrarySort.TITLE_DESC -> stringResource(R.string.sort_title_descending)
-}
-
-/**
- * The track-list sort menu, styled after the account switcher: a full-screen
- * scrim to catch the dismissal tap, and the options on a frosted panel that
- * blurs the page behind it. Composed here in the main hierarchy rather than
- * as a popup window — which is exactly what lets the haze see the content it
- * is blurring.
- */
-@OptIn(ExperimentalHazeMaterialsApi::class)
-@Composable
-private fun FrostedSortMenu(
-    hazeState: HazeState,
-    selected: SongSort,
-    onSelect: (SongSort) -> Unit,
-    onFlipDateDirection: () -> Unit,
-    onDismiss: () -> Unit,
-) {
-    val reduceDynamicBlur by AppSettings.reduceDynamicBlur.collectAsStateWithLifecycle()
-    val shape = MaterialTheme.shapes.extraLarge
-    Box(
-        Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.scrim.copy(alpha = .48f))
-            .clickable(onClick = onDismiss),
-        contentAlignment = Alignment.TopEnd,
-    ) {
-        Surface(
-            color = Color.Transparent,
-            contentColor = MaterialTheme.colorScheme.onSurface,
-            shape = shape,
-            modifier = Modifier
-                .padding(top = 56.dp, end = 20.dp)
-                .width(IntrinsicSize.Max)
-                .clip(shape)
-                .then(
-                    if (reduceDynamicBlur) {
-                        Modifier.background(MaterialTheme.colorScheme.surface)
-                    } else {
-                        Modifier.optimizedHazeEffect(
-                            state = hazeState,
-                            style = HazeMaterials.thin(MaterialTheme.colorScheme.surface),
-                        )
-                    },
-                )
-                .clickable(onClick = {}),
-        ) {
-            Column(Modifier.padding(vertical = 8.dp)) {
-                // Date added is one row, Spotify-style: the arrow on it shows
-                // the direction — up for newest first, down for oldest — and
-                // tapping flips it, the rotation animating the flip. Up is
-                // also where a fresh activation lands, newest first being the
-                // point of the feature.
-                val dateActive = selected == SongSort.DATE_ADDED_ASC ||
-                    selected == SongSort.DATE_ADDED_DESC
-                val arrowRotation by animateFloatAsState(
-                    targetValue = if (selected == SongSort.DATE_ADDED_ASC) 180f else 0f,
-                    animationSpec = tween(durationMillis = 200),
-                    label = "dateAddedArrow",
-                )
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 48.dp)
-                        .clickable(role = Role.Button) { onFlipDateDirection() }
-                        .padding(horizontal = 20.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        stringResource(R.string.sort_date_added_toggle),
-                        style = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.weight(1f),
-                    )
-                    if (dateActive) {
-                        Icon(
-                            Icons.Rounded.ArrowUpward,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.rotate(arrowRotation),
-                        )
-                    }
-                }
-                SongSort.entries
-                    .filter { it != SongSort.DATE_ADDED_ASC && it != SongSort.DATE_ADDED_DESC }
-                    .forEach { option ->
-                        Row(
-                            Modifier
-                                .fillMaxWidth()
-                                .heightIn(min = 44.dp)
-                                .clickable(role = Role.Button) { onSelect(option) }
-                                .padding(horizontal = 20.dp, vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                option.localizedLabel(),
-                                style = MaterialTheme.typography.bodyLarge,
-                                modifier = Modifier.weight(1f),
-                            )
-                            if (option == selected) {
-                                Icon(
-                                    Icons.Rounded.Check,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                )
-                            }
-                        }
-                    }
-            }
-        }
-    }
-}
-
-@Composable
-private fun SongSort.localizedLabel(): String = when (this) {
-    SongSort.DEFAULT -> stringResource(R.string.sort_default)
-    SongSort.TITLE_ASC -> stringResource(R.string.sort_title_ascending)
-    SongSort.TITLE_DESC -> stringResource(R.string.sort_title_descending)
-    SongSort.DATE_ADDED_ASC -> stringResource(R.string.sort_date_added_oldest)
-    SongSort.DATE_ADDED_DESC -> stringResource(R.string.sort_date_added)
-}
-
-/**
- * Whether this page id is one of the two device folders — `local:downloads` and
- * `local:all`, the tabbed Songs / Artists / Albums view.
- *
- * Asked rather than `startsWith("local:")` because that prefix now covers two
- * unlike pages: a folder, and one downloaded playlist, which is a plain track
- * listing under its own cover and wants the same chrome every other release page
- * gets. See [Downloads.PLAYLIST_PREFIX] for why they share a namespace at all.
- */
-private fun String?.isDeviceFolder(): Boolean =
-    this != null && startsWith("local:") && !startsWith(Downloads.PLAYLIST_PREFIX)
-
-/**
- * Whether [videoId] is the track playing, and is known to be playing YouTube's
- * own copy — which decides whether the player menu leads with "Revert to
- * original" or with "Upgrade quality".
- *
- * See [QualityUpgrade.isKnownToBePlayingYouTubesOwn] for why "known" is doing
- * real work here: an unresolved track playing off the disk cache answers false,
- * and keeps the revert on offer.
- */
-private fun playingYouTubesOwn(videoId: String, controller: MediaController?): Boolean {
-    val item = controller?.currentMediaItem?.takeIf { it.mediaId == videoId } ?: return false
-    return QualityUpgrade.isKnownToBePlayingYouTubesOwn(
-        videoId,
-        item.localConfiguration?.uri?.let(QualityUpgrade::cacheTag),
-    )
-}
-
-/** `M:SS`/`H:MM:SS`, the same shape [String?.durationMillis] parses back. */
-private fun formatDurationText(ms: Long): String {
-    val totalSeconds = ms / 1000
-    val minutes = totalSeconds / 60
-    val seconds = totalSeconds % 60
-    return "%d:%02d".format(Locale.ROOT, minutes, seconds)
-}
-
-/**
- * How far short of the end a seek is allowed to land.
- *
- * Seeking to the final millisecond is indistinguishable from the track running
- * out, so it starts the next song — which is not what anyone dragging to the end
- * of the bar, or tapping the last line of a lyric, is asking for. A second back
- * from the end plays the outro instead.
- */
-private const val SEEK_END_GUARD_MS = 1_000L
-
-/**
- * How far a detail page scrolls before its title moves up into the bar.
- *
- * Roughly the height of the sleeve and the credit stacked above the Play pair,
- * so the two titles hand over as the header one leaves rather than sitting on
- * screen together. The bar cross-fades over 220ms, which absorbs the difference
- * between that estimate and a particular page's real header.
- */
-private val DETAIL_TITLE_DROP = 320.dp
-
-/**
- * How fast, a second, a mini-player pull has to be moving when the finger
- * lifts to decide open or closed on its own, wherever it got to — see
- * [MiniPlayerPull]. A flick is a whole gesture; only a slow pull is judged by
- * the distance it covered.
- */
-private val PLAYER_PULL_FLING_VELOCITY = 400.dp
-
-/** M3's own scrim strength, which the player's dim stands in for. */
-private const val PLAYER_SCRIM_ALPHA = 0.32f
-
-/**
- * The player sheet's shape: square, as [RectangleShape] was, but reaching a
- * whole sheet's height above the sheet's top edge.
- *
- * The sheet's Surface clips its content to this shape, and on the way down to
- * the mini player the artwork travels ahead of the sheet carrying it — up
- * above the sheet's top edge, where a plain rectangle cut it off mid-air,
- * leaving only its lower part to arrive in the bar. Nothing else is drawn
- * outside the sheet (its background is transparent and it casts no shadow),
- * so at rest this is the rectangle it replaces.
- */
-private object PlayerSheetShape : Shape {
-    override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline =
-        Outline.Rectangle(Rect(0f, -size.height, size.width, size.height))
-}
-
-private const val TAB_HOME = 0
-private const val TAB_EXPLORE = 1
-private const val TAB_LIBRARY = 2
-private const val TAB_SEARCH = 3
-
-/**
- * What a tab's key is prefixed with in the content switcher above.
- *
- * The index is read back off it there rather than off `selectedTab`, so the
- * prefix has to be the one thing both the writing and the reading agree on.
- */
-private const val TAB_KEY = "tab:"

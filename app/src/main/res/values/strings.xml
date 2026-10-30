@@ -1,7 +1,7 @@
 <resources>
     <string name="app_name">Vibe Music</string>
-    <string name="announcements_channel_name">Updates &amp; Announcements</string>
-    <string name="announcements_channel_description">News, releases, and community updates</string>
+    <string name="announcements_channel_name" translatable="false">Updates &amp; Announcements</string>
+    <string name="announcements_channel_description" translatable="false">News, releases, and community updates</string>
     <string name="playback_channel_name">Now playing</string>
     <string name="download_channel_name">Downloads</string>
     <string name="download_channel_description">Songs being saved to your Music folder</string>
@@ -743,8 +743,8 @@
     <string name="replay_summary_start">Your </string>
     <string name="saved">Saved</string>
     <string name="saved_bang">Saved!</string>
-    <string name="copy_text">Copy text</string>
-    <string name="copied_bang">Copied!</string>
+    <string name="copy_text" translatable="false">Copy text</string>
+    <string name="copied_bang" translatable="false">Copied!</string>
     <string name="share_my_replay">Share my Replay</string>
     <string name="share_your_lyrics">Send your lyrics card</string>
     <string name="share_your_replay">Share your Replay</string>
@@ -1131,27 +1131,96 @@
     <string name="clear_song_cache_title">Clear song cache?</string>
     <string name="clear_song_cache_warning">All cached songs will be deleted and the Cached songs folder will be emptied. They will stream again the next time you play them.</string>
     <string name="import_spotify">Import Spotify</string>
-    <string name="import_spotify_subtitle">From a playlist link</string>
-    <string name="spotify_import_title">Import Spotify playlist</string>
-    <string name="spotify_import_description">Paste a public playlist link. Songs are matched on YouTube Music.</string>
-    <string name="spotify_import_description_local">Paste a public playlist link. Songs are matched on YouTube Music and saved on this device.</string>
-    <string name="spotify_import_hint">open.spotify.com/playlist/…</string>
-    <string name="spotify_import_invalid">That isn\'t a Spotify playlist link.</string>
-    <string name="spotify_import_fetching">Reading the Spotify playlist…</string>
+    <string name="import_spotify_subtitle">From a playlist or album link</string>
+    <string name="spotify_import_title">Import from Spotify</string>
+    <string name="spotify_import_description">Paste a public playlist or album link. Songs are matched on YouTube Music.</string>
+    <string name="spotify_import_description_local">Paste a public playlist or album link. Songs are matched on YouTube Music and saved on this device.</string>
+    <string name="spotify_import_hint">open.spotify.com/playlist/… or /album/…</string>
+    <string name="spotify_import_invalid">That isn\'t a Spotify playlist or album link.</string>
+    <string name="spotify_import_fetching">Reading from Spotify…</string>
     <string name="spotify_import_matching">Matching songs %1$d of %2$d</string>
     <string name="spotify_import_none">None of those songs were found on YouTube Music.</string>
-    <string name="spotify_import_failed">Couldn\'t import the playlist: %1$s</string>
+    <string name="spotify_import_failed">Couldn\'t import from Spotify: %1$s</string>
     <string name="spotify_import_button">Import</string>
     <string name="spotify_import_local_fallback">Couldn\'t create it on YouTube Music, so \'%1$s\' was saved on this device instead.</string>
     <string name="spotify_import_done">Imported \'%1$s\'</string>
     <string name="spotify_import_unmatched">%1$d songs weren\'t found on YouTube Music</string>
     <string name="local_playlist_subtitle">%1$d songs · On this device</string>
-    <string name="spotify_import_empty_playlist">No songs in this playlist</string>
+    <string name="spotify_import_empty_playlist">No songs found to import</string>
     <string name="spotify_library_subtitle">Your Spotify playlists</string>
     <string name="up_next_prompt_title" translatable="false">Up Next Queue (%1$d tracks)</string>
     <string name="up_next_prompt_body" translatable="false">You have %1$d tracks queued in Up Next. How would you like to play \"%2$s\"?</string>
     <string name="keep_queue" translatable="false">Play &amp; Keep Queue</string>
     <string name="clear_queue" translatable="false">Start Fresh</string>
-    <string name="lyrics_original_title">Search lyrics with original title</string>
-    <string name="lyrics_original_title_desc">Restore the original YouTube title before searching lyrics so translated titles still match</string>
+    <string name="lyrics_original_title" translatable="false">Search lyrics with original title</string>
+    <string name="lyrics_original_title_desc" translatable="false">Restore the original YouTube title before searching lyrics so translated titles still match</string>
+    <string name="download_location" translatable="false">Download location</string>
+    <string name="download_location_subtitle" translatable="false">Where downloaded songs are stored on this device</string>
+    <string name="download_location_private" translatable="false">App storage (private)</string>
+    <string name="download_location_private_subtitle" translatable="false">Only visible inside Vibe Music; deleted if the app is uninstalled</string>
+    <string name="download_location_default_music" translatable="false">Default Music folder</string>
+    <string name="download_location_default_music_subtitle" translatable="false">Music/Vibe Music · visible to other music apps</string>
+    <string name="download_location_custom" translatable="false">Custom folder…</string>
+    <string name="download_location_custom_subtitle" translatable="false">Choose a subfolder on internal storage or SD card (Android 11+ blocks picking the root of Internal Storage or Downloads)</string>
+    <string name="download_location_unmounted" translatable="false">%1$s · Folder unavailable (SD card unmounted)</string>
+    <string name="download_location_cloud_rejected" translatable="false">Cloud folders aren\'t supported for downloads. Please choose a folder on internal storage or an SD card.</string>
+    <string name="download_location_permission_failed" translatable="false">Couldn\'t get write access to that folder</string>
+    <string name="export_existing_downloads" translatable="false">Export existing downloads</string>
+    <string name="export_existing_downloads_subtitle" translatable="false">Copy or move already-downloaded songs to %1$s</string>
+    <string name="export_existing_downloads_running" translatable="false">Exporting %1$d of %2$d · %3$s</string>
+    <string name="move_existing_downloads_running" translatable="false">Moving %1$d of %2$d · %3$s</string>
+    <string name="export_existing_downloads_dialog_title" translatable="false">Export existing downloads?</string>
+    <string name="export_existing_downloads_dialog_body" translatable="false">Send your already-downloaded songs to %1$s. Choose Move to delete the originals after each file is verified (saving storage), or Copy to keep both.</string>
+    <string name="export_action_move" translatable="false">Move</string>
+    <string name="export_action_copy" translatable="false">Copy</string>
+    <string name="spotify_import_save_partial" translatable="false">Save Partial</string>
+    <string name="spotify_import_saving" translatable="false">Saving %1$d of %2$d songs…</string>
+    <string name="spotify_import_run_in_background" translatable="false">Run in background</string>
+    <string name="spotify_import_saved_count" translatable="false">Saved %1$d of %2$d songs to \'%3$s\'</string>
+    <string name="spotify_import_interrupted_title" translatable="false">Spotify import interrupted · %1$s</string>
+    <string name="spotify_import_interrupted_subtitle" translatable="false">Matched %1$d of %2$d songs (%3$d ready to save)</string>
+    <string name="spotify_import_resume" translatable="false">Resume</string>
+    <string name="spotify_import_save_what_we_got" translatable="false">Save %1$d of %2$d</string>
+    <string name="spotify_import_discard" translatable="false">Discard</string>
+    <string name="smart_mixes_shelf" translatable="false">Smart Mixes</string>
+    <string name="smart_mix_most_played_30d" translatable="false">Most Played (30 Days)</string>
+    <string name="smart_mix_most_played_30d_subtitle" translatable="false">%1$d songs · Last 30 days</string>
+    <string name="smart_mix_recently_downloaded" translatable="false">Recently Downloaded</string>
+    <string name="smart_mix_recently_downloaded_subtitle" translatable="false">%1$d songs · Offline</string>
+    <string name="smart_mix_forgotten_favorites" translatable="false">Forgotten Favorites</string>
+    <string name="smart_mix_forgotten_favorites_subtitle" translatable="false">%1$d songs · Rediscover</string>
+    <string name="batch_select" translatable="false">Select</string>
+    <string name="batch_select_tracks" translatable="false">Select tracks</string>
+    <string name="batch_selected_count" translatable="false">%1$d selected</string>
+    <string name="batch_select_all" translatable="false">Select all</string>
+    <string name="batch_deselect_all" translatable="false">Deselect all</string>
+    <string name="batch_action_queue" translatable="false">Queue</string>
+    <string name="batch_action_playlist" translatable="false">Playlist</string>
+    <string name="batch_action_download" translatable="false">Download</string>
+    <string name="batch_action_remove" translatable="false">Remove</string>
+    <string name="batch_delete_downloads_title" translatable="false">Delete %1$d downloaded songs from device?</string>
+    <string name="batch_delete_downloads_body" translatable="false">This permanently deletes the selected audio files from your device storage.</string>
+    <string name="batch_added_to_playlist" translatable="false">Added to %1$s</string>
+    <string name="batch_added_to_local_playlist" translatable="false">Added %1$d songs to %2$s</string>
+    <string name="batch_added_to_local_playlist_deduped" translatable="false">Added %1$d songs to %2$s (%3$d already in playlist)</string>
+    <string name="spotify_import_partial_done" translatable="false">Saved %1$d of %2$d songs to \'%3$s\'</string>
+    <string name="batch_added_to_playlist_deduped" translatable="false">Added %1$d songs to %2$s (%3$d already in playlist)</string>
+    <string name="batch_added_to_remote_playlist" translatable="false">Added to %1$s</string>
+    <string name="smart_mix_most_played" translatable="false">Most Played (30 Days)</string>
+    <string name="smart_mix_recently_added" translatable="false">Recently Downloaded</string>
+    <string name="confirm_delete_downloads_title" translatable="false">Delete downloaded songs from device?</string>
+    <string name="confirm_delete_downloads_body" translatable="false">This permanently deletes the selected audio files from your device storage.</string>
+    <plurals name="confirm_delete_downloads_body" translatable="false">
+        <item quantity="one">This permanently deletes %1$d downloaded audio file from your device storage.</item>
+        <item quantity="other">This permanently deletes %1$d downloaded audio files from your device storage.</item>
+    </plurals>
+    <string name="deselect_all" translatable="false">Deselect all</string>
+    <string name="selected_count" translatable="false">%1$d selected</string>
+    <string name="batch_queue" translatable="false">Queue</string>
+    <string name="batch_playlist" translatable="false">Playlist</string>
+    <string name="batch_download" translatable="false">Download</string>
+    <string name="batch_remove" translatable="false">Remove</string>
+    <string name="select_tracks" translatable="false">Select tracks</string>
+    <string name="batch_add_to_queue" translatable="false">Add to queue</string>
+    <string name="batch_add_to_playlist" translatable="false">Add to playlist</string>
 </resources>

@@ -31,9 +31,23 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
+import android.os.Build
+import android.os.Environment
+import android.os.storage.StorageManager
+import android.provider.DocumentsContract
+import com.music.vibe.data.model.durationMillis
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import java.io.FileInputStream
+import java.io.FileNotFoundException
 import java.io.OutputStream
 import java.io.File
 import java.util.Locale
+import kotlin.math.abs
 
 /** Where a track is between "not on this device" and "on it". */
 sealed interface DownloadState {
@@ -45,6 +59,29 @@ sealed interface DownloadState {
     data class Running(val fraction: Float) : DownloadState
 
     data class Failed(val reason: String) : DownloadState
+}
+
+/** Progress and outcome of a batch export/move to the configured download folder. */
+sealed interface ExportState {
+    data object Idle : ExportState
+
+    data class Running(
+        val completed: Int,
+        val total: Int,
+        val currentTitle: String,
+        val moveMode: Boolean,
+    ) : ExportState
+
+    data class Completed(
+        val exported: Int,
+        val skippedAlreadyThere: Int,
+        val skippedConflicts: Int,
+        val copiedFallback: Int,
+        val failed: Int,
+        val moveMode: Boolean,
+    ) : ExportState
+
+    data class Failed(val reason: String) : ExportState
 }
 
 /**
@@ -142,17 +179,268 @@ object Downloads {
      */
     private val running = LinkedHashMap<String, Job?>()
 
+    private val _exportState = MutableStateFlow<ExportState>(ExportState.Idle)
+    val exportState: StateFlow<ExportState> = _exportState.asStateFlow()
+
+    private val backgroundScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val validationMutex = Mutex()
+
+    @Volatile
+    private var consecutiveFolderDeleteFailures = 0
+
+    @Volatile
+    private var exportJob: Job? = null
+
+    @Volatile
+    private var database: com.music.vibe.data.db.VibeDatabase? = null
+
     fun init(context: Context) {
-        prefs = context.getSharedPreferences("vibemusic_settings", Context.MODE_PRIVATE)
-        _saved.value = runCatching {
-            json.decodeFromString(serializer, prefs.getString(KEY_SAVED, null) ?: "{}")
-        }.getOrDefault(emptyMap())
-        _savedMetadata.value = runCatching {
-            json.decodeFromString(metadataSerializer, prefs.getString(KEY_SAVED_METADATA, null) ?: "{}")
-        }.getOrDefault(emptyMap())
-        _collections.value = runCatching {
-            json.decodeFromString(collectionSerializer, prefs.getString(KEY_SAVED_COLLECTIONS, null) ?: "{}")
-        }.getOrDefault(emptyMap())
+        val appContext = context.applicationContext
+        prefs = appContext.getSharedPreferences("vibemusic_settings", Context.MODE_PRIVATE)
+        val db = com.music.vibe.data.db.VibeDatabase.getInstance(appContext)
+        database = db
+        val loaded = db.downloadsDao.loadAll()
+
+        _saved.value = if (loaded.savedUris.isNotEmpty()) {
+            loaded.savedUris
+        } else {
+            runCatching {
+                json.decodeFromString(serializer, prefs.getString(KEY_SAVED, null) ?: "{}")
+            }.getOrDefault(emptyMap())
+        }
+
+        _savedMetadata.value = if (loaded.metadataJsonById.isNotEmpty()) {
+            loaded.metadataJsonById.mapNotNull { (id, rawJson) ->
+                runCatching {
+                    id to json.decodeFromString(SavedSongMetadata.serializer(), rawJson)
+                }.getOrNull()
+            }.toMap()
+        } else {
+            runCatching {
+                json.decodeFromString(metadataSerializer, prefs.getString(KEY_SAVED_METADATA, null) ?: "{}")
+            }.getOrDefault(emptyMap())
+        }
+
+        _collections.value = if (loaded.collectionsJsonById.isNotEmpty()) {
+            loaded.collectionsJsonById.mapNotNull { (id, rawJson) ->
+                runCatching {
+                    id to json.decodeFromString(SavedCollection.serializer(), rawJson)
+                }.getOrNull()
+            }.toMap()
+        } else {
+            runCatching {
+                json.decodeFromString(collectionSerializer, prefs.getString(KEY_SAVED_COLLECTIONS, null) ?: "{}")
+            }.getOrDefault(emptyMap())
+        }
+
+        backgroundScope.launch {
+            db.backfillV2MetadataIfNeeded()
+            DownloadStore.cleanupStaleTempFiles(appContext)
+            validateDownloadFolder(appContext, allowReset = true)
+            releaseUnusedSafTreeGrants(appContext)
+        }
+    }
+
+    /**
+     * Schedules a non-destructive background validation of the custom download folder.
+     */
+    fun scheduleFolderValidation(context: Context, allowReset: Boolean = false) {
+        val appContext = context.applicationContext
+        backgroundScope.launch {
+            validateDownloadFolder(appContext, allowReset = allowReset)
+        }
+    }
+
+    private enum class TreeRootStatus {
+        EXISTS,
+        DEFINITIVELY_MISSING,
+        TRANSIENT_ERROR,
+    }
+
+    private fun queryTreeRootStatus(context: Context, treeUri: Uri): TreeRootStatus {
+        return try {
+            val treeDocId = DocumentsContract.getTreeDocumentId(treeUri)
+            val docUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, treeDocId)
+            val cursor = context.contentResolver.query(
+                docUri,
+                arrayOf(DocumentsContract.Document.COLUMN_DOCUMENT_ID),
+                null,
+                null,
+                null,
+            ) ?: return TreeRootStatus.TRANSIENT_ERROR
+            cursor.use {
+                if (it.moveToFirst()) TreeRootStatus.EXISTS else TreeRootStatus.DEFINITIVELY_MISSING
+            }
+        } catch (_: FileNotFoundException) {
+            TreeRootStatus.DEFINITIVELY_MISSING
+        } catch (e: IllegalArgumentException) {
+            val msg = e.message?.lowercase(Locale.ROOT).orEmpty()
+            if ("not found" in msg || "does not exist" in msg || "no such" in msg) {
+                TreeRootStatus.DEFINITIVELY_MISSING
+            } else {
+                TreeRootStatus.TRANSIENT_ERROR
+            }
+        } catch (_: Exception) {
+            TreeRootStatus.TRANSIENT_ERROR
+        }
+    }
+
+    /**
+     * Validates `AppSettings.downloadFolderUri` off the main thread:
+     *  1. Checks `contentResolver.persistedUriPermissions` for read+write access.
+     *  2. Checks `StorageManager.storageVolumes` so unmounted SD cards set
+     *     `downloadFolderUnavailable = true` without losing the folder URI or grant.
+     *  3. Uses a 2-strike check (with a 1.5s retry) before treating a mounted folder
+     *     as permanently deleted.
+     */
+    suspend fun validateDownloadFolder(context: Context, allowReset: Boolean = true) =
+        withContext(Dispatchers.IO) {
+            validationMutex.withLock {
+                val rawUri = AppSettings.downloadFolderUri.value
+                if (rawUri.isBlank()) {
+                    AppSettings.setDownloadFolderUnavailable(false)
+                    consecutiveFolderDeleteFailures = 0
+                    return@withLock
+                }
+                val treeUri = runCatching { Uri.parse(rawUri) }.getOrNull()
+                if (treeUri == null) {
+                    if (allowReset) {
+                        AppSettings.setDownloadLocationDefaultMusic()
+                    }
+                    return@withLock
+                }
+
+                // 1. Check persisted URI permissions
+                val hasGrant = runCatching {
+                    val targetTreeId = DownloadStore.extractTreeDocumentId(treeUri)
+                    context.contentResolver.persistedUriPermissions.any { perm ->
+                        perm.isReadPermission && perm.isWritePermission &&
+                            perm.uri.authority == treeUri.authority &&
+                            (perm.uri == treeUri || run {
+                                val grantTreeId = DownloadStore.extractTreeDocumentId(perm.uri)
+                                targetTreeId != null && grantTreeId != null &&
+                                    (targetTreeId == grantTreeId || targetTreeId.startsWith("$grantTreeId/"))
+                            })
+                    }
+                }.getOrDefault(false)
+
+                if (!hasGrant) {
+                    if (allowReset) {
+                        Log.w(TAG, "Persisted permission lost for $treeUri; reverting to default Music folder")
+                        AppSettings.setDownloadLocationDefaultMusic()
+                        AppSettings.setDownloadFolderWarning(
+                            "Download folder permission was lost; switched to Music/Vibe Music",
+                        )
+                        consecutiveFolderDeleteFailures = 0
+                    }
+                    return@withLock
+                }
+
+                // 2. Check volume mount state via StorageManager
+                val volId = DownloadStore.volumeIdOf(treeUri)
+                if (volId != "primary") {
+                    val storageManager = context.getSystemService(StorageManager::class.java)
+                    val matchedVol = storageManager?.storageVolumes?.firstOrNull {
+                        it.uuid?.equals(volId, ignoreCase = true) == true
+                    }
+                    if (matchedVol == null || matchedVol.state != Environment.MEDIA_MOUNTED) {
+                        Log.w(TAG, "Volume $volId for download folder is unmounted (${matchedVol?.state})")
+                        AppSettings.setDownloadFolderUnavailable(true)
+                        return@withLock
+                    }
+                }
+                AppSettings.setDownloadFolderUnavailable(false)
+
+                // 3. Conservative 2-strike check for folder deletion on mounted volume
+                var status = queryTreeRootStatus(context, treeUri)
+                if (status == TreeRootStatus.DEFINITIVELY_MISSING) {
+                    delay(1_500L)
+                    status = queryTreeRootStatus(context, treeUri)
+                }
+
+                when (status) {
+                    TreeRootStatus.EXISTS -> {
+                        consecutiveFolderDeleteFailures = 0
+                        DownloadStore.markSafIndexDirty()
+                    }
+                    TreeRootStatus.TRANSIENT_ERROR -> {
+                        Log.w(TAG, "Transient error querying download folder root $treeUri; keeping setting")
+                    }
+                    TreeRootStatus.DEFINITIVELY_MISSING -> {
+                        consecutiveFolderDeleteFailures += 1
+                        Log.w(TAG, "Download folder $treeUri missing (strike $consecutiveFolderDeleteFailures)")
+                        if (allowReset && consecutiveFolderDeleteFailures >= 2) {
+                            consecutiveFolderDeleteFailures = 0
+                            AppSettings.setDownloadLocationDefaultMusic()
+                            AppSettings.setDownloadFolderWarning(
+                                "Custom download folder was deleted; switched to Music/Vibe Music",
+                            )
+                            releaseUnusedSafTreeGrants(context)
+                        }
+                    }
+                }
+            }
+        }
+
+    /**
+     * Releases persisted write grants for old custom SAF trees that are no longer the active
+     * `downloadFolderUri`, not `localMusicFolderUri`, and have zero surviving files in
+     * `Downloads.saved` (deduplicated by `(authority, documentId)` across overlapping trees).
+     */
+    fun releaseUnusedSafTreeGrants(context: Context) {
+        runCatching {
+            val resolver = context.contentResolver
+            val activeDownloadUri = AppSettings.downloadFolderUri.value
+            val activeLocalMusicUri = AppSettings.localMusicFolderUri.value
+
+            // Deduplicate saved SAF document entries by (authority, documentId)
+            val savedSafDocs = _saved.value.values.mapNotNull { uriStr ->
+                val uri = runCatching { Uri.parse(uriStr) }.getOrNull() ?: return@mapNotNull null
+                if (!DownloadStore.isSafTreeUri(uri)) return@mapNotNull null
+                val auth = uri.authority ?: return@mapNotNull null
+                val docId = DownloadStore.extractDocumentId(uri)
+                    ?: DownloadStore.extractTreeDocumentId(uri)
+                    ?: return@mapNotNull null
+                auth to docId
+            }.toSet()
+
+            val activeTreeSpecs = listOf(activeDownloadUri, activeLocalMusicUri)
+                .filter { it.isNotBlank() }
+                .mapNotNull { raw ->
+                    val u = runCatching { Uri.parse(raw) }.getOrNull() ?: return@mapNotNull null
+                    val auth = u.authority ?: return@mapNotNull null
+                    val treeId = DownloadStore.extractTreeDocumentId(u) ?: return@mapNotNull null
+                    auth to treeId
+                }
+
+            for (perm in resolver.persistedUriPermissions) {
+                if (!perm.isWritePermission) continue
+                val grantUri = perm.uri
+                if (!DownloadStore.isSafTreeUri(grantUri)) continue
+                val grantStr = grantUri.toString()
+                if (grantStr == activeDownloadUri || grantStr == activeLocalMusicUri) continue
+
+                val grantAuth = grantUri.authority ?: continue
+                val grantTreeId = DownloadStore.extractTreeDocumentId(grantUri) ?: continue
+
+                val overlapsActiveSetting = activeTreeSpecs.any { (auth, treeId) ->
+                    auth == grantAuth && DownloadStore.treeOverlaps(treeId, grantTreeId)
+                }
+                if (overlapsActiveSetting) continue
+
+                val coversAnySavedDoc = savedSafDocs.any { (auth, docId) ->
+                    auth == grantAuth && DownloadStore.treeOverlaps(docId, grantTreeId)
+                }
+                if (!coversAnySavedDoc) {
+                    val flags = (if (perm.isReadPermission) Intent.FLAG_GRANT_READ_URI_PERMISSION else 0) or
+                        (if (perm.isWritePermission) Intent.FLAG_GRANT_WRITE_URI_PERMISSION else 0)
+                    runCatching {
+                        resolver.releasePersistableUriPermission(grantUri, flags)
+                        Log.d(TAG, "Released unused SAF tree grant: $grantUri")
+                    }
+                }
+            }
+        }
     }
 
     // ---- Asking -------------------------------------------------------------
@@ -248,6 +536,56 @@ object Downloads {
         forget(videoId)
         null
     }
+
+    /**
+     * Checks [savedUri] first (fast ID lookup in `Downloads.saved`), and if not recorded,
+     * falls back to two-pass stem matching + ±2s duration verification against the active
+     * download folder. Matching untracked files are adopted into `Downloads.saved` so future
+     * lookups are O(1).
+     */
+    suspend fun savedOrAdoptUri(context: Context, song: Song): Uri? = withContext(Dispatchers.IO) {
+        savedUri(context, song.videoId)?.let { return@withContext it }
+
+        val stemQuery = if (song.artist.isNotBlank()) {
+            "${song.artist} - ${song.title}"
+        } else {
+            song.title
+        }
+        if (stemQuery.isBlank()) return@withContext null
+
+        val candidates = DownloadStore.findExistingByStem(context, stemQuery)
+        if (candidates.isEmpty()) return@withContext null
+
+        val expectedDurationMs = song.durationMillis().takeIf { it > 0L }
+        val exactExpectedStem = DownloadStore.normalizedStem(stemQuery, stripCollisionSuffix = false)
+
+        for ((candidateUri, displayName) in candidates) {
+            val fileDurationMs = extractDurationMs(context, candidateUri)
+            val durationMatches = when {
+                expectedDurationMs != null && fileDurationMs != null && fileDurationMs > 0L ->
+                    abs(fileDurationMs - expectedDurationMs) <= 2_500L
+                expectedDurationMs == null ->
+                    DownloadStore.normalizedStem(displayName, stripCollisionSuffix = false) == exactExpectedStem
+                else -> false
+            }
+            if (durationMatches) {
+                Log.d(TAG, "Adopted existing file $displayName for ${song.videoId}")
+                remember(song, song, candidateUri)
+                return@withContext candidateUri
+            }
+        }
+        null
+    }
+
+    private fun extractDurationMs(context: Context, uri: Uri): Long? = runCatching {
+        val retriever = MediaMetadataRetriever()
+        try {
+            retriever.setDataSource(context, uri)
+            retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull()
+        } finally {
+            runCatching { retriever.release() }
+        }
+    }.getOrNull()
 
     /**
      * True when [uriString] names a `file://` path that is not there.
@@ -513,7 +851,12 @@ object Downloads {
         synchronized(collectionLock) {
             val map = update(_collections.value)
             _collections.value = map
-            if (::prefs.isInitialized) {
+            val db = database
+            db?.downloadsDao?.saveCollections(
+                map.mapValues { (_, c) -> json.encodeToString(SavedCollection.serializer(), c) },
+            )
+            val skipLegacyWrite = db != null && com.music.vibe.data.db.LegacyDataMigrator.isV1MigrationDone
+            if (!skipLegacyWrite && ::prefs.isInitialized) {
                 prefs.edit()
                     .putString(KEY_SAVED_COLLECTIONS, json.encodeToString(collectionSerializer, map))
                     .apply()
@@ -612,16 +955,76 @@ object Downloads {
     ) {
         val savedMap = _saved.updateAndGet(saved)
         val metaMap = _savedMetadata.updateAndGet(meta)
-        if (!::prefs.isInitialized) return
         synchronized(recordLock) {
-            prefs.edit()
-                .putString(KEY_SAVED, json.encodeToString(serializer, savedMap))
-                .putString(KEY_SAVED_METADATA, json.encodeToString(metadataSerializer, metaMap))
-                .apply()
+            val db = database
+            db?.downloadsDao?.saveTracksAndMetadata(
+                savedUris = savedMap,
+                metadataJsonById = metaMap.mapValues { (_, m) ->
+                    json.encodeToString(SavedSongMetadata.serializer(), m)
+                },
+                dateAddedSecById = metaMap.mapValues { (_, m) -> m.dateAddedSeconds ?: 0L },
+            )
+            val skipLegacyWrite = db != null && com.music.vibe.data.db.LegacyDataMigrator.isV1MigrationDone
+            if (!skipLegacyWrite && ::prefs.isInitialized) {
+                prefs.edit()
+                    .putString(KEY_SAVED, json.encodeToString(serializer, savedMap))
+                    .putString(KEY_SAVED_METADATA, json.encodeToString(metadataSerializer, metaMap))
+                    .apply()
+            }
         }
     }
 
     private val recordLock = Any()
+
+    /** Serializes current download records for [com.music.vibe.data.stats.Backup] export. */
+    fun exportForBackup(): Map<String, String> = mapOf(
+        KEY_SAVED to json.encodeToString(serializer, _saved.value),
+        KEY_SAVED_METADATA to json.encodeToString(metadataSerializer, _savedMetadata.value),
+        KEY_SAVED_COLLECTIONS to json.encodeToString(collectionSerializer, _collections.value),
+    )
+
+    /**
+     * Restores download records from a [com.music.vibe.data.stats.Backup] settings map
+     * (supporting both new backups and pre-v2 legacy backup files) into memory and [VibeDatabase].
+     */
+    fun importFromBackup(decodedSettings: Map<String, Any?>) {
+        val rawSaved = decodedSettings[KEY_SAVED] as? String
+        val rawMeta = decodedSettings[KEY_SAVED_METADATA] as? String
+        val rawCollections = decodedSettings[KEY_SAVED_COLLECTIONS] as? String
+
+        val parsedSaved = if (!rawSaved.isNullOrBlank()) {
+            runCatching { json.decodeFromString(serializer, rawSaved) }
+                .getOrDefault(emptyMap())
+                .filterValues { uri -> !(uri.startsWith("content://") && uri.contains("/tree/")) }
+        } else {
+            emptyMap()
+        }
+
+        val parsedMeta = if (!rawMeta.isNullOrBlank()) {
+            runCatching { json.decodeFromString(metadataSerializer, rawMeta) }
+                .getOrDefault(emptyMap())
+                .filterValues { m -> !(m.uri.startsWith("content://") && m.uri.contains("/tree/")) }
+        } else {
+            emptyMap()
+        }
+
+        val parsedCollections = if (!rawCollections.isNullOrBlank()) {
+            runCatching { json.decodeFromString(collectionSerializer, rawCollections) }
+                .getOrDefault(emptyMap())
+        } else {
+            emptyMap()
+        }
+
+        if (rawSaved != null || rawMeta != null) {
+            record(
+                saved = { parsedSaved },
+                meta = { parsedMeta },
+            )
+        }
+        if (rawCollections != null) {
+            recordCollections { parsedCollections }
+        }
+    }
 
     /** Returns all downloaded songs whose files still exist on disk. */
     suspend fun getDownloadedSongs(context: Context): List<Song> = withContext(Dispatchers.IO) {
@@ -1321,6 +1724,553 @@ object Downloads {
     fun dismissFailure(videoId: String) {
         if (_active.value[videoId] is DownloadState.Failed) clear(videoId)
     }
+
+    // ---- Batch Export / Move Engine -----------------------------------------
+
+    fun dismissExportState() {
+        val cur = _exportState.value
+        if (cur is ExportState.Completed || cur is ExportState.Failed) {
+            _exportState.value = ExportState.Idle
+        }
+    }
+
+    fun startExport(context: Context, moveMode: Boolean) {
+        if (_exportState.value is ExportState.Running) return
+        val app = context.applicationContext
+        val intent = Intent(app, DownloadService::class.java).apply {
+            action = DownloadService.ACTION_START_EXPORT
+            putExtra(DownloadService.EXTRA_MOVE_MODE, moveMode)
+        }
+        runCatching {
+            ContextCompat.startForegroundService(app, intent)
+        }.onFailure {
+            Log.w(TAG, "Could not start export service: ${it.message}")
+            _exportState.value = ExportState.Failed("Could not start export service")
+        }
+    }
+
+    fun cancelExport() {
+        exportJob?.cancel()
+        exportJob = null
+        if (_exportState.value is ExportState.Running) {
+            _exportState.value = ExportState.Idle
+        }
+    }
+
+    internal fun attachExportJob(job: Job) {
+        exportJob = job
+    }
+
+    internal fun isExportRunning(): Boolean = _exportState.value is ExportState.Running
+
+    private data class ExportSourceItem(
+        val sourceUri: Uri,
+        val displayName: String,
+        val title: String,
+        val sizeBytes: Long,
+        val videoIds: Set<String>,
+        val safFlags: Int = 0,
+    )
+
+    internal suspend fun runExport(context: Context, moveMode: Boolean) = withContext(Dispatchers.IO) {
+        val targetTreeUri = DownloadStore.activeCustomTreeUri()
+        if (!AppSettings.exportDownloads.value && targetTreeUri == null) {
+            _exportState.value = ExportState.Failed("Choose a download folder first")
+            return@withContext
+        }
+
+        _exportState.value = ExportState.Running(
+            completed = 0,
+            total = 0,
+            currentTitle = "Preparing…",
+            moveMode = moveMode,
+        )
+
+        try {
+            DownloadStore.cleanupStaleTempFiles(context, targetTreeUri)
+            val items = collectExportableItems(context, targetTreeUri)
+            if (items.isEmpty()) {
+                _exportState.value = ExportState.Completed(
+                    exported = 0,
+                    skippedAlreadyThere = 0,
+                    skippedConflicts = 0,
+                    copiedFallback = 0,
+                    failed = 0,
+                    moveMode = moveMode,
+                )
+                return@withContext
+            }
+
+            // Pre-flight free space check on destination volume
+            val targetVol = targetTreeUri?.let(DownloadStore::volumeIdOf) ?: "primary"
+            val existingNamesInTarget = if (targetTreeUri != null) {
+                DownloadStore.getSafIndex(context, targetTreeUri, forceRefresh = true)
+                    ?.byDisplayNameLower.orEmpty()
+            } else {
+                emptyMap()
+            }
+
+            val itemsNeedingWrite = items.filter { item ->
+                val existing = existingNamesInTarget[item.displayName.lowercase(Locale.ROOT)]
+                existing == null
+            }
+
+            val allSameVolume = itemsNeedingWrite.all {
+                DownloadStore.volumeIdOf(it.sourceUri) == targetVol
+            }
+            val safetyMargin = 10L * 1024 * 1024 // 10 MB
+            val requiredBytes = if (moveMode && allSameVolume) {
+                (itemsNeedingWrite.maxOfOrNull { it.sizeBytes } ?: 0L) + safetyMargin
+            } else {
+                itemsNeedingWrite.sumOf { it.sizeBytes.coerceAtLeast(0L) } + safetyMargin
+            }
+
+            val availableBytes = DownloadStore.queryAvailableBytes(context, targetTreeUri)
+            if (availableBytes != null && itemsNeedingWrite.isNotEmpty() && availableBytes < requiredBytes) {
+                val neededMb = (requiredBytes / (1024 * 1024)).coerceAtLeast(1L)
+                _exportState.value = ExportState.Failed("Not enough free storage (${neededMb} MB needed)")
+                return@withContext
+            }
+
+            var exportedCount = 0
+            var skippedAlreadyThereCount = 0
+            var skippedConflictsCount = 0
+            var copiedFallbackCount = 0
+            var failedCount = 0
+
+            val total = items.size
+            for ((index, item) in items.withIndex()) {
+                _exportState.value = ExportState.Running(
+                    completed = index,
+                    total = total,
+                    currentTitle = item.title,
+                    moveMode = moveMode,
+                )
+
+                val mutex = DownloadStore.stemMutexFor(item.displayName)
+                mutex.withLock {
+                    try {
+                        val outcome = exportSingleItem(
+                            context = context,
+                            item = item,
+                            targetTreeUri = targetTreeUri,
+                            moveMode = moveMode,
+                        )
+                        when (outcome) {
+                            SingleExportOutcome.EXPORTED -> exportedCount++
+                            SingleExportOutcome.EXPORTED_COPIED_FALLBACK -> {
+                                exportedCount++
+                                copiedFallbackCount++
+                            }
+                            SingleExportOutcome.ALREADY_THERE -> skippedAlreadyThereCount++
+                            SingleExportOutcome.ALREADY_THERE_COPIED_FALLBACK -> {
+                                skippedAlreadyThereCount++
+                                copiedFallbackCount++
+                            }
+                            SingleExportOutcome.CONFLICT_SKIPPED -> skippedConflictsCount++
+                        }
+                    } catch (ce: CancellationException) {
+                        throw ce
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed exporting ${item.displayName}: ${e.message}", e)
+                        failedCount++
+                    }
+                }
+            }
+
+            DownloadStore.markSafIndexDirty()
+            releaseUnusedSafTreeGrants(context)
+
+            _exportState.value = ExportState.Completed(
+                exported = exportedCount,
+                skippedAlreadyThere = skippedAlreadyThereCount,
+                skippedConflicts = skippedConflictsCount,
+                copiedFallback = copiedFallbackCount,
+                failed = failedCount,
+                moveMode = moveMode,
+            )
+        } catch (ce: CancellationException) {
+            _exportState.value = ExportState.Idle
+            throw ce
+        } catch (e: Exception) {
+            Log.w(TAG, "Export failed: ${e.message}", e)
+            _exportState.value = ExportState.Failed(e.message ?: "Export failed")
+        }
+    }
+
+    private enum class SingleExportOutcome {
+        EXPORTED,
+        EXPORTED_COPIED_FALLBACK,
+        ALREADY_THERE,
+        ALREADY_THERE_COPIED_FALLBACK,
+        CONFLICT_SKIPPED,
+    }
+
+    private fun exportSingleItem(
+        context: Context,
+        item: ExportSourceItem,
+        targetTreeUri: Uri?,
+        moveMode: Boolean,
+    ): SingleExportOutcome {
+        val resolver = context.contentResolver
+        val fileName = item.displayName
+        val mimeType = DownloadStore.realAudioMimeType(fileName)
+
+        if (targetTreeUri != null) {
+            // Check target SAF folder index for existing file with same displayName
+            val existing = DownloadStore.findSafEntryByDisplayName(
+                context = context,
+                treeUri = targetTreeUri,
+                displayName = fileName,
+                forceRefresh = false,
+            )
+            if (existing != null) {
+                return if (item.sizeBytes > 0L && existing.size == item.sizeBytes) {
+                    // Already exported with identical size
+                    updateSavedReferences(item.sourceUri, existing.uri, item.videoIds)
+                    if (moveMode && item.sourceUri != existing.uri) {
+                        val deleted = deleteSourceSafely(context, item.sourceUri)
+                        if (deleted) {
+                            SingleExportOutcome.ALREADY_THERE
+                        } else {
+                            SingleExportOutcome.ALREADY_THERE_COPIED_FALLBACK
+                        }
+                    } else {
+                        SingleExportOutcome.ALREADY_THERE
+                    }
+                } else {
+                    // Different byte size -> conflict! Skip and keep original URI in Downloads.saved
+                    Log.w(TAG, "Skipping conflict for $fileName (source=${item.sizeBytes}, target=${existing.size})")
+                    SingleExportOutcome.CONFLICT_SKIPPED
+                }
+            }
+
+            // Fast same-provider SAF move optimization (when no conflict exists)
+            if (moveMode &&
+                DownloadStore.isSafTreeUri(item.sourceUri) &&
+                item.sourceUri.authority == targetTreeUri.authority &&
+                DownloadStore.volumeIdOf(item.sourceUri) == DownloadStore.volumeIdOf(targetTreeUri) &&
+                (item.safFlags and DocumentsContract.Document.FLAG_SUPPORTS_MOVE) != 0
+            ) {
+                val movedTreeUri = runCatching {
+                    val sourceTreeId = DownloadStore.extractTreeDocumentId(item.sourceUri)
+                        ?: return@runCatching null
+                    val sourceParentUri = DocumentsContract.buildDocumentUriUsingTree(item.sourceUri, sourceTreeId)
+                    val targetTreeId = DocumentsContract.getTreeDocumentId(targetTreeUri)
+                    val targetParentUri = DocumentsContract.buildDocumentUriUsingTree(targetTreeUri, targetTreeId)
+                    val moved = DocumentsContract.moveDocument(
+                        resolver,
+                        item.sourceUri,
+                        sourceParentUri,
+                        targetParentUri,
+                    ) ?: return@runCatching null
+                    DownloadStore.toTreeDocumentUri(targetTreeUri, moved)
+                }.getOrNull()
+
+                if (movedTreeUri != null) {
+                    DownloadStore.markSafIndexDirty()
+                    updateSavedReferences(item.sourceUri, movedTreeUri, item.videoIds)
+                    return SingleExportOutcome.EXPORTED
+                }
+            }
+
+            // Standard .vibe-part- write + renameDocument
+            val destUri = DownloadStore.writeSafDocumentWithPart(
+                context = context,
+                treeUri = targetTreeUri,
+                finalFileName = fileName,
+                mimeType = mimeType,
+                expectedSize = item.sizeBytes,
+            ) { out ->
+                streamSourceToOutput(context, item.sourceUri, out)
+            }
+
+            updateSavedReferences(item.sourceUri, destUri, item.videoIds)
+            if (moveMode) {
+                val deleted = deleteSourceSafely(context, item.sourceUri)
+                if (!deleted) {
+                    return SingleExportOutcome.EXPORTED_COPIED_FALLBACK
+                }
+            }
+            return SingleExportOutcome.EXPORTED
+        } else {
+            // Exporting to default Music/Vibe Music folder
+            val alreadyInDefault = DownloadStore.existing(context, fileName)
+            if (alreadyInDefault != null) {
+                val targetSize = queryUriSizeAndName(context, alreadyInDefault)?.first ?: -1L
+                return if (item.sizeBytes > 0L && targetSize == item.sizeBytes) {
+                    updateSavedReferences(item.sourceUri, alreadyInDefault, item.videoIds)
+                    if (moveMode && item.sourceUri != alreadyInDefault) {
+                        val deleted = deleteSourceSafely(context, item.sourceUri)
+                        if (deleted) {
+                            SingleExportOutcome.ALREADY_THERE
+                        } else {
+                            SingleExportOutcome.ALREADY_THERE_COPIED_FALLBACK
+                        }
+                    } else {
+                        SingleExportOutcome.ALREADY_THERE
+                    }
+                } else {
+                    SingleExportOutcome.CONFLICT_SKIPPED
+                }
+            }
+
+            val pending = DownloadStore.begin(context, fileName, mimeType)
+            try {
+                pending.openStream().use { out ->
+                    streamSourceToOutput(context, item.sourceUri, out)
+                }
+                val committedUri = pending.commit(mimeType)
+                updateSavedReferences(item.sourceUri, committedUri, item.videoIds)
+                if (moveMode) {
+                    val deleted = deleteSourceSafely(context, item.sourceUri)
+                    if (!deleted) {
+                        return SingleExportOutcome.EXPORTED_COPIED_FALLBACK
+                    }
+                }
+                return SingleExportOutcome.EXPORTED
+            } catch (t: Throwable) {
+                pending.abort()
+                throw t
+            }
+        }
+    }
+
+    /**
+     * Deletes [sourceUri] after a verified copy. If [sourceUri] is a `MediaStore` row from a
+     * previous install (throwing `SecurityException` or returning 0 rows deleted), catches it
+     * and returns `false` so the caller treats that file as a Copy fallback rather than failing.
+     */
+    private fun deleteSourceSafely(context: Context, sourceUri: Uri): Boolean = try {
+        DownloadStore.delete(context, sourceUri)
+    } catch (se: SecurityException) {
+        Log.w(TAG, "MediaStore refused delete for $sourceUri (${se.message}); keeping source copy")
+        false
+    } catch (e: Exception) {
+        Log.w(TAG, "Could not delete source $sourceUri (${e.message})")
+        false
+    }
+
+    private fun updateSavedReferences(sourceUri: Uri, newUri: Uri, videoIds: Set<String>) {
+        val oldStr = sourceUri.toString()
+        val newStr = newUri.toString()
+        if (oldStr == newStr && videoIds.isEmpty()) return
+        record(
+            saved = { current ->
+                val updated = current.toMutableMap()
+                for ((k, v) in current) {
+                    if (v == oldStr || k in videoIds) {
+                        updated[k] = newStr
+                    }
+                }
+                updated
+            },
+            meta = { current ->
+                val updated = current.toMutableMap()
+                for ((k, v) in current) {
+                    if (v.uri == oldStr || k in videoIds) {
+                        updated[k] = v.copy(uri = newStr)
+                    }
+                }
+                updated
+            },
+        )
+    }
+
+    private fun streamSourceToOutput(context: Context, sourceUri: Uri, out: OutputStream): Long {
+        val buffer = ByteArray(64 * 1024)
+        var total = 0L
+        if (sourceUri.scheme == "file") {
+            val file = File(sourceUri.path ?: error("Invalid file path"))
+            FileInputStream(file).use { input ->
+                while (true) {
+                    val read = input.read(buffer)
+                    if (read <= 0) break
+                    out.write(buffer, 0, read)
+                    total += read
+                }
+            }
+        } else {
+            context.contentResolver.openInputStream(sourceUri)?.use { input ->
+                while (true) {
+                    val read = input.read(buffer)
+                    if (read <= 0) break
+                    out.write(buffer, 0, read)
+                    total += read
+                }
+            } ?: error("Could not read $sourceUri")
+        }
+        return total
+    }
+
+    private fun collectExportableItems(context: Context, targetTreeUri: Uri?): List<ExportSourceItem> {
+        val targetTreeId = targetTreeUri?.let(DownloadStore::extractTreeDocumentId)
+        val targetAuthority = targetTreeUri?.authority
+        val savedMap = _saved.value
+        val metaMap = _savedMetadata.value
+
+        val videoIdsByUri = mutableMapOf<String, MutableSet<String>>()
+        for ((vid, u) in savedMap) {
+            videoIdsByUri.getOrPut(u) { LinkedHashSet() }.add(vid)
+        }
+        for ((vid, m) in metaMap) {
+            videoIdsByUri.getOrPut(m.uri) { LinkedHashSet() }.add(vid)
+        }
+
+        val itemsByUri = LinkedHashMap<String, ExportSourceItem>()
+
+        // 1. Tracked downloads in Downloads.saved / _savedMetadata
+        for ((uriStr, vids) in videoIdsByUri) {
+            val uri = runCatching { Uri.parse(uriStr) }.getOrNull() ?: continue
+            // Skip HLS/DASH multi-file packages
+            if (uri.scheme == "file" && uri.lastPathSegment == "playlist.m3u8") continue
+            if (uri.path?.contains("/offline-hls/") == true) continue
+            // Skip files already inside the target SAF folder
+            if (targetTreeUri != null && DownloadStore.isSafTreeUri(uri) &&
+                uri.authority == targetAuthority &&
+                DownloadStore.extractTreeDocumentId(uri) == targetTreeId
+            ) {
+                continue
+            }
+            if (!DownloadStore.exists(context, uri)) continue
+
+            val meta = vids.firstNotNullOfOrNull { metaMap[it] }
+            val info = queryUriSizeAndName(context, uri)
+            val fallbackExt = uri.lastPathSegment?.substringAfterLast('.', "m4a") ?: "m4a"
+            val fallbackName = if (meta != null) {
+                DownloadStore.fileNameFor(
+                    Song(
+                        videoId = meta.videoId,
+                        title = meta.title,
+                        artist = meta.artist,
+                        thumbnailUrl = meta.thumbnailUrl,
+                    ),
+                    fallbackExt,
+                )
+            } else {
+                uri.lastPathSegment?.substringAfterLast('/') ?: "track.$fallbackExt"
+            }
+            val displayName = info?.second?.takeIf { it.isNotBlank() } ?: fallbackName
+            if (displayName.startsWith(DownloadStore.PART_PREFIX) || displayName.startsWith(".")) continue
+
+            itemsByUri[uriStr] = ExportSourceItem(
+                sourceUri = uri,
+                displayName = displayName,
+                title = meta?.title?.takeIf { it.isNotBlank() } ?: displayName.substringBeforeLast('.'),
+                sizeBytes = info?.first ?: 0L,
+                videoIds = vids,
+                safFlags = info?.third ?: 0,
+            )
+        }
+
+        // 2. Untracked files in app-private storage (getExternalFilesDir(MUSIC) and filesDir/downloads)
+        val privateDirs = listOfNotNull(
+            DownloadStore.privateDirectory(context),
+            File(context.filesDir, "downloads").takeIf { it.exists() },
+        )
+        for (dir in privateDirs) {
+            dir.listFiles()?.forEach { file ->
+                if (!file.isFile || file.name.startsWith(".")) return@forEach
+                val u = Uri.fromFile(file)
+                val uStr = u.toString()
+                if (uStr !in itemsByUri) {
+                    itemsByUri[uStr] = ExportSourceItem(
+                        sourceUri = u,
+                        displayName = file.name,
+                        title = file.nameWithoutExtension,
+                        sizeBytes = file.length(),
+                        videoIds = emptySet(),
+                    )
+                }
+            }
+        }
+
+        // 3. Files in default Music/Vibe Music when exporting to a custom SAF folder
+        if (targetTreeUri != null && !DownloadStore.isCustomFolderSameAsDefaultMusic(targetTreeUri.toString())) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                runCatching {
+                    context.contentResolver.query(
+                        android.provider.MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                        arrayOf(
+                            android.provider.MediaStore.Audio.Media._ID,
+                            android.provider.MediaStore.Audio.Media.DISPLAY_NAME,
+                            android.provider.MediaStore.Audio.Media.SIZE,
+                            android.provider.MediaStore.Audio.Media.TITLE,
+                        ),
+                        "${android.provider.MediaStore.MediaColumns.RELATIVE_PATH} LIKE ?",
+                        arrayOf("%${DownloadStore.FOLDER}%"),
+                        null,
+                    )?.use { cursor ->
+                        val idCol = cursor.getColumnIndexOrThrow(android.provider.MediaStore.Audio.Media._ID)
+                        val nameCol = cursor.getColumnIndexOrThrow(android.provider.MediaStore.Audio.Media.DISPLAY_NAME)
+                        val sizeCol = cursor.getColumnIndexOrThrow(android.provider.MediaStore.Audio.Media.SIZE)
+                        val titleCol = cursor.getColumnIndexOrThrow(android.provider.MediaStore.Audio.Media.TITLE)
+                        while (cursor.moveToNext()) {
+                            val id = cursor.getLong(idCol)
+                            val name = cursor.getString(nameCol) ?: continue
+                            if (name.startsWith(".")) continue
+                            val size = cursor.getLong(sizeCol)
+                            val title = cursor.getString(titleCol)
+                            val contentUri = android.content.ContentUris.withAppendedId(
+                                android.provider.MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                                id,
+                            )
+                            val uStr = contentUri.toString()
+                            if (uStr !in itemsByUri) {
+                                itemsByUri[uStr] = ExportSourceItem(
+                                    sourceUri = contentUri,
+                                    displayName = name,
+                                    title = title?.takeIf { it.isNotBlank() } ?: name.substringBeforeLast('.'),
+                                    sizeBytes = size,
+                                    videoIds = videoIdsByUri[uStr].orEmpty(),
+                                )
+                            }
+                        }
+                    }
+                }
+            } else {
+                val legacyFolder = DownloadStore.legacyFile("dummy").parentFile
+                legacyFolder?.listFiles()?.forEach { file ->
+                    if (!file.isFile || file.name.startsWith(".")) return@forEach
+                    val u = Uri.fromFile(file)
+                    val uStr = u.toString()
+                    if (uStr !in itemsByUri) {
+                        itemsByUri[uStr] = ExportSourceItem(
+                            sourceUri = u,
+                            displayName = file.name,
+                            title = file.nameWithoutExtension,
+                            sizeBytes = file.length(),
+                            videoIds = videoIdsByUri[uStr].orEmpty(),
+                        )
+                    }
+                }
+            }
+        }
+
+        return itemsByUri.values.toList()
+    }
+
+    private fun queryUriSizeAndName(context: Context, uri: Uri): Triple<Long, String?, Int>? = runCatching {
+        if (uri.scheme == "file") {
+            val f = File(uri.path ?: return@runCatching null)
+            return@runCatching Triple(f.length(), f.name, 0)
+        }
+        val projection = arrayOf(
+            DocumentsContract.Document.COLUMN_SIZE,
+            DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+            DocumentsContract.Document.COLUMN_FLAGS,
+        )
+        context.contentResolver.query(uri, projection, null, null, null)?.use { cursor ->
+            if (!cursor.moveToFirst()) return@use null
+            val sizeIdx = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_SIZE)
+            val nameIdx = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
+            val flagsIdx = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_FLAGS)
+            val size = if (sizeIdx >= 0 && !cursor.isNull(sizeIdx)) cursor.getLong(sizeIdx) else 0L
+            val name = if (nameIdx >= 0 && !cursor.isNull(nameIdx)) cursor.getString(nameIdx) else null
+            val flags = if (flagsIdx >= 0 && !cursor.isNull(flagsIdx)) cursor.getInt(flagsIdx) else 0
+            Triple(size, name, flags)
+        }
+    }.getOrNull()
 
     private const val KEY_SAVED = "downloaded_tracks"
 }

@@ -1,6 +1,11 @@
 package com.music.vibe.data.model
 
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.json.Json
+
 /** Tier of an item in the playback queue. */
+@Serializable
 enum class QueueTier {
     /** Explicitly queued by user ("Play Next", "Add to Queue", or preserved user queue). */
     USER_QUEUE,
@@ -16,12 +21,14 @@ enum class QueueTier {
  * @property browseId The artist's own channel, so their page is the one that
  * opens. Null for the rare run that names an artist without linking one.
  */
+@Serializable
 data class ArtistRef(
     val name: String,
     val browseId: String? = null,
 )
 
 /** A playable YouTube Music track. */
+@Serializable
 data class Song(
     val videoId: String,
     val title: String,
@@ -289,9 +296,11 @@ const val NOTIFICATION_ART_PX = 544
  */
 const val PLAYER_ART_PX = 1200
 
+@Serializable
 enum class BrowseType { ALBUM, ARTIST, PLAYLIST, OTHER }
 
 /** A queue-level origin shown above Now Playing, in the style of Spotify. */
+@Serializable
 enum class PlaybackSourceType {
     HOME,
     SEARCH,
@@ -605,3 +614,29 @@ sealed interface UiState<out T> {
     data class Success<T>(val data: T) : UiState<T>
     data class Error(val message: String) : UiState<Nothing>
 }
+
+/**
+ * Canonical JSON codec for [Song] and [List]<[Song]>, eliminating parallel
+ * `StoredTrack` / `Bundle` copies that drop newly added [Song] properties.
+ */
+object SongJsonCodec {
+    val json = Json {
+        ignoreUnknownKeys = true
+        encodeDefaults = true
+    }
+
+    fun encode(song: Song): String =
+        json.encodeToString(Song.serializer(), song)
+
+    fun decode(raw: String): Song? =
+        runCatching { json.decodeFromString(Song.serializer(), raw) }.getOrNull()
+
+    fun encodeList(songs: List<Song>): String =
+        json.encodeToString(ListSerializer(Song.serializer()), songs)
+
+    fun decodeList(raw: String): List<Song> =
+        runCatching {
+            json.decodeFromString(ListSerializer(Song.serializer()), raw)
+        }.getOrDefault(emptyList())
+}
+

@@ -496,11 +496,11 @@ object LyricsTranslation {
             }
 
             override fun onResponse(call: Call, response: Response) {
-                response.use {
-                    val body = if (it.isSuccessful) it.body?.string() else null
+                response.use { res ->
+                    val body = if (res.isSuccessful) res.body.string() else null
                     if (!continuation.isActive) return
                     if (body != null) continuation.resume(body)
-                    else continuation.resumeWithException(IOException("Translation HTTP ${it.code}"))
+                    else continuation.resumeWithException(IOException("Translation HTTP ${res.code}"))
                 }
             }
         })

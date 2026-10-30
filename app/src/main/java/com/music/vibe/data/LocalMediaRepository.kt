@@ -18,12 +18,37 @@ import com.music.vibe.download.Downloads
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.util.Collections
 import java.util.Locale
 
 object LocalMediaRepository {
 
     private const val TAG = "VibeMusic"
     private const val MIN_LOCAL_MUSIC_DURATION_MS = 30_000L
+    private const val MAX_METADATA_CACHE_ENTRIES = 2_000
+
+    private data class MetadataCacheKey(
+        val uriString: String,
+        val lastModified: Long,
+        val size: Long,
+    )
+
+    private data class CachedExtractedMetadata(
+        val title: String,
+        val artist: String,
+        val albumName: String?,
+        val durationText: String?,
+        val trackNumber: Int?,
+    )
+
+    private val metadataCache: MutableMap<MetadataCacheKey, CachedExtractedMetadata> =
+        Collections.synchronizedMap(
+            object : LinkedHashMap<MetadataCacheKey, CachedExtractedMetadata>(256, 0.75f, true) {
+                override fun removeEldestEntry(
+                    eldest: MutableMap.MutableEntry<MetadataCacheKey, CachedExtractedMetadata>?,
+                ): Boolean = size > MAX_METADATA_CACHE_ENTRIES
+            },
+        )
 
     // `mp4` only ever reaches this list as an audio row — MediaStore files a
     // video .mp4 under Video, not Audio — so it is the audio-only MP4s Dolby
@@ -90,11 +115,50 @@ object LocalMediaRepository {
     suspend fun getDownloadedSongs(context: Context): List<Song> = withContext(Dispatchers.IO) {
         val appDownloads = Downloads.getDownloadedSongs(context)
         val knownUris = appDownloads.mapNotNull { it.localUri }.toSet()
-        val extraSongs = mutableListOf<Song>()
+        val extraSongs = mutableListOf<Pair<Song, Pair<String, Long>?>>()
 
         /** uri to what the media scanner read off that file. */
         val scanned = mutableMapOf<String, ScannedTags>()
+        val scannedNameSizeByUri = mutableMapOf<String, Pair<String, Long>>()
 
+        val customTreeUri = DownloadStore.activeCustomTreeUri()
+        val sameAsDefaultMusic = customTreeUri != null &&
+            DownloadStore.isCustomFolderSameAsDefaultMusic(customTreeUri.toString())
+
+        // 1. Scan active custom SAF folder via single-query SAF index (skipping .vibe-part-* files)
+        if (customTreeUri != null) {
+            runCatching {
+                val safEntries = DownloadStore.getActiveSafEntries(context)
+                for (entry in safEntries) {
+                    val uriStr = entry.uri.toString()
+                    val nameLower = entry.displayName.lowercase(Locale.ROOT)
+                    if (entry.size > 0L) {
+                        scannedNameSizeByUri[uriStr] = nameLower to entry.size
+                    }
+                    if (uriStr !in knownUris && isAudioFileName(entry.displayName)) {
+                        val modSeconds = entry.lastModified.takeIf { it > 0L }?.div(1_000L)
+                        val tags = ScannedTags(
+                            albumName = null,
+                            artworkUrl = null,
+                            dateAddedSeconds = modSeconds,
+                            dateModifiedSeconds = modSeconds,
+                        )
+                        val song = buildSongFromUri(
+                            context = context,
+                            uriStr = uriStr,
+                            fileName = entry.displayName,
+                            scanned = tags,
+                            lastModified = entry.lastModified,
+                            size = entry.size,
+                        )
+                        val dedupKey = if (entry.size > 0L) nameLower to entry.size else null
+                        extraSongs.add(song to dedupKey)
+                    }
+                }
+            }.onFailure { Log.w(TAG, "Failed scanning custom SAF download folder: ${it.message}") }
+        }
+
+        // 2. Scan default Music/Vibe Music directory (skip adding duplicate extraSongs if custom folder is Music/Vibe Music)
         runCatching {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 val projection = arrayOf(
@@ -106,6 +170,7 @@ object LocalMediaRepository {
                     MediaStore.Audio.Media.DATE_ADDED,
                     MediaStore.Audio.Media.DATE_MODIFIED,
                     MediaStore.Audio.Media.TRACK,
+                    MediaStore.Audio.Media.SIZE,
                 )
                 val selection = "${MediaStore.MediaColumns.RELATIVE_PATH} LIKE ?"
                 val selectionArgs = arrayOf("%${DownloadStore.FOLDER}%")
@@ -124,14 +189,22 @@ object LocalMediaRepository {
                     val dateAddedCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_ADDED)
                     val dateModifiedCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_MODIFIED)
                     val trackCol = cursor.getColumnIndex(MediaStore.Audio.Media.TRACK)
+                    val sizeCol = cursor.getColumnIndex(MediaStore.Audio.Media.SIZE)
                     val albumArtBaseUri = Uri.parse("content://media/external/audio/albumart")
 
                     while (cursor.moveToNext()) {
                         val id = cursor.getLong(idCol)
                         val name = cursor.getString(nameCol) ?: continue
+                        if (name.startsWith(DownloadStore.PART_PREFIX) || name.startsWith(".")) continue
                         val contentUri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id).toString()
                         val albumId = cursor.getLong(albumIdCol)
                         val trackRaw = if (trackCol >= 0) cursor.getString(trackCol) else null
+                        val dateMod = cursor.getLong(dateModifiedCol)
+                        val size = if (sizeCol >= 0 && !cursor.isNull(sizeCol)) cursor.getLong(sizeCol) else 0L
+                        val nameLower = name.lowercase(Locale.ROOT)
+                        if (size > 0L) {
+                            scannedNameSizeByUri[contentUri] = nameLower to size
+                        }
                         val tags = ScannedTags(
                             albumName = cursor.getString(albumCol).cleanTag(),
                             artworkUrl = if (albumId > 0) {
@@ -140,16 +213,25 @@ object LocalMediaRepository {
                                 null
                             },
                             dateAddedSeconds = cursor.getLong(dateAddedCol),
-                            dateModifiedSeconds = cursor.getLong(dateModifiedCol),
+                            dateModifiedSeconds = dateMod,
                             trackNumber = parseTrackNumber(trackRaw),
                         )
                         scanned[contentUri] = tags
-                        if (contentUri !in knownUris && isAudioFileName(name)) {
-                            extraSongs.add(buildSongFromUri(context, contentUri, name, tags))
+                        if (!sameAsDefaultMusic && contentUri !in knownUris && isAudioFileName(name)) {
+                            val song = buildSongFromUri(
+                                context = context,
+                                uriStr = contentUri,
+                                fileName = name,
+                                scanned = tags,
+                                lastModified = dateMod * 1_000L,
+                                size = size,
+                            )
+                            val dedupKey = if (size > 0L) nameLower to size else null
+                            extraSongs.add(song to dedupKey)
                         }
                     }
                 }
-            } else {
+            } else if (!sameAsDefaultMusic) {
                 val folder = File(
                     android.os.Environment.getExternalStoragePublicDirectory(
                         android.os.Environment.DIRECTORY_MUSIC,
@@ -158,18 +240,26 @@ object LocalMediaRepository {
                 )
                 if (folder.exists() && folder.isDirectory) {
                     folder.listFiles()?.forEach { file ->
-                        if (file.isFile && isAudioFileName(file.name)) {
+                        if (file.isFile && !file.name.startsWith(".") && isAudioFileName(file.name)) {
                             val uriStr = Uri.fromFile(file).toString()
+                            val size = file.length()
+                            val nameLower = file.name.lowercase(Locale.ROOT)
+                            if (size > 0L) {
+                                scannedNameSizeByUri[uriStr] = nameLower to size
+                            }
                             if (uriStr !in knownUris) {
-                                val modified = file.lastModified().takeIf { it > 0 }?.div(1_000)
-                                extraSongs.add(
-                                    buildSongFromUri(
-                                        context,
-                                        uriStr,
-                                        file.name,
-                                        ScannedTags(null, null, modified, modified),
-                                    ),
+                                val modifiedMs = file.lastModified()
+                                val modified = modifiedMs.takeIf { it > 0 }?.div(1_000)
+                                val song = buildSongFromUri(
+                                    context = context,
+                                    uriStr = uriStr,
+                                    fileName = file.name,
+                                    scanned = ScannedTags(null, null, modified, modified),
+                                    lastModified = modifiedMs,
+                                    size = size,
                                 )
+                                val dedupKey = if (size > 0L) nameLower to size else null
+                                extraSongs.add(song to dedupKey)
                             }
                         }
                     }
@@ -188,7 +278,22 @@ object LocalMediaRepository {
             )
         }
 
-        (filled + extraSongs).distinctBy { it.localUri ?: it.videoId }
+        // Deduplicate by (normalizedDisplayName, size) so a file indexed by both MediaStore
+        // and SAF (or tracked in Downloads.saved under one URI and scanned under the other)
+        // never appears twice. Prefer the canonical entry from Downloads.saved (`filled`).
+        val seenNameSizes = HashSet<Pair<String, Long>>()
+        for (song in filled) {
+            val uri = song.localUri ?: continue
+            scannedNameSizeByUri[uri]?.let { seenNameSizes.add(it) }
+        }
+
+        val deduplicatedExtras = mutableListOf<Song>()
+        for ((song, dedupKey) in extraSongs) {
+            if (dedupKey != null && !seenNameSizes.add(dedupKey)) continue
+            deduplicatedExtras.add(song)
+        }
+
+        (filled + deduplicatedExtras).distinctBy { it.localUri ?: it.videoId }
     }
 
     /**
@@ -343,6 +448,27 @@ object LocalMediaRepository {
     /** Human-readable path for the folder setting without exposing provider internals. */
     fun selectedFolderLabel(treeUri: String): String? = selectedFolder(treeUri)?.label
 
+    /**
+     * Formats a custom SAF download tree URI into a clean user-facing path such as
+     * `Internal storage/Music/MyVibe` or `SD card/Music/MyVibe`.
+     */
+    fun downloadFolderLabel(treeUri: String): String? = runCatching {
+        if (treeUri.isBlank()) return@runCatching null
+        val documentId = DocumentsContract.getTreeDocumentId(Uri.parse(treeUri))
+        if (documentId.startsWith("raw:")) {
+            val path = documentId.removePrefix("raw:").trimEnd('/')
+            return@runCatching path.substringAfterLast('/').ifBlank { path }
+        }
+        val volume = documentId.substringBefore(':')
+        val relative = documentId.substringAfter(':', "").trim('/')
+        val volumeLabel = if (volume.equals("primary", ignoreCase = true)) {
+            "Internal storage"
+        } else {
+            "SD card"
+        }
+        if (relative.isBlank()) volumeLabel else "$volumeLabel/$relative"
+    }.getOrNull()
+
     internal fun isInSelectedFolder(path: String?, treeUri: String): Boolean {
         if (treeUri.isBlank()) return true
         val folder = selectedFolder(treeUri) ?: return false
@@ -425,7 +551,30 @@ object LocalMediaRepository {
         uriStr: String,
         fileName: String,
         scanned: ScannedTags? = null,
+        lastModified: Long = 0L,
+        size: Long = 0L,
     ): Song {
+        val cacheKey = if (lastModified > 0L || size > 0L) {
+            MetadataCacheKey(uriStr, lastModified, size)
+        } else {
+            null
+        }
+        val cached = cacheKey?.let { metadataCache[it] }
+        if (cached != null) {
+            return Song(
+                videoId = uriStr,
+                title = cached.title,
+                artist = cached.artist,
+                thumbnailUrl = scanned?.artworkUrl,
+                durationText = cached.durationText,
+                albumName = cached.albumName ?: scanned?.albumName,
+                localUri = uriStr,
+                localDateAddedSeconds = scanned?.dateAddedSeconds,
+                localDateModifiedSeconds = scanned?.dateModifiedSeconds,
+                trackNumber = cached.trackNumber ?: scanned?.trackNumber,
+            )
+        }
+
         var title = fileName.substringBeforeLast(".")
         var artist = "Unknown Artist"
         var albumName: String? = null
@@ -450,6 +599,16 @@ object LocalMediaRepository {
             }
         } finally {
             runCatching { retriever.release() }
+        }
+
+        if (cacheKey != null) {
+            metadataCache[cacheKey] = CachedExtractedMetadata(
+                title = title,
+                artist = artist,
+                albumName = albumName,
+                durationText = durationText,
+                trackNumber = trackNumber,
+            )
         }
 
         return Song(

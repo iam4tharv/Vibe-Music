@@ -922,8 +922,9 @@ object YtMusicRepository {
     suspend fun addToPlaylist(
         playlistId: String,
         videoIds: List<String>,
+        dedupe: Boolean = true,
     ): Result<Map<String, String>> =
-        call("playlist:add") { Innertube.addToPlaylist(playlistId, videoIds) }
+        call("playlist:add") { Innertube.addToPlaylist(playlistId, videoIds, dedupe) }
 
     /** [entries] are (setVideoId, videoId) pairs — see [Song.setVideoId]. */
     suspend fun removeFromPlaylist(

@@ -54,9 +54,13 @@ import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.PlaylistAdd
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material.icons.rounded.Sort
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -70,15 +74,18 @@ import androidx.compose.material3.TabRowDefaults
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.draw.clip
@@ -117,6 +124,11 @@ import com.music.vibe.ui.haptics.Haptic
 import com.music.vibe.ui.haptics.rememberHaptics
 import com.music.vibe.ui.icons.VibeMusicIcons
 import java.util.Locale
+
+private val DownloadsStringSetSaver: Saver<Set<String>, ArrayList<String>> = Saver(
+    save = { ArrayList(it) },
+    restore = { it.toSet() },
+)
 
 private const val LOCAL_TAB_SONGS = 0
 private const val LOCAL_TAB_ARTISTS = 1
@@ -176,6 +188,11 @@ fun LocalMusicScreen(
     onDeleteDownloads: ((List<Song>) -> Unit)? = null,
     /** Copies the selected Downloads rows to the WebDAV server; null hides the action. */
     onUploadToWebDav: ((List<Song>) -> Unit)? = null,
+    onBatchAddToQueue: ((List<Song>) -> Unit)? = null,
+    onBatchAddToPlaylist: ((List<Song>) -> Unit)? = null,
+    selectionTriggerSong: Song? = null,
+    selectionTriggerPage: Boolean = false,
+    onSelectionTriggerHandled: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     // Which top-level tab is selected.
@@ -196,12 +213,36 @@ fun LocalMusicScreen(
         AppSettings.localMusicViewType.collectAsStateWithLifecycle()
     }
     val sortedSongs = remember(songs, sortOrder) { songs.sortedForLibrary(sortOrder) }
-    var selectedDownloadIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var isSelectionModeExplicit by rememberSaveable { mutableStateOf(false) }
+    var selectedDownloadIds by rememberSaveable(stateSaver = DownloadsStringSetSaver) {
+        mutableStateOf<Set<String>>(emptySet())
+    }
     // Kept separately from the tracks selected for deletion: different albums
     // can share tracks, so inferring an album's selection from those track ids
     // made one held playlist appear to select unrelated albums.
-    var selectedAlbumKeys by remember { mutableStateOf<Set<String>>(emptySet()) }
-    val selectingDownloads = isDownloads && selectedDownloadIds.isNotEmpty()
+    var selectedAlbumKeys by rememberSaveable(stateSaver = DownloadsStringSetSaver) {
+        mutableStateOf<Set<String>>(emptySet())
+    }
+    var showDeleteConfirm by rememberSaveable { mutableStateOf(false) }
+    val selectingDownloads = isDownloads && (isSelectionModeExplicit || selectedDownloadIds.isNotEmpty())
+
+    LaunchedEffect(selectionTriggerPage, selectionTriggerSong, isDownloads) {
+        if (!isDownloads) return@LaunchedEffect
+        if (selectionTriggerPage) {
+            isSelectionModeExplicit = true
+            onSelectionTriggerHandled()
+        } else if (selectionTriggerSong != null) {
+            isSelectionModeExplicit = true
+            selectedDownloadIds = selectedDownloadIds + selectionTriggerSong.videoId
+            onSelectionTriggerHandled()
+        }
+    }
+
+    val exitSelection = {
+        isSelectionModeExplicit = false
+        selectedDownloadIds = emptySet()
+        selectedAlbumKeys = emptySet()
+    }
 
     fun toggleDownloadSelection(song: Song) {
         selectedDownloadIds = selectedDownloadIds.let { selected ->
@@ -236,11 +277,43 @@ fun LocalMusicScreen(
         drillDownArt = null
     }
 
-    BackHandler(enabled = selectingDownloads) {
-        selectedDownloadIds = emptySet()
-        selectedAlbumKeys = emptySet()
-    }
+    BackHandler(enabled = selectingDownloads) { exitSelection() }
     BackHandler(enabled = inDrillDown && !selectingDownloads) { leaveDrillDown() }
+
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text(stringResource(R.string.confirm_delete_downloads_title)) },
+            text = {
+                Text(
+                    pluralStringResource(
+                        R.plurals.confirm_delete_downloads_body,
+                        selectedDownloadIds.size,
+                        selectedDownloadIds.size,
+                    ),
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val chosen = songs.filter { it.videoId in selectedDownloadIds }
+                        showDeleteConfirm = false
+                        exitSelection()
+                        onDeleteDownloads?.invoke(chosen)
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                    modifier = Modifier.testTag("confirm_delete_downloads_button"),
+                ) {
+                    Text(stringResource(R.string.delete))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            },
+        )
+    }
 
     // The tab row is fixed above the scrolling content, so its own top
     // padding has to clear the frosted top bar / status bar that the
@@ -260,25 +333,41 @@ fun LocalMusicScreen(
             DownloadSelectionBar(
                 count = selectedDownloadIds.size,
                 allSelected = sortedSongs.isNotEmpty() && selectedDownloadIds.containsAll(sortedSongs.map { it.videoId }),
-                onSelectAll = { selectedDownloadIds = sortedSongs.mapTo(linkedSetOf()) { it.videoId } },
+                onSelectAll = {
+                    val allIds = sortedSongs.mapTo(linkedSetOf()) { it.videoId }
+                    selectedDownloadIds = if (selectedDownloadIds.containsAll(allIds)) {
+                        emptySet()
+                    } else {
+                        allIds
+                    }
+                },
+                onQueue = onBatchAddToQueue?.let { queueFn ->
+                    {
+                        val chosen = songs.filter { it.videoId in selectedDownloadIds }
+                        exitSelection()
+                        if (chosen.isNotEmpty()) queueFn(chosen)
+                    }
+                },
+                onPlaylist = onBatchAddToPlaylist?.let { playlistFn ->
+                    {
+                        val chosen = songs.filter { it.videoId in selectedDownloadIds }
+                        exitSelection()
+                        if (chosen.isNotEmpty()) playlistFn(chosen)
+                    }
+                },
                 onDelete = {
-                    val chosen = songs.filter { it.videoId in selectedDownloadIds }
-                    selectedDownloadIds = emptySet()
-                    selectedAlbumKeys = emptySet()
-                    onDeleteDownloads?.invoke(chosen)
+                    if (selectedDownloadIds.isNotEmpty()) {
+                        showDeleteConfirm = true
+                    }
                 },
                 onUpload = onUploadToWebDav?.let { upload ->
                     {
                         val chosen = songs.filter { it.videoId in selectedDownloadIds }
-                        selectedDownloadIds = emptySet()
-                        selectedAlbumKeys = emptySet()
+                        exitSelection()
                         upload(chosen)
                     }
                 },
-                onCancel = {
-                    selectedDownloadIds = emptySet()
-                    selectedAlbumKeys = emptySet()
-                },
+                onCancel = exitSelection,
                 modifier = Modifier.padding(
                     top = barHeight + TopBarContentGap,
                     start = PAGE_GUTTER,
@@ -299,6 +388,11 @@ fun LocalMusicScreen(
                 val next = if (viewType == LibraryViewType.GRID) LibraryViewType.LIST else LibraryViewType.GRID
                 if (isDownloads) AppSettings.setDownloadedMusicViewType(next)
                 else AppSettings.setLocalMusicViewType(next)
+            },
+            onEnterSelectionMode = if (isDownloads && sortedSongs.isNotEmpty()) {
+                { isSelectionModeExplicit = true }
+            } else {
+                null
             },
             modifier = Modifier.padding(
                 // The same clearance every other page under the frosted bar
@@ -1506,6 +1600,7 @@ private fun LocalSearchField(
     viewType: LibraryViewType,
     onViewTypeToggle: () -> Unit,
     modifier: Modifier = Modifier,
+    onEnterSelectionMode: (() -> Unit)? = null,
 ) {
     var sortMenuOpen by remember { mutableStateOf(false) }
     val haptics = rememberHaptics()
@@ -1559,6 +1654,27 @@ private fun LocalSearchField(
                 )
             }
             Spacer(Modifier.width(4.dp))
+        }
+        onEnterSelectionMode?.let { enterSelect ->
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    .clickable {
+                        haptics.play(Haptic.Select)
+                        enterSelect()
+                    }
+                    .testTag("downloads_select_button"),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.CheckCircle,
+                    contentDescription = stringResource(R.string.select_tracks),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(19.dp),
+                )
+            }
+            Spacer(Modifier.width(2.dp))
         }
         Box(
             modifier = Modifier
@@ -1643,6 +1759,8 @@ private fun DownloadSelectionBar(
     modifier: Modifier = Modifier,
     /** Copies the selection to WebDAV; null (no server configured) hides the action. */
     onUpload: (() -> Unit)? = null,
+    onQueue: (() -> Unit)? = null,
+    onPlaylist: (() -> Unit)? = null,
 ) {
     Row(
         modifier = modifier
@@ -1652,7 +1770,11 @@ private fun DownloadSelectionBar(
             .padding(horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        IconButton(onClick = onSelectAll, enabled = !allSelected) {
+        IconButton(
+            onClick = onSelectAll,
+            enabled = !allSelected,
+            modifier = Modifier.testTag("downloads_batch_select_all_button"),
+        ) {
             Icon(
                 Icons.Rounded.Check,
                 contentDescription = stringResource(R.string.select_all),
@@ -1664,34 +1786,69 @@ private fun DownloadSelectionBar(
             text = "$count ${stringResource(R.string.selected)}",
             style = MaterialTheme.typography.titleSmall,
             color = if (isSystemInDarkTheme()) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
-        onUpload?.let { upload ->
-            TextButton(onClick = upload, enabled = count > 0) {
+        onQueue?.let { queue ->
+            IconButton(
+                onClick = queue,
+                enabled = count > 0,
+                modifier = Modifier.testTag("downloads_batch_queue_button"),
+            ) {
                 Icon(
-                    Icons.Rounded.FileUpload,
-                    contentDescription = null,
+                    Icons.AutoMirrored.Rounded.QueueMusic,
+                    contentDescription = stringResource(R.string.batch_add_to_queue),
                     tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(18.dp),
-                )
-                Spacer(Modifier.width(4.dp))
-                Text(
-                    stringResource(R.string.upload_to_webdav),
-                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp),
                 )
             }
         }
-        TextButton(onClick = onDelete, enabled = count > 0) {
+        onPlaylist?.let { playlist ->
+            IconButton(
+                onClick = playlist,
+                enabled = count > 0,
+                modifier = Modifier.testTag("downloads_batch_playlist_button"),
+            ) {
+                Icon(
+                    Icons.Rounded.PlaylistAdd,
+                    contentDescription = stringResource(R.string.batch_add_to_playlist),
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+        }
+        onUpload?.let { upload ->
+            IconButton(
+                onClick = upload,
+                enabled = count > 0,
+            ) {
+                Icon(
+                    Icons.Rounded.FileUpload,
+                    contentDescription = stringResource(R.string.upload_to_webdav),
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+        }
+        IconButton(
+            onClick = onDelete,
+            enabled = count > 0,
+            modifier = Modifier.testTag("downloads_batch_delete_button"),
+        ) {
             Icon(
                 Icons.Rounded.Delete,
-                contentDescription = null,
+                contentDescription = stringResource(R.string.delete),
                 tint = Color(0xFFFF453A),
-                modifier = Modifier.size(18.dp),
+                modifier = Modifier.size(20.dp),
             )
-            Spacer(Modifier.width(4.dp))
-            Text(stringResource(R.string.delete), color = Color(0xFFFF453A))
         }
-        TextButton(onClick = onCancel) { Text(stringResource(R.string.cancel)) }
+        TextButton(
+            onClick = onCancel,
+            modifier = Modifier.testTag("downloads_batch_cancel_button"),
+        ) {
+            Text(stringResource(R.string.cancel))
+        }
     }
 }
 

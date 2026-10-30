@@ -1,6 +1,7 @@
 package com.music.vibe.ui.components
 
 import com.music.vibe.R
+import com.music.vibe.data.settings.AppSettings
 
 import android.net.Uri
 import androidx.compose.foundation.background
@@ -143,6 +144,7 @@ fun SongActionsSheet(
     onOpenArtist: (String) -> Unit,
     modifier: Modifier = Modifier,
     onRemoveFromPlaylist: (() -> Unit)? = null,
+    onSelectTrack: (() -> Unit)? = null,
     showSleepTimer: Boolean = false,
     /**
      * Sends the playing track back to YouTube's own upload, and keeps it there.
@@ -294,6 +296,23 @@ fun SongActionsSheet(
                 )
             }
             GroupSeparator(palette)
+        } else if (onRemoveFromPlaylist != null) {
+            ActionRow(
+                icon = Icons.Rounded.PlaylistRemove,
+                label = stringResource(R.string.remove_from_playlist),
+                accent = palette.accent,
+                onClick = onRemoveFromPlaylist,
+            )
+            GroupSeparator(palette)
+        }
+
+        onSelectTrack?.let { select ->
+            ActionRow(
+                icon = Icons.Rounded.Check,
+                label = stringResource(R.string.batch_select_tracks),
+                accent = palette.accent,
+                onClick = select,
+            )
         }
 
         DownloadRow(song, palette, isOffline, onDownload)
@@ -548,9 +567,11 @@ private fun DownloadRow(song: Song, palette: ArtworkPalette, isOffline: Boolean,
     // flicker: a finished download clears the running state and writes the
     // record in the same breath, and starting pessimistic would show "Download"
     // again for as long as the check off the main thread takes.
+    val downloadFolderUri by AppSettings.downloadFolderUri.collectAsStateWithLifecycle()
+    val exportDownloads by AppSettings.exportDownloads.collectAsStateWithLifecycle()
     val recorded = saved[song.videoId]
-    val file by produceState(recorded?.let(Uri::parse), song.videoId, recorded) {
-        value = Downloads.savedUri(context, song.videoId)
+    val file by produceState(recorded?.let(Uri::parse), song.videoId, recorded, downloadFolderUri, exportDownloads) {
+        value = Downloads.savedOrAdoptUri(context, song)
     }
 
     // A failure is worth stating once. Leaving it set would have the row still

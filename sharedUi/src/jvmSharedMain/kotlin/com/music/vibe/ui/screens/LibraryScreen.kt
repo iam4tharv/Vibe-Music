@@ -114,11 +114,13 @@ fun LibraryScreen(
      * whole. Left off the page entirely while there are none.
      */
     deviceItems: List<ShelfItem>,
+    smartMixes: List<ShelfItem> = emptyList(),
     /** The big "Library" heading; the desktop's pages carry none. */
     showTitle: Boolean = true,
 ) {
     val pinnedPlaylists by AppUi.host.pinnedPlaylists.collectAsStateWithLifecycle()
     val onDevice = stringResource(Res.string.on_device)
+    val smartMixesTitle = stringResource(Res.string.smart_mixes)
     PullToRefresh(
         refreshing = refreshing,
         onRefresh = onRefresh,
@@ -143,6 +145,17 @@ fun LibraryScreen(
             item(key = "replay") { replay() }
             if (links.isNotEmpty()) {
                 item(key = "links") { LibraryLinkList(links = links, onClick = onShelfItemClick) }
+            }
+            if (smartMixes.isNotEmpty()) {
+                item(key = "shelf:$smartMixesTitle") {
+                    val smartShelf = HomeShelf(title = smartMixesTitle, items = smartMixes)
+                    LibraryGridShelf(
+                        shelf = smartShelf,
+                        onItemClick = onShelfItemClick,
+                        onItemLongPress = onShelfItemLongPress,
+                        onShowAll = { onShowAll(smartShelf) },
+                    )
+                }
             }
             if (deviceItems.isNotEmpty()) {
                 item(key = "shelf:$onDevice") {

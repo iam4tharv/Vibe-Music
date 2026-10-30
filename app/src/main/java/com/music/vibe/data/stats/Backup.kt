@@ -8,6 +8,8 @@ import com.music.vibe.data.settings.SearchHistory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.MapSerializer
+import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
 import java.time.Instant
 import java.time.ZoneId
@@ -63,10 +65,15 @@ object Backup {
     suspend fun exportTo(context: Context, target: Uri): Result<Int> = withContext(Dispatchers.IO) {
         runCatching {
             val buckets = ListeningStats.exportAll()
+            val mergedPrefs = LinkedHashMap<String, Any?>().apply {
+                putAll(AppSettings.exportPrefs())
+                put("search_history", SearchHistory.exportJson())
+                putAll(com.music.vibe.download.Downloads.exportForBackup())
+            }
             val file = BackupFile(
                 versionName = BuildConfig.VERSION_NAME,
                 exportedAt = Instant.now().toString(),
-                settings = AppSettings.exportPrefs().mapNotNull { (key, value) ->
+                settings = mergedPrefs.mapNotNull { (key, value) ->
                     PrefValue.of(value)?.let { key to it }
                 }.toMap(),
                 listening = buckets,
@@ -100,10 +107,23 @@ object Backup {
             }
 
             ListeningStats.importAll(file.listening)
-            AppSettings.importPrefs(file.settings.mapValues { it.value.decoded() })
-            // Shares AppSettings' preference file, so it has already been
-            // overwritten by the line above — it just doesn't know yet.
-            SearchHistory.reload()
+            val decodedSettings = file.settings
+                .filterKeys { it != "download_folder_uri" }
+                .mapValues { (key, prefValue) ->
+                    val raw = prefValue.decoded()
+                    if (key == "downloaded_tracks" && raw is String) {
+                        filterSafTreeTrackUris(raw)
+                    } else {
+                        raw
+                    }
+                }
+            AppSettings.importPrefs(decodedSettings)
+            if (decodedSettings.containsKey("search_history")) {
+                SearchHistory.importJson(decodedSettings["search_history"] as? String)
+            } else {
+                SearchHistory.reload()
+            }
+            com.music.vibe.download.Downloads.importFromBackup(decodedSettings)
             Summary(
                 months = file.listening.size,
                 settings = file.settings.size,
@@ -112,6 +132,23 @@ object Backup {
             )
         }
     }
+
+    /**
+     * Filters out device-specific SAF `/tree/` URIs (`content://.../tree/...`)
+     * from a serialized `downloaded_tracks` map while leaving `MediaStore`
+     * (`content://media/...`) and `file://` URIs untouched.
+     */
+    internal fun filterSafTreeTrackUris(rawJson: String): String = runCatching {
+        val mapSerializer = MapSerializer(
+            String.serializer(),
+            String.serializer(),
+        )
+        val parsed = json.decodeFromString(mapSerializer, rawJson)
+        val filtered = parsed.filterValues { uri ->
+            !(uri.startsWith("content://") && uri.contains("/tree/"))
+        }
+        json.encodeToString(mapSerializer, filtered)
+    }.getOrDefault(rawJson)
 
     /** What an import turned out to contain, for the line shown afterwards. */
     data class Summary(

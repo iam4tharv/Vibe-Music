@@ -1011,12 +1011,19 @@ object Innertube {
      * Absences are normal and not an error — the add still happened; only the
      * id for undoing it is unknown.
      */
-    suspend fun addToPlaylist(playlistId: String, videoIds: List<String>): Map<String, String> {
+    suspend fun addToPlaylist(
+        playlistId: String,
+        videoIds: List<String>,
+        dedupe: Boolean = true,
+    ): Map<String, String> {
         val response = editPlaylist(playlistId) {
             videoIds.forEach { videoId ->
                 addJsonObject {
                     put("action", "ACTION_ADD_VIDEO")
                     put("addedVideoId", videoId)
+                    if (dedupe) {
+                        put("dedupeOption", "DEDUPE_OPTION_SKIP")
+                    }
                 }
             }
         }

@@ -209,6 +209,26 @@ object AppSettings {
      */
     val exportDownloads = MutableStateFlow(false)
 
+    /**
+     * Custom SAF tree URI (`content://.../tree/...`) for exported downloads.
+     * Blank when using private app storage (`exportDownloads == false`) or the
+     * default `Music/Vibe Music` folder (`exportDownloads == true`).
+     */
+    val downloadFolderUri = MutableStateFlow("")
+
+    /**
+     * True when [downloadFolderUri] lives on a removable volume (e.g. SD card)
+     * that is currently unmounted. Keeps [downloadFolderUri] intact while
+     * temporarily falling back to default storage.
+     */
+    val downloadFolderUnavailable = MutableStateFlow(false)
+
+    /**
+     * Transient warning shown when a persisted custom download folder permission
+     * was revoked or the folder was permanently deleted.
+     */
+    val downloadFolderWarning = MutableStateFlow<String?>(null)
+
     /** Whether the active network charges for data. `null` while offline. */
     val meteredConnection = MutableStateFlow<Boolean?>(null)
 
@@ -789,7 +809,9 @@ object AppSettings {
         migrateDownloadQuality()
         downloadQuality.value = readDownloadQuality()
         wifiOnlyDownloads.value = prefs.getBoolean(KEY_WIFI_ONLY_DOWNLOADS, true)
-        exportDownloads.value = prefs.getBoolean(KEY_EXPORT_DOWNLOADS, false)
+        downloadFolderUri.value = prefs.getString(KEY_DOWNLOAD_FOLDER_URI, "").orEmpty()
+        exportDownloads.value = prefs.getBoolean(KEY_EXPORT_DOWNLOADS, false) ||
+            downloadFolderUri.value.isNotBlank()
         crossfadeSeconds.value = prefs.getInt(KEY_CROSSFADE, 0)
         smartFadeEnabled.value = prefs.getBoolean(KEY_SMART_FADE, false)
         automixPerformanceMode.value = runCatching {
@@ -1515,7 +1537,62 @@ object AppSettings {
 
     fun setExportDownloads(value: Boolean) {
         exportDownloads.value = value
-        prefs.edit().putBoolean(KEY_EXPORT_DOWNLOADS, value).apply()
+        if (!value) {
+            downloadFolderUri.value = ""
+            downloadFolderUnavailable.value = false
+            prefs.edit()
+                .putBoolean(KEY_EXPORT_DOWNLOADS, false)
+                .putString(KEY_DOWNLOAD_FOLDER_URI, "")
+                .apply()
+        } else {
+            prefs.edit().putBoolean(KEY_EXPORT_DOWNLOADS, true).apply()
+        }
+    }
+
+    fun setDownloadFolderUri(value: String) {
+        val trimmed = value.trim()
+        downloadFolderUri.value = trimmed
+        downloadFolderUnavailable.value = false
+        downloadFolderWarning.value = null
+        if (trimmed.isNotEmpty()) {
+            exportDownloads.value = true
+            prefs.edit()
+                .putString(KEY_DOWNLOAD_FOLDER_URI, trimmed)
+                .putBoolean(KEY_EXPORT_DOWNLOADS, true)
+                .apply()
+        } else {
+            prefs.edit().putString(KEY_DOWNLOAD_FOLDER_URI, "").apply()
+        }
+    }
+
+    fun setDownloadLocationPrivate() {
+        downloadFolderUri.value = ""
+        downloadFolderUnavailable.value = false
+        downloadFolderWarning.value = null
+        exportDownloads.value = false
+        prefs.edit()
+            .putString(KEY_DOWNLOAD_FOLDER_URI, "")
+            .putBoolean(KEY_EXPORT_DOWNLOADS, false)
+            .apply()
+    }
+
+    fun setDownloadLocationDefaultMusic() {
+        downloadFolderUri.value = ""
+        downloadFolderUnavailable.value = false
+        downloadFolderWarning.value = null
+        exportDownloads.value = true
+        prefs.edit()
+            .putString(KEY_DOWNLOAD_FOLDER_URI, "")
+            .putBoolean(KEY_EXPORT_DOWNLOADS, true)
+            .apply()
+    }
+
+    fun setDownloadFolderUnavailable(value: Boolean) {
+        downloadFolderUnavailable.value = value
+    }
+
+    fun setDownloadFolderWarning(value: String?) {
+        downloadFolderWarning.value = value
     }
 
     fun setLastfmPrimaryArtistOnly(value: Boolean) {
@@ -1908,6 +1985,7 @@ object AppSettings {
         "downloaded_tracks_metadata",
         "downloaded_collections",
         KEY_LOCAL_MUSIC_FOLDER_URI,
+        KEY_DOWNLOAD_FOLDER_URI,
         KEY_LAST_VERSION_CODE,
     )
 
@@ -1936,6 +2014,7 @@ object AppSettings {
     private const val KEY_QUALITY_DOWNLOAD = "audio_quality_download"
     private const val KEY_WIFI_ONLY_DOWNLOADS = "wifi_only_downloads"
     private const val KEY_EXPORT_DOWNLOADS = "export_downloads"
+    private const val KEY_DOWNLOAD_FOLDER_URI = "download_folder_uri"
     private const val KEY_LOSSLESS = "lossless_audio"
     private const val KEY_CROSSFADE = "crossfade_seconds"
     private const val KEY_SMART_FADE = "smart_fade_enabled"

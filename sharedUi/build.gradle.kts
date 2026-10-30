@@ -115,3 +115,75 @@ compose.resources {
     packageOfResClass = "com.music.vibe.sharedui.resources"
     generateResClass = always
 }
+
+val syncSharedUiStrings = tasks.register("syncSharedUiStrings") {
+    description = "Synchronizes sharedUi composeResources string keys from app/src/main/res/values*/strings.xml"
+    doLast {
+        val appResDir = rootProject.file("app/src/main/res")
+        val sharedResDir = project.file("src/commonMain/composeResources")
+        val baseSharedStrings = File(sharedResDir, "values/strings.xml")
+        if (!baseSharedStrings.exists() || !appResDir.exists()) return@doLast
+        val factory = javax.xml.parsers.DocumentBuilderFactory.newInstance()
+        fun extractKeys(file: File): Set<String> {
+            if (!file.exists()) return emptySet()
+            val doc = factory.newDocumentBuilder().parse(file)
+            val result = linkedSetOf<String>()
+            for (tag in listOf("string", "string-array", "plurals")) {
+                val nodes = doc.getElementsByTagName(tag)
+                for (i in 0 until nodes.length) {
+                    val el = nodes.item(i) as org.w3c.dom.Element
+                    val name = el.getAttribute("name")
+                    if (name.isNotEmpty()) result.add(name)
+                }
+            }
+            return result
+        }
+        val canonicalKeys = extractKeys(baseSharedStrings)
+        if (canonicalKeys.isEmpty()) return@doLast
+
+        sharedResDir.listFiles()?.filter { it.isDirectory && it.name.startsWith("values") }?.forEach { targetDir ->
+            val targetFile = File(targetDir, "strings.xml")
+            val sourceFile = File(File(appResDir, targetDir.name), "strings.xml")
+            if (!sourceFile.exists() || !targetFile.exists()) return@forEach
+            val existingKeys = extractKeys(targetFile)
+            val missingKeys = canonicalKeys - existingKeys
+            if (missingKeys.isEmpty()) return@forEach
+
+            val sourceDoc = factory.newDocumentBuilder().parse(sourceFile)
+            val targetDoc = factory.newDocumentBuilder().parse(targetFile)
+            val targetRoot = targetDoc.documentElement
+            var modified = false
+            for (tag in listOf("string", "string-array", "plurals")) {
+                val nodes = sourceDoc.getElementsByTagName(tag)
+                for (i in 0 until nodes.length) {
+                    val el = nodes.item(i) as org.w3c.dom.Element
+                    val name = el.getAttribute("name")
+                    if (name in missingKeys) {
+                        val imported = targetDoc.importNode(el, true)
+                        targetRoot.appendChild(targetDoc.createTextNode("    "))
+                        targetRoot.appendChild(imported)
+                        targetRoot.appendChild(targetDoc.createTextNode("\n"))
+                        modified = true
+                    }
+                }
+            }
+            if (modified) {
+                val transformer = javax.xml.transform.TransformerFactory.newInstance().newTransformer()
+                transformer.transform(
+                    javax.xml.transform.dom.DOMSource(targetDoc),
+                    javax.xml.transform.stream.StreamResult(targetFile),
+                )
+            }
+        }
+    }
+}
+
+tasks.matching {
+    it.name.startsWith("prepareComposeResourcesTaskFor") ||
+        it.name.startsWith("convertXmlValueResourcesFor") ||
+        it.name.startsWith("copyNonXmlValueResourcesFor")
+}.configureEach {
+    dependsOn(syncSharedUiStrings)
+}
+
+

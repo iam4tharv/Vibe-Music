@@ -170,77 +170,15 @@ fun MediaController.swapToVersion(targetSong: Song) {
  * that has been through something which dropped one of them yields what is left
  * rather than a list of names with no ids or ids with no names.
  */
-private fun Bundle.artistsFromBundle(): List<ArtistRef> {
-    val names = getStringArrayList(ARTISTS_NAMES).orEmpty()
-    val ids = getStringArrayList(ARTISTS_IDS).orEmpty()
-    if (names.isEmpty() || ids.isEmpty()) return emptyList()
-    return names.indices.map { index ->
-        ArtistRef(name = names[index], browseId = ids.getOrNull(index)?.ifBlank { null })
-    }
-}
+private fun Bundle.artistsFromBundle(): List<ArtistRef> =
+    SongBundleCodec.decodeArtists(this)
 
-private const val ARTISTS_NAMES = "artistNames"
-private const val ARTISTS_IDS = "artistIds"
+private const val ARTISTS_NAMES = SongBundleCodec.KEY_ARTIST_NAMES
+private const val ARTISTS_IDS = SongBundleCodec.KEY_ARTIST_IDS
 
-fun Song.toSongBundle(): Bundle = bundleOf(
-    "videoId" to videoId,
-    "title" to title,
-    "artist" to artist,
-    "thumbnailUrl" to thumbnailUrl,
-    "durationText" to durationText,
-    "artistId" to artistId,
-    "albumId" to albumId,
-    "albumName" to albumName,
-    "isVideo" to isVideo,
-    "isVideoOrigin" to isVideoOrigin,
-    "setVideoId" to setVideoId,
-    "fromAutoplay" to fromAutoplay,
-    "radioName" to radioName,
-    "localUri" to localUri,
-    "downloadFormat" to downloadFormat,
-    "localPath" to localPath,
-    "sourceQuality" to sourceQuality,
-    "playbackSource" to playbackSource,
-    "playbackSourceType" to playbackSourceType?.name,
-    "playbackSourceId" to playbackSourceId,
-    "queueTier" to queueTier.name,
-    "queueEntryId" to queueEntryId,
-    // `bundleOf` has no overload for a list of strings, so the two halves of
-    // the credits go in afterwards.
-).apply {
-    isExplicit?.let { putBoolean("isExplicit", it) }
-    trackNumber?.let { putInt("trackNumber", it) }
-    putStringArrayList(ARTISTS_NAMES, ArrayList(artists.map { it.name }))
-    putStringArrayList(ARTISTS_IDS, ArrayList(artists.map { it.browseId.orEmpty() }))
-}
+fun Song.toSongBundle(): Bundle = SongBundleCodec.encodeToBundle(this)
 
-fun songFromBundle(b: Bundle): Song = Song(
-    videoId = b.getString("videoId").orEmpty(),
-    title = b.getString("title").orEmpty(),
-    artist = b.getString("artist").orEmpty(),
-    thumbnailUrl = b.getString("thumbnailUrl"),
-    durationText = b.getString("durationText"),
-    artistId = b.getString("artistId"),
-    artists = b.artistsFromBundle(),
-    albumId = b.getString("albumId"),
-    albumName = b.getString("albumName"),
-    isVideo = b.getBoolean("isVideo"),
-    isVideoOrigin = b.getBoolean("isVideoOrigin"),
-    setVideoId = b.getString("setVideoId"),
-    queueTier = b.getString("queueTier")?.let { runCatching { QueueTier.valueOf(it) }.getOrNull() }
-        ?: if (b.getBoolean("fromAutoplay")) QueueTier.AUTOPLAY else QueueTier.CONTEXT,
-    queueEntryId = b.getString("queueEntryId"),
-    radioName = b.getString("radioName"),
-    localUri = b.getString("localUri"),
-    downloadFormat = b.getString("downloadFormat"),
-    localPath = b.getString("localPath"),
-    sourceQuality = b.getString("sourceQuality"),
-    playbackSource = b.getString("playbackSource"),
-    playbackSourceType = b.getString("playbackSourceType")?.let { runCatching { com.music.vibe.data.model.PlaybackSourceType.valueOf(it) }.getOrNull() },
-    playbackSourceId = b.getString("playbackSourceId"),
-    isExplicit = if (b.containsKey("isExplicit")) b.getBoolean("isExplicit") else null,
-    trackNumber = if (b.containsKey("trackNumber")) b.getInt("trackNumber") else null,
-)
+fun songFromBundle(b: Bundle): Song = SongBundleCodec.decodeFromBundle(b)
 
 /** Flushes the current radio queue to disk before reporting that it started. */
 suspend fun MediaController.commitRadioQueue() {
@@ -387,33 +325,56 @@ fun rememberPlayerState(controller: MediaController?): PlayerState {
  * service. A field dropped here disappears as soon as a Song passes through
  * Media3, because controllers and service helpers read it back through this.
  */
-fun MediaItem.toSong() = Song(
-    videoId = mediaId,
-    title = mediaMetadata.title?.toString().orEmpty(),
-    artist = mediaMetadata.artist?.toString().orEmpty(),
-    thumbnailUrl = mediaMetadata.artworkUri?.toString(),
-    durationText = mediaMetadata.extras?.getString(EXTRA_DURATION),
-    artistId = mediaMetadata.extras?.getString(EXTRA_ARTIST_ID),
-    artists = mediaMetadata.extras?.artistsFromBundle() ?: emptyList(),
-    albumId = mediaMetadata.extras?.getString(EXTRA_ALBUM_ID),
-    albumName = mediaMetadata.albumTitle?.toString(),
-    isExplicit = mediaMetadata.extras?.takeIf { it.containsKey(EXTRA_EXPLICIT) }
-        ?.getBoolean(EXTRA_EXPLICIT),
-    isVideo = mediaMetadata.extras?.getBoolean(EXTRA_IS_VIDEO) == true,
-    isVideoOrigin = mediaMetadata.extras?.getBoolean(EXTRA_VIDEO_ORIGIN) == true ||
-        mediaMetadata.extras?.getBoolean(EXTRA_IS_VIDEO) == true,
-    setVideoId = mediaMetadata.extras?.getString(EXTRA_SET_VIDEO_ID),
-    queueTier = this.queueTier,
-    queueEntryId = this.queueEntryId,
-    radioName = mediaMetadata.extras?.getString(EXTRA_RADIO_NAME),
-    playbackSource = mediaMetadata.extras?.getString(EXTRA_PLAYBACK_SOURCE),
-    playbackSourceType = mediaMetadata.extras?.getString(EXTRA_PLAYBACK_SOURCE_TYPE)
-        ?.let { runCatching { PlaybackSourceType.valueOf(it) }.getOrNull() },
-    playbackSourceId = mediaMetadata.extras?.getString(EXTRA_PLAYBACK_SOURCE_ID),
-    localUri = mediaMetadata.extras?.getString(EXTRA_LOCAL_URI),
-    localPath = mediaMetadata.extras?.getString(EXTRA_LOCAL_PATH),
-    trackNumber = mediaMetadata.trackNumber ?: mediaMetadata.extras?.takeIf { it.containsKey(EXTRA_TRACK_NUMBER) }?.getInt(EXTRA_TRACK_NUMBER),
-)
+fun MediaItem.toSong(): Song {
+    val extras = mediaMetadata.extras
+    val base = extras?.getString(SongBundleCodec.EXTRA_SONG_PAYLOAD_JSON)
+        ?.let { com.music.vibe.data.model.SongJsonCodec.decode(it) }
+    val explicitOverride = extras?.takeIf { it.containsKey(EXTRA_EXPLICIT) }?.getBoolean(EXTRA_EXPLICIT)
+        ?: base?.isExplicit
+    val isVideoFlag = if (extras?.containsKey(EXTRA_IS_VIDEO) == true) {
+        extras.getBoolean(EXTRA_IS_VIDEO)
+    } else {
+        base?.isVideo ?: false
+    }
+    val isVideoOriginFlag = if (extras?.containsKey(EXTRA_VIDEO_ORIGIN) == true || extras?.containsKey(EXTRA_IS_VIDEO) == true) {
+        extras.getBoolean(EXTRA_VIDEO_ORIGIN) || extras.getBoolean(EXTRA_IS_VIDEO)
+    } else {
+        base?.isVideoOrigin ?: isVideoFlag
+    }
+    val parsedArtists = extras?.artistsFromBundle().orEmpty()
+    return Song(
+        videoId = mediaId.ifEmpty { base?.videoId.orEmpty() },
+        title = mediaMetadata.title?.toString() ?: base?.title.orEmpty(),
+        artist = mediaMetadata.artist?.toString() ?: base?.artist.orEmpty(),
+        thumbnailUrl = mediaMetadata.artworkUri?.toString() ?: base?.thumbnailUrl,
+        durationText = extras?.getString(EXTRA_DURATION) ?: base?.durationText,
+        artistId = extras?.getString(EXTRA_ARTIST_ID) ?: base?.artistId,
+        artists = if (parsedArtists.isNotEmpty()) parsedArtists else base?.artists.orEmpty(),
+        albumId = extras?.getString(EXTRA_ALBUM_ID) ?: base?.albumId,
+        albumName = mediaMetadata.albumTitle?.toString() ?: base?.albumName,
+        isExplicit = explicitOverride,
+        isVideo = isVideoFlag,
+        isVideoOrigin = isVideoOriginFlag,
+        setVideoId = extras?.getString(EXTRA_SET_VIDEO_ID) ?: base?.setVideoId,
+        queueTier = this.queueTier,
+        queueEntryId = this.queueEntryId ?: base?.queueEntryId,
+        radioName = extras?.getString(EXTRA_RADIO_NAME) ?: base?.radioName,
+        playbackSource = extras?.getString(EXTRA_PLAYBACK_SOURCE) ?: base?.playbackSource,
+        playbackSourceType = extras?.getString(EXTRA_PLAYBACK_SOURCE_TYPE)
+            ?.let { runCatching { PlaybackSourceType.valueOf(it) }.getOrNull() }
+            ?: base?.playbackSourceType,
+        playbackSourceId = extras?.getString(EXTRA_PLAYBACK_SOURCE_ID) ?: base?.playbackSourceId,
+        localUri = extras?.getString(EXTRA_LOCAL_URI) ?: base?.localUri,
+        downloadFormat = base?.downloadFormat,
+        localPath = extras?.getString(EXTRA_LOCAL_PATH) ?: base?.localPath,
+        localDateAddedSeconds = base?.localDateAddedSeconds,
+        localDateModifiedSeconds = base?.localDateModifiedSeconds,
+        sourceQuality = base?.sourceQuality,
+        trackNumber = mediaMetadata.trackNumber
+            ?: extras?.takeIf { it.containsKey(EXTRA_TRACK_NUMBER) }?.getInt(EXTRA_TRACK_NUMBER)
+            ?: base?.trackNumber,
+    )
+}
 
 /** @see Song.fromAutoplay */
 val MediaItem.fromAutoplay: Boolean
@@ -653,34 +614,36 @@ fun Song.toMediaItem(): MediaItem {
             // back a null duration and later matching loses the `&d=` it
             // depends on.
             .apply {
-                if (queueTier != QueueTier.CONTEXT || queueEntryId != null || fromAutoplay ||
-                    offlineUri != null || durationText != null ||
-                    artistId != null || albumId != null || setVideoId != null ||
-                    isExplicit != null || isVideo || isVideoOrigin || radioName != null ||
-                    playbackSource != null || playbackSourceType != null || playbackSourceId != null ||
-                    this@toMediaItem.trackNumber != null
-                ) {
-                    val extrasBundle = bundleOf(
-                        EXTRA_QUEUE_TIER to queueTier.name,
-                        EXTRA_QUEUE_ENTRY_ID to queueEntryId,
-                        EXTRA_FROM_AUTOPLAY to fromAutoplay,
-                        EXTRA_RADIO_NAME to radioName,
-                        EXTRA_PLAYBACK_SOURCE to playbackSource,
-                        EXTRA_PLAYBACK_SOURCE_TYPE to playbackSourceType?.name,
-                        EXTRA_PLAYBACK_SOURCE_ID to playbackSourceId,
-                        EXTRA_LOCAL_URI to offlineUri,
-                        EXTRA_LOCAL_PATH to localPath,
-                        EXTRA_DURATION to durationText,
-                        EXTRA_ARTIST_ID to artistId,
-                        EXTRA_ALBUM_ID to albumId,
-                        EXTRA_SET_VIDEO_ID to setVideoId,
-                        EXTRA_IS_VIDEO to isVideo,
-                        EXTRA_VIDEO_ORIGIN to isVideoOrigin,
-                    )
-                    this@toMediaItem.isExplicit?.let { extrasBundle.putBoolean(EXTRA_EXPLICIT, it) }
-                    this@toMediaItem.trackNumber?.let { extrasBundle.putInt(EXTRA_TRACK_NUMBER, it) }
-                    setExtras(extrasBundle)
+                val resolvedSong = if (offlineUri != null && offlineUri != localUri) {
+                    this@toMediaItem.copy(localUri = offlineUri)
+                } else {
+                    this@toMediaItem
                 }
+                val extrasBundle = bundleOf(
+                    SongBundleCodec.EXTRA_SONG_PAYLOAD_JSON to com.music.vibe.data.model.SongJsonCodec.encode(resolvedSong),
+                    EXTRA_QUEUE_TIER to queueTier.name,
+                    EXTRA_QUEUE_ENTRY_ID to queueEntryId,
+                    EXTRA_FROM_AUTOPLAY to fromAutoplay,
+                    EXTRA_RADIO_NAME to radioName,
+                    EXTRA_PLAYBACK_SOURCE to playbackSource,
+                    EXTRA_PLAYBACK_SOURCE_TYPE to playbackSourceType?.name,
+                    EXTRA_PLAYBACK_SOURCE_ID to playbackSourceId,
+                    EXTRA_LOCAL_URI to offlineUri,
+                    EXTRA_LOCAL_PATH to localPath,
+                    EXTRA_DURATION to durationText,
+                    EXTRA_ARTIST_ID to artistId,
+                    EXTRA_ALBUM_ID to albumId,
+                    EXTRA_SET_VIDEO_ID to setVideoId,
+                    EXTRA_IS_VIDEO to isVideo,
+                    EXTRA_VIDEO_ORIGIN to isVideoOrigin,
+                )
+                this@toMediaItem.isExplicit?.let { extrasBundle.putBoolean(EXTRA_EXPLICIT, it) }
+                this@toMediaItem.trackNumber?.let { extrasBundle.putInt(EXTRA_TRACK_NUMBER, it) }
+                if (artists.isNotEmpty()) {
+                    extrasBundle.putStringArrayList(ARTISTS_NAMES, ArrayList(artists.map { it.name }))
+                    extrasBundle.putStringArrayList(ARTISTS_IDS, ArrayList(artists.map { it.browseId.orEmpty() }))
+                }
+                setExtras(extrasBundle)
             }
             .build(),
     )

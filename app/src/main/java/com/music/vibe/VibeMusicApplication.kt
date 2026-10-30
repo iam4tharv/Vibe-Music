@@ -104,26 +104,12 @@ class VibeMusicApplication : Application(), SingletonImageLoader.Factory {
         Innertube.appLanguage = { AppCompatDelegate.getApplicationLocales().get(0)?.toLanguageTag() }
         migrateScriptOnlyAppLocale()
         LyricsTranslation.cacheDir = cacheDir
+        container = com.music.vibe.di.AppContainer(this).also {
+            com.music.vibe.di.AppContainer.install(it)
+        }
         // PlaybackService shares this process, so seeding the cookie here means
         // stream resolution is authenticated from the first play onwards.
-        authStore = AuthStore(this)
-        // Opened off the main thread, alongside everything below: none of these
-        // reads a setting or the session, and between them they are the slowest
-        // opens at startup — SourceRegistry's encrypted store most of all.
-        // Started only once [AuthStore] exists, because both encrypted stores
-        // share one keystore master key and a first launch must not have two
-        // threads racing to create it. Joined before onCreate returns, so
-        // nothing that runs after startup can see any of them half open.
-        val backgroundInit = thread(name = "startup-init") {
-            SourceRegistry.init(this)
-            AndroidStreamHooks.initInnerTubeX(this)
-            // Its own directory: canvas clips are looping video, not audio, and
-            // belong in a cache AudioCache's own limit and eviction policy were
-            // never sized for. See CanvasCache's doc for why this one exists at
-            // all — it is the fix for canvas clips re-fetching the same few
-            // seconds of video from the network on every loop.
-            CanvasCache.init(this)
-        }
+        authStore = container.authStore
         // Migration-safe: an old single cookie becomes the first encrypted
         // session, while newer installs restore the profile the listener chose.
         val restoredSession = authStore.activeSession
@@ -132,57 +118,12 @@ class VibeMusicApplication : Application(), SingletonImageLoader.Factory {
         }
         authStore.cookie = restoredSession?.cookie
         Innertube.cookie = restoredSession?.cookie
-        // Which account that cookie actually acts as. Read here rather than on
-        // demand so the answer is usually in hand before the first request needs
-        // it: a play registered under the wrong account is indistinguishable, to
-        // the listener, from one that was never registered at all. Fire and
-        // forget — every caller works without it, just less precisely.
         if (restoredSession != null) {
-            // After the cookie, never before: setting the cookie clears any
-            // channel the last session was acting as, so restoring the choice
-            // first would restore it into the value about to be wiped.
             restoredSession.profiles.firstOrNull { it.profileId == restoredSession.activeProfileId }
                 ?.let { Innertube.selectChannel(it.pageId, it.dataSyncId, it.authUser) }
-            CoroutineScope(Dispatchers.IO).launch { Innertube.ensureSessionScope() }
+            container.applicationScope.launch { Innertube.ensureSessionScope() }
         }
-        AppSettings.init(this, authStore)
-        // Before anything resolves a track: an addon with `checkValidLossless`
-        // is gated on this, and the gate reads "no" until it has looked.
-        com.music.vibe.playback.audio.LosslessOutput.init(this)
-        // Restores a party this device is still a member of, so a process death
-        // mid-session is something the rest of the party never sees. The socket
-        // and the clock offset are not restored — both are re-established on
-        // the next connect, which is the only way to be sure they are current.
-        ListenTogether.init(this)
-        SearchHistory.init(this)
-        LastPlayed.init(this)
-        com.music.vibe.playback.PartyPersonalQueueStash.init(this)
-        // Which tracks the listener has reverted to YouTube's own upload. Read
-        // by [Song.toMediaItem], so it has to be open before the restart
-        // snapshot below is turned back into queue items.
-        OriginalVersion.init(this)
-        // What's already saved to Downloads, so the song menu can say so
-        // without a media-store query per row.
-        Downloads.init(this)
-        // The device's own listening record. Opened here rather than in
-        // PlaybackService because the Replay page reads it from the UI side and
-        // both live in this process — one owner, one directory.
-        ListeningStats.init(this)
-        // After AppSettings, whose switch decides whether half of it runs.
-        ArtistFacts.init(this)
-        // One cache directory can only be opened once per process, and
-        // PlaybackService shares this one — so it's opened here, not there.
-        AudioCache.init(this)
-        // The offscreen WebView that mints a Spotify access token from the
-        // listener's own session cookie needs a Context, and nothing in the
-        // suspend call chain that reaches it (a track's canvas lookup) has
-        // one to hand — see SpotifyToken's doc for why.
-        SpotifyToken.init(this)
-        // A sideloaded update is just a new APK over the old one, so app data —
-        // including whatever the old build left in these caches — survives it
-        // untouched. Wipe both on the first launch of a higher versionCode so a
-        // format or key change between builds can't serve stale or mismatched
-        // bytes from a cache the new code didn't write.
+        container.initializeCoreStores()
         if (AppSettings.consumeVersionUpdate(BuildConfig.VERSION_CODE)) {
             AudioCache.clear()
             SingletonImageLoader.get(this).let { loader ->
@@ -194,8 +135,10 @@ class VibeMusicApplication : Application(), SingletonImageLoader.Factory {
         initLastfm()
         // The public "apps open right now" count; see Presence.
         com.music.vibe.data.presence.AndroidPresence.install(this)
-        backgroundInit.join()
     }
+
+    lateinit var container: com.music.vibe.di.AppContainer
+        private set
 
     /**
      * Artwork loading, which was previously left entirely on Coil's defaults.

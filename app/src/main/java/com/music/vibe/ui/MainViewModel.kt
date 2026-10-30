@@ -91,9 +91,6 @@ import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 
-/** What the Search tab searches: YouTube Music, or the Local Music folder on this device. */
-enum class SearchSource { YOUTUBE, LIBRARY }
-
 class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private val authStore = AuthStore(app)
@@ -542,12 +539,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _library = MutableStateFlow<UiState<LibraryPage>>(UiState.Loading)
     val library: StateFlow<UiState<LibraryPage>> = _library.asStateFlow()
 
-    /** In-memory cache is partitioned by account and profile; it is never shared. */
-    private data class ListenerSnapshot(
-        val account: Account?, val library: UiState<LibraryPage>,
-        val history: UiState<List<Song>>, val playlists: List<UserPlaylist>,
-        val owned: Map<String, Boolean>,
-    )
     private val listenerCache = mutableMapOf<String, ListenerSnapshot>()
 
     /**
@@ -1121,6 +1112,156 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
+     * Batch-adds [songs] to each selected playlist in [playlists].
+     * Uses `DEDUPE_OPTION_SKIP` for remote YouTube Music playlists and local `videoId`
+     * deduplication for local playlists.
+     */
+    fun addSongsToPlaylists(
+        playlists: List<UserPlaylist>,
+        songs: List<Song>,
+        onResult: (notice: String) -> Unit = {},
+    ) {
+        if (songs.isEmpty() || playlists.isEmpty()) return
+        viewModelScope.launch {
+            val app = getApplication<Application>()
+            if (playlists.size == 1) {
+                val target = playlists.first()
+                if (target.playlistId.startsWith("local:playlist:") || target.playlistId.startsWith("sp_local_")) {
+                    val (added, skipped) = com.music.vibe.data.spotify.LocalPlaylistStore.addSongsToPlaylist(
+                        target.playlistId,
+                        songs,
+                    )
+                    if (_detailStack.value.any { it.browseId == target.browseId || it.browseId == target.playlistId }) {
+                        reloadLocalDetail(target.browseId)
+                    }
+                    val notice = when {
+                        added > 0 && skipped > 0 ->
+                            app.getString(R.string.batch_added_to_playlist_deduped, added, target.title, skipped)
+                        added == 0 && skipped > 0 ->
+                            app.getString(R.string.song_already_in_playlist)
+                        else ->
+                            app.getString(R.string.batch_added_to_remote_playlist, target.title)
+                    }
+                    onResult(notice)
+                } else {
+                    if (!requireSignIn()) return@launch
+                    YtMusicRepository.addToPlaylist(
+                        playlistId = target.playlistId,
+                        videoIds = songs.map { it.videoId },
+                        dedupe = true,
+                    ).fold(
+                        onSuccess = { addedMap ->
+                            libraryStale = true
+                            songs.forEach { song ->
+                                appendToOpenPlaylist(target.browseId, song, addedMap[song.videoId])
+                            }
+                            onResult(app.getString(R.string.batch_added_to_remote_playlist, target.title))
+                        },
+                        onFailure = {
+                            onResult(app.getString(R.string.failed))
+                        },
+                    )
+                }
+                return@launch
+            }
+
+            var succeeded = 0
+            for (playlist in playlists) {
+                if (playlist.playlistId.startsWith("local:playlist:") || playlist.playlistId.startsWith("sp_local_")) {
+                    com.music.vibe.data.spotify.LocalPlaylistStore.addSongsToPlaylist(playlist.playlistId, songs)
+                    if (_detailStack.value.any { it.browseId == playlist.browseId || it.browseId == playlist.playlistId }) {
+                        reloadLocalDetail(playlist.browseId)
+                    }
+                    succeeded++
+                } else if (_signedIn.value) {
+                    YtMusicRepository.addToPlaylist(
+                        playlistId = playlist.playlistId,
+                        videoIds = songs.map { it.videoId },
+                        dedupe = true,
+                    ).onSuccess { addedMap ->
+                        libraryStale = true
+                        songs.forEach { song ->
+                            appendToOpenPlaylist(playlist.browseId, song, addedMap[song.videoId])
+                        }
+                        succeeded++
+                    }
+                }
+            }
+            val notice = if (succeeded > 0) {
+                app.resources.getQuantityString(R.plurals.added_to_playlists_notice, succeeded, succeeded)
+            } else {
+                app.getString(R.string.failed)
+            }
+            onResult(notice)
+        }
+    }
+
+    /**
+     * Batch-removes [songs] from the playlist or downloaded collection at [browseId].
+     */
+    fun removeSongsFromPlaylist(
+        browseId: String,
+        songs: List<Song>,
+        selectedIndices: Set<Int> = emptySet(),
+    ) {
+        if (songs.isEmpty()) return
+        val localPlaylist = com.music.vibe.data.spotify.LocalPlaylistStore.getPlaylist(browseId)
+        if (localPlaylist != null) {
+            val updated = com.music.vibe.data.spotify.LocalPlaylistStore.removeSongsFromPlaylist(
+                id = browseId,
+                videoIds = songs.mapTo(HashSet()) { it.videoId },
+                indicesToRemove = selectedIndices,
+            )
+            if (updated != null) {
+                _detailStack.value = _detailStack.value.map { page ->
+                    if (page.browseId != browseId) page
+                    else page.copy(
+                        songs = if (updated.songs.isEmpty()) UiState.Error(text(R.string.spotify_import_empty_playlist))
+                        else UiState.Success(updated.songs),
+                    )
+                }
+            }
+            return
+        }
+        if (browseId == "local:downloads" || Downloads.recordIdOf(browseId) != null) {
+            viewModelScope.launch {
+                val app = getApplication<Application>()
+                songs.forEach { song -> Downloads.delete(app, song.videoId) }
+                reloadLocalDetail(browseId)
+                refreshSmartMixes()
+            }
+            return
+        }
+        val removals = songs.mapNotNull { song -> song.setVideoId?.let { setId -> setId to song.videoId } }
+        if (removals.isEmpty() || !requireSignIn()) return
+        val playlistId = browseId.removePrefix("VL")
+        viewModelScope.launch {
+            YtMusicRepository.removeFromPlaylist(
+                playlistId,
+                removals,
+            ).fold(
+                onSuccess = {
+                    libraryStale = true
+                    val removedSetIds = removals.mapTo(HashSet()) { it.first }
+                    _detailStack.value = _detailStack.value.map { page ->
+                        val current = (page.songs as? UiState.Success)?.data
+                        if (page.browseId != browseId || current == null) {
+                            page
+                        } else {
+                            val remaining = current.filterNot { it.setVideoId in removedSetIds }
+                            page.copy(
+                                songs = if (remaining.isEmpty()) UiState.Error(text(R.string.no_tracks_here))
+                                else UiState.Success(remaining),
+                            )
+                        }
+                    }
+                },
+                onFailure = {},
+            )
+        }
+    }
+
+    /**
      * Adds one of [DetailPage.suggestedSongs] to the playlist it was suggested
      * for: out of that section, and into the track list above it.
      *
@@ -1377,15 +1518,90 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      */
     private var libraryStale = false
 
+    private val _smartMixes = MutableStateFlow<List<ShelfItem>>(emptyList())
+    val smartMixes: StateFlow<List<ShelfItem>> = _smartMixes.asStateFlow()
+
+    /**
+     * Re-evaluates the dynamic SQLite Smart Mixes (Most Played 30d, Recently Downloaded,
+     * Forgotten Favorites) on [Dispatchers.IO], waiting for any pending v1→v2 metadata
+     * backfill first and omitting any mix with zero tracks.
+     */
+    fun refreshSmartMixes() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val app = getApplication<Application>()
+            val db = com.music.vibe.data.db.VibeDatabase.getInstance(app)
+            db.backfillV2MetadataIfNeeded()
+            val now = System.currentTimeMillis()
+            val mostPlayed = db.smartPlaylistsDao.getMostPlayedLast30Days(
+                sinceMs = now - 30L * 24 * 60 * 60 * 1000,
+            )
+            val recentlyDownloaded = db.smartPlaylistsDao.getRecentlyDownloaded()
+            val forgottenFavorites = db.smartPlaylistsDao.getForgottenFavorites(
+                beforeMs = now - 60L * 24 * 60 * 60 * 1000,
+            )
+            val items = buildList {
+                if (mostPlayed.isNotEmpty()) {
+                    add(
+                        ShelfItem(
+                            title = app.getString(R.string.smart_mix_most_played),
+                            subtitle = app.resources.getQuantityString(
+                                R.plurals.song_count_plural,
+                                mostPlayed.size,
+                                mostPlayed.size,
+                            ),
+                            thumbnailUrl = mostPlayed.firstOrNull { !it.thumbnailUrl.isNullOrBlank() }?.thumbnailUrl,
+                            videoId = null,
+                            browseId = SMART_MOST_PLAYED_30D,
+                        ),
+                    )
+                }
+                if (recentlyDownloaded.isNotEmpty()) {
+                    add(
+                        ShelfItem(
+                            title = app.getString(R.string.smart_mix_recently_added),
+                            subtitle = app.resources.getQuantityString(
+                                R.plurals.song_count_plural,
+                                recentlyDownloaded.size,
+                                recentlyDownloaded.size,
+                            ),
+                            thumbnailUrl = recentlyDownloaded.firstOrNull { !it.thumbnailUrl.isNullOrBlank() }?.thumbnailUrl,
+                            videoId = null,
+                            browseId = SMART_RECENTLY_DOWNLOADED,
+                        ),
+                    )
+                }
+                if (forgottenFavorites.isNotEmpty()) {
+                    add(
+                        ShelfItem(
+                            title = app.getString(R.string.smart_mix_forgotten_favorites),
+                            subtitle = app.resources.getQuantityString(
+                                R.plurals.song_count_plural,
+                                forgottenFavorites.size,
+                                forgottenFavorites.size,
+                            ),
+                            thumbnailUrl = forgottenFavorites.firstOrNull { !it.thumbnailUrl.isNullOrBlank() }?.thumbnailUrl,
+                            videoId = null,
+                            browseId = SMART_FORGOTTEN_FAVORITES,
+                        ),
+                    )
+                }
+            }
+            _smartMixes.value = items
+        }
+    }
+
     /** Call when the library tab becomes visible. */
     fun onLibraryShown() {
         loadPlaylists()
+        refreshSmartMixes()
         if (!libraryStale) return
         libraryStale = false
         if (_library.value is UiState.Success) refresh(Feed.LIBRARY)
     }
 
     init {
+        com.music.vibe.data.spotify.SpotifyImportManager.init(getApplication())
+        refreshSmartMixes()
         startSearchPipeline()
         startSuggestPipeline()
         startTypeaheadMediaPipeline()
@@ -1404,7 +1620,43 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
         viewModelScope.launch {
             // drop(1): the current value is just the count so far, not a play.
-            PlaybackTracker.registeredPlays.drop(1).collect { homeStale = true }
+            PlaybackTracker.registeredPlays.drop(1).collect {
+                homeStale = true
+                refreshSmartMixes()
+            }
+        }
+        viewModelScope.launch {
+            Downloads.saved.drop(1).collect {
+                refreshSmartMixes()
+            }
+        }
+        viewModelScope.launch {
+            com.music.vibe.data.spotify.SpotifyImportManager.events.collect { event ->
+                if (!event.savedLocally && event.browseId != null) {
+                    val playlistId = event.browseId.removePrefix("VL")
+                    setPlaylistOwned("VL$playlistId", true)
+                    libraryStale = true
+                    val created = UserPlaylist(
+                        playlistId = playlistId,
+                        title = event.title,
+                        subtitle = "${event.matchedCount} songs",
+                        thumbnailUrl = null,
+                    )
+                    _playlists.value = listOf(created) +
+                        _playlists.value.filterNot { it.playlistId == created.playlistId }
+                    editPlaylistShelf { items ->
+                        listOf(
+                            ShelfItem(
+                                title = created.title,
+                                subtitle = created.subtitle,
+                                thumbnailUrl = created.thumbnailUrl,
+                                videoId = null,
+                                browseId = created.browseId,
+                            ),
+                        ) + items.filterNot { it.browseId == created.browseId }
+                    }
+                }
+            }
         }
         viewModelScope.launch {
             AppSettings.filterNonMusicAudio.drop(1).collect {
@@ -2406,12 +2658,34 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
          * opening it.
          */
 
+        const val SMART_MOST_PLAYED_30D = "smart:most_played_30d"
+        const val SMART_RECENTLY_DOWNLOADED = "smart:recently_downloaded"
+        const val SMART_FORGOTTEN_FAVORITES = "smart:forgotten_favorites"
+
         fun browseTypeOf(browseId: String, fallback: BrowseType = BrowseType.OTHER): BrowseType = when {
             browseId.startsWith(Downloads.PLAYLIST_PREFIX) -> BrowseType.PLAYLIST
+            browseId.startsWith("local:playlist:") || browseId.startsWith("smart:") -> BrowseType.PLAYLIST
             browseId.startsWith("UC") -> BrowseType.ARTIST
             browseId.startsWith("MPREb") || browseId.startsWith("VLOLAK") || browseId.startsWith("OLAK") -> BrowseType.ALBUM
             browseId.startsWith("VL") || browseId.startsWith("PL") -> BrowseType.PLAYLIST
             else -> fallback
+        }
+    }
+
+    private suspend fun smartPlaylistSongs(browseId: String): List<Song>? {
+        if (!browseId.startsWith("smart:")) return null
+        val db = com.music.vibe.data.db.VibeDatabase.getInstance(getApplication())
+        db.backfillV2MetadataIfNeeded()
+        val now = System.currentTimeMillis()
+        return when (browseId) {
+            SMART_MOST_PLAYED_30D -> db.smartPlaylistsDao.getMostPlayedLast30Days(
+                sinceMs = now - 30L * 24 * 60 * 60 * 1000,
+            )
+            SMART_RECENTLY_DOWNLOADED -> db.smartPlaylistsDao.getRecentlyDownloaded()
+            SMART_FORGOTTEN_FAVORITES -> db.smartPlaylistsDao.getForgottenFavorites(
+                beforeMs = now - 60L * 24 * 60 * 60 * 1000,
+            )
+            else -> emptyList()
         }
     }
 
@@ -2529,6 +2803,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 }
             }
             val state = when {
+                browseId.startsWith("smart:") -> {
+                    val songs = smartPlaylistSongs(browseId).orEmpty()
+                    credit = getApplication<Application>().resources.getQuantityString(
+                        R.plurals.song_count_plural,
+                        songs.size,
+                        songs.size,
+                    )
+                    artwork = songs.firstOrNull { !it.thumbnailUrl.isNullOrBlank() }?.thumbnailUrl
+                    if (songs.isEmpty()) UiState.Error(text(R.string.no_tracks_here))
+                    else UiState.Success(songs)
+                }
                 localPlaylist != null -> {
                     name = localPlaylist.title
                     credit = getApplication<Application>().getString(R.string.local_playlist_subtitle, localPlaylist.songs.size)
@@ -2732,6 +3017,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val localPlaylist = com.music.vibe.data.spotify.LocalPlaylistStore.getPlaylist(browseId)
             val remote = remoteLibrary(browseId)
             val state: UiState<List<Song>> = when {
+                browseId.startsWith("smart:") -> {
+                    val songs = smartPlaylistSongs(browseId).orEmpty()
+                    if (songs.isEmpty()) UiState.Error(text(R.string.no_tracks_here))
+                    else UiState.Success(songs)
+                }
                 localPlaylist != null -> {
                     if (localPlaylist.songs.isEmpty()) UiState.Error(text(R.string.spotify_import_empty_playlist))
                     else UiState.Success(localPlaylist.songs)
@@ -2905,6 +3195,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val context = getApplication<Application>()
             val remote = remoteLibrary(browseId)
             val result = when {
+                browseId.startsWith("smart:") -> runCatching {
+                    smartPlaylistSongs(browseId).orEmpty().ifEmpty { error(text(R.string.no_tracks_here)) }
+                }
+                com.music.vibe.data.spotify.LocalPlaylistStore.getPlaylist(browseId) != null -> runCatching {
+                    com.music.vibe.data.spotify.LocalPlaylistStore.getPlaylist(browseId)?.songs.orEmpty()
+                        .ifEmpty { error(text(R.string.spotify_import_empty_playlist)) }
+                }
                 remote != null -> runCatching {
                     remote.songs().ifEmpty { error(text(remote.emptyRes)) }
                 }
@@ -3147,32 +3444,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private fun persistDetectedProfiles(channels: List<AccountChannel>) {
         val accountId = _activeAccountId.value ?: return
         val current = authStore.sessions.firstOrNull { it.accountId == accountId } ?: return
-        val detected = channels.map { channel -> YouTubeProfile(
-            profileId(channel.pageId, channel.dataSyncId, channel.name), channel.name, channel.subtitle,
-            channel.thumbnailUrl, channel.pageId, channel.dataSyncId,
-            isBrandAccount = channel.pageId != null,
-        ) }
-        // A profile captured before its channel existed carries a provisional,
-        // name-hash id (see profileId()) rather than the pageId/dataSyncId Google
-        // reports here once the channel is live. Once Google actually reports a
-        // channel, that placeholder is stale — it would have been listed here
-        // too if it still lacked real ids — and it's dropped rather than kept
-        // alongside the identity it was standing in for. An empty response
-        // (channel not created yet, or a transient miss) must never drop it.
-        val stalePlaceholder = if (detected.isEmpty()) emptySet() else current.profiles
-            .filter { it.profileId.startsWith("profile:") }
-            .map { it.profileId }
-            .toSet()
-        // Keep the captured active identity if Google's endpoint temporarily
-        // omits it; an empty/partial response must never erase a selection.
-        val profiles = (current.profiles.filter { known ->
-            known.profileId !in stalePlaceholder && detected.none { it.profileId == known.profileId }
-        } + detected)
-        val selected = when {
-            current.activeProfileId != null && current.activeProfileId !in stalePlaceholder -> current.activeProfileId
-            current.activeProfileId in stalePlaceholder -> detected.singleOrNull()?.profileId
-            else -> null
-        } ?: profiles.firstOrNull()?.profileId
+        val (profiles, selected) = mergeDetectedProfiles(
+            existingProfiles = current.profiles,
+            activeProfileId = current.activeProfileId,
+            channels = channels,
+        )
         authStore.upsertSession(current.copy(profiles = profiles, activeProfileId = selected), activate = false)
         _googleAccounts.value = authStore.sessions
     }

@@ -2,31 +2,32 @@ package com.music.vibe.data.settings
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.music.vibe.data.db.VibeDatabase
+import com.music.vibe.data.model.SearchHistoryEntity
+import com.music.vibe.data.runCatchingLogged
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
-import com.music.vibe.data.model.SearchHistoryEntity
 
 /**
  * What's been searched for lately, kept on this device only.
  *
- * YouTube Music has an account-level search history, but reading it back needs
- * a separate signed-in call on every keystroke's worth of empty query — and it
- * would be wrong for a signed-out user. A local list is instant, works either
- * way, and is what Spotify and Apple Music show in the same spot.
- *
- * Stored as JSON rather than a delimited string: a query can contain any
- * character, separators included.
+ * Persisted in [VibeDatabase] (`search_history` table) and mirrored to
+ * `vibemusic_settings` so [com.music.vibe.data.stats.Backup] export/import
+ * continues to include search history seamlessly.
  */
 object SearchHistory {
 
-    /** Deep enough to be useful, shallow enough that the list stays scannable. */
+    private const val TAG = "SearchHistory"
     private const val MAX_ENTRIES = 20
 
     private lateinit var prefs: SharedPreferences
-    private val json = Json
+    @Volatile
+    private var database: VibeDatabase? = null
+
+    private val json = Json { ignoreUnknownKeys = true }
     private val serializer = ListSerializer(SearchHistoryEntity.serializer())
 
     private val _recent = MutableStateFlow<List<SearchHistoryEntity>>(emptyList())
@@ -35,22 +36,43 @@ object SearchHistory {
     val recent: StateFlow<List<SearchHistoryEntity>> = _recent.asStateFlow()
 
     fun init(context: Context) {
-        prefs = context.getSharedPreferences("vibemusic_settings", Context.MODE_PRIVATE)
-        reload()
+        val appContext = context.applicationContext
+        prefs = appContext.getSharedPreferences("vibemusic_settings", Context.MODE_PRIVATE)
+        database = VibeDatabase.getInstance(appContext)
+        val fromDb = database?.searchHistoryDao?.getRecent(MAX_ENTRIES).orEmpty()
+        if (fromDb.isNotEmpty()) {
+            _recent.value = fromDb
+        } else {
+            reload()
+        }
     }
 
     /**
-     * Re-reads the list off disk.
-     *
-     * This shares its preference file with [AppSettings], so an import replaces
-     * what is stored here without ever calling [record] — and the flow above
-     * would otherwise go on serving the list the old device had.
+     * Re-reads the list off disk (e.g. after [com.music.vibe.data.stats.Backup.importFrom]
+     * replaces `vibemusic_settings`) and syncs it into [VibeDatabase].
      */
     fun reload() {
         if (!this::prefs.isInitialized) return
-        _recent.value = runCatching {
+        val fromPrefs = runCatchingLogged(TAG, "reloadSearchHistory") {
             json.decodeFromString(serializer, prefs.getString(KEY_HISTORY, null) ?: "[]")
-        }.getOrDefault(emptyList())
+        }.getOrDefault(emptyList()).take(MAX_ENTRIES)
+        _recent.value = fromPrefs
+        database?.searchHistoryDao?.replaceAll(fromPrefs)
+    }
+
+    /** Serializes current search history for [com.music.vibe.data.stats.Backup] export. */
+    fun exportJson(): String = json.encodeToString(serializer, _recent.value)
+
+    /** Restores search history from a [com.music.vibe.data.stats.Backup] payload into memory and [VibeDatabase]. */
+    fun importJson(rawJson: String?) {
+        if (rawJson.isNullOrBlank()) {
+            save(emptyList())
+            return
+        }
+        val parsed = runCatchingLogged(TAG, "importJsonSearchHistory") {
+            json.decodeFromString(serializer, rawJson)
+        }.getOrDefault(emptyList()).take(MAX_ENTRIES)
+        save(parsed)
     }
 
     /**
@@ -70,7 +92,12 @@ object SearchHistory {
 
     private fun save(value: List<SearchHistoryEntity>) {
         _recent.value = value
-        prefs.edit().putString(KEY_HISTORY, json.encodeToString(serializer, value)).apply()
+        val db = database
+        db?.searchHistoryDao?.replaceAll(value)
+        val skipLegacyWrite = db != null && com.music.vibe.data.db.LegacyDataMigrator.isV1MigrationDone
+        if (!skipLegacyWrite && this::prefs.isInitialized) {
+            prefs.edit().putString(KEY_HISTORY, json.encodeToString(serializer, value)).apply()
+        }
     }
 
     private const val KEY_HISTORY = "search_history"

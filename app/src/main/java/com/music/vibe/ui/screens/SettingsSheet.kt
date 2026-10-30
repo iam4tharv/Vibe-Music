@@ -155,6 +155,13 @@ import com.music.vibe.data.settings.AudioQuality
 import com.music.vibe.data.settings.DownloadQuality
 import com.music.vibe.data.settings.ThemeMode
 import com.music.vibe.data.stats.Backup
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.core.content.ContextCompat
+import com.music.vibe.download.DownloadStore
+import com.music.vibe.download.Downloads
+import com.music.vibe.download.ExportState
 import com.music.vibe.playback.AudioCache
 import com.music.vibe.ui.player.fullBleedArtworkAvailable
 import kotlinx.coroutines.launch
@@ -234,6 +241,10 @@ fun SettingsScreen(
     val downloadQuality by AppSettings.downloadQuality.collectAsStateWithLifecycle()
     val wifiOnlyDownloads by AppSettings.wifiOnlyDownloads.collectAsStateWithLifecycle()
     val exportDownloads by AppSettings.exportDownloads.collectAsStateWithLifecycle()
+    val downloadFolderUri by AppSettings.downloadFolderUri.collectAsStateWithLifecycle()
+    val downloadFolderUnavailable by AppSettings.downloadFolderUnavailable.collectAsStateWithLifecycle()
+    val downloadFolderWarning by AppSettings.downloadFolderWarning.collectAsStateWithLifecycle()
+    val downloadsExportState by Downloads.exportState.collectAsStateWithLifecycle()
     val stopOnTaskRemoved by AppSettings.stopOnTaskRemoved.collectAsStateWithLifecycle()
     val hideVolumeBar by AppSettings.hideVolumeBar.collectAsStateWithLifecycle()
     val hideSongStatus by AppSettings.hideSongStatus.collectAsStateWithLifecycle()
@@ -282,6 +293,8 @@ fun SettingsScreen(
     var searchQuery by remember { mutableStateOf("") }
     var picking by remember { mutableStateOf<QualityTarget?>(null) }
     var pickingDownloadQuality by remember { mutableStateOf(false) }
+    var pickingDownloadLocation by remember { mutableStateOf(false) }
+    var confirmExportDownloadsDialog by remember { mutableStateOf(false) }
     var pickingAutomixPerformance by remember { mutableStateOf(false) }
     // What the last export or import did, shown on the row that did it rather
     // than as a toast: a backup is the one action here whose outcome nobody can
@@ -311,6 +324,52 @@ fun SettingsScreen(
             )
         }
         AppSettings.setLocalMusicFolderUri(folder.toString())
+    }
+    val exportNotifyPermission = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { _ -> }
+    val downloadFolderPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocumentTree(),
+    ) { folder ->
+        if (folder == null) return@rememberLauncherForActivityResult
+        if (!DownloadStore.isLocalSafProvider(folder)) {
+            Toast.makeText(
+                context,
+                context.getString(R.string.download_location_cloud_rejected),
+                Toast.LENGTH_LONG,
+            ).show()
+            return@rememberLauncherForActivityResult
+        }
+        val granted = runCatching {
+            context.contentResolver.takePersistableUriPermission(
+                folder,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
+            )
+            true
+        }.getOrDefault(false)
+        if (!granted) {
+            Toast.makeText(
+                context,
+                context.getString(R.string.download_location_permission_failed),
+                Toast.LENGTH_SHORT,
+            ).show()
+            return@rememberLauncherForActivityResult
+        }
+        AppSettings.setDownloadFolderUri(folder.toString())
+        DownloadStore.markSafIndexDirty()
+        Downloads.scheduleFolderValidation(context, allowReset = false)
+        Downloads.releaseUnusedSafTreeGrants(context)
+        confirmExportDownloadsDialog = true
+    }
+
+    LaunchedEffect(Unit) {
+        Downloads.validateDownloadFolder(context, allowReset = true)
+    }
+
+    LaunchedEffect(downloadFolderWarning) {
+        val warning = downloadFolderWarning ?: return@LaunchedEffect
+        Toast.makeText(context, warning, Toast.LENGTH_LONG).show()
+        AppSettings.setDownloadFolderWarning(null)
     }
 
     /**
@@ -681,14 +740,93 @@ fun SettingsScreen(
                     badge = stringResource(R.string.blocking).takeIf { wifiOnlyDownloads && metered == true },
                 )
             }
-            val exportDownloadsTitle = stringResource(R.string.export_compatible_downloads)
-            row(exportDownloadsTitle, "music folder", divided = false) {
-                SettingsSubRow(
-                    title = exportDownloadsTitle,
-                    checked = exportDownloads,
-                    onCheckedChange = AppSettings::setExportDownloads,
-                    subtitle = "Music/Vibe Music".takeIf { exportDownloads },
-                )
+            val downloadLocationTitle = stringResource(R.string.download_location)
+            val customFolderLabel = remember(downloadFolderUri) {
+                LocalMediaRepository.downloadFolderLabel(downloadFolderUri)
+            }
+            val activeLocationSubtitle = when {
+                !exportDownloads -> stringResource(R.string.download_location_private)
+                downloadFolderUri.isNotBlank() -> {
+                    val folderLabel = customFolderLabel ?: stringResource(R.string.download_location_custom)
+                    if (downloadFolderUnavailable) {
+                        stringResource(R.string.download_location_unmounted, folderLabel)
+                    } else {
+                        folderLabel
+                    }
+                }
+                else -> "Music/Vibe Music"
+            }
+            row(
+                downloadLocationTitle,
+                activeLocationSubtitle,
+                stringResource(R.string.export_compatible_downloads),
+                "custom folder",
+                "music folder",
+                "sd card",
+                "storage",
+            ) {
+                Box(Modifier.testTag("download_location_row")) {
+                    SettingsRow(
+                        icon = Icons.Rounded.Folder,
+                        title = downloadLocationTitle,
+                        subtitle = activeLocationSubtitle,
+                        onClick = { pickingDownloadLocation = true },
+                    )
+                }
+            }
+            if (exportDownloads) {
+                val exportExistingTitle = stringResource(R.string.export_existing_downloads)
+                val targetFolderDisplay = if (downloadFolderUri.isNotBlank()) {
+                    customFolderLabel ?: "Custom folder"
+                } else {
+                    "Music/Vibe Music"
+                }
+                val isRunning = downloadsExportState is ExportState.Running
+                val exportExistingSubtitle = when (val state = downloadsExportState) {
+                    is ExportState.Idle -> stringResource(
+                        R.string.export_existing_downloads_subtitle,
+                        targetFolderDisplay,
+                    )
+                    is ExportState.Running -> stringResource(
+                        if (state.moveMode) {
+                            R.string.move_existing_downloads_running
+                        } else {
+                            R.string.export_existing_downloads_running
+                        },
+                        state.completed,
+                        state.total,
+                        state.currentTitle,
+                    )
+                    is ExportState.Completed -> formatExportSummary(state)
+                    is ExportState.Failed -> state.reason
+                }
+                row(
+                    exportExistingTitle,
+                    exportExistingSubtitle,
+                    "export",
+                    "move",
+                    "copy",
+                    "custom folder",
+                    "music folder",
+                ) {
+                    Box(Modifier.testTag("export_existing_downloads_row")) {
+                        SettingsRow(
+                            icon = Icons.Rounded.FileUpload,
+                            title = exportExistingTitle,
+                            subtitle = exportExistingSubtitle,
+                            badge = stringResource(R.string.cancel).takeIf { isRunning },
+                            enabled = !downloadFolderUnavailable || downloadFolderUri.isBlank(),
+                            onClick = {
+                                if (isRunning) {
+                                    Downloads.cancelExport()
+                                } else {
+                                    Downloads.dismissExportState()
+                                    confirmExportDownloadsDialog = true
+                                }
+                            },
+                        )
+                    }
+                }
             }
         }
 
@@ -1635,6 +1773,97 @@ fun SettingsScreen(
         }
     }
 
+    if (pickingDownloadLocation) {
+        ModalBottomSheet(
+            onDismissRequest = { pickingDownloadLocation = false },
+            containerColor = MaterialTheme.colorScheme.background,
+        ) {
+            DownloadLocationSheet(
+                exportDownloads = exportDownloads,
+                downloadFolderUri = downloadFolderUri,
+                onSelectPrivate = {
+                    AppSettings.setDownloadLocationPrivate()
+                    Downloads.releaseUnusedSafTreeGrants(context)
+                    pickingDownloadLocation = false
+                },
+                onSelectDefaultMusic = {
+                    val wasPrivate = !exportDownloads
+                    AppSettings.setDownloadLocationDefaultMusic()
+                    Downloads.releaseUnusedSafTreeGrants(context)
+                    pickingDownloadLocation = false
+                    if (wasPrivate) {
+                        confirmExportDownloadsDialog = true
+                    }
+                },
+                onPickCustomFolder = {
+                    pickingDownloadLocation = false
+                    downloadFolderPicker.launch(null)
+                },
+            )
+        }
+    }
+
+    if (confirmExportDownloadsDialog) {
+        val targetFolderDisplay = remember(downloadFolderUri) {
+            if (downloadFolderUri.isNotBlank()) {
+                LocalMediaRepository.downloadFolderLabel(downloadFolderUri) ?: "Custom folder"
+            } else {
+                "Music/Vibe Music"
+            }
+        }
+        val requestNotificationIfNeeded = {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.POST_NOTIFICATIONS,
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                exportNotifyPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+        AlertDialog(
+            onDismissRequest = { confirmExportDownloadsDialog = false },
+            title = { Text(stringResource(R.string.export_existing_downloads_dialog_title)) },
+            text = {
+                Text(
+                    stringResource(
+                        R.string.export_existing_downloads_dialog_body,
+                        targetFolderDisplay,
+                    ),
+                )
+            },
+            confirmButton = {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(
+                        onClick = {
+                            confirmExportDownloadsDialog = false
+                            requestNotificationIfNeeded()
+                            Downloads.startExport(context, moveMode = false)
+                        },
+                        modifier = Modifier.testTag("export_copy_button"),
+                    ) {
+                        Text(stringResource(R.string.export_action_copy))
+                    }
+                    TextButton(
+                        onClick = {
+                            confirmExportDownloadsDialog = false
+                            requestNotificationIfNeeded()
+                            Downloads.startExport(context, moveMode = true)
+                        },
+                        modifier = Modifier.testTag("export_move_button"),
+                    ) {
+                        Text(stringResource(R.string.export_action_move))
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmExportDownloadsDialog = false }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            },
+        )
+    }
+
     if (pickingAutomixPerformance) {
         ModalBottomSheet(
             onDismissRequest = { pickingAutomixPerformance = false },
@@ -2307,6 +2536,147 @@ private fun DownloadQualitySheet(
                     )
                 }
             }
+        }
+    }
+}
+
+private fun formatExportSummary(state: ExportState.Completed): String {
+    val parts = mutableListOf<String>()
+    val verb = if (state.moveMode) "Moved" else "Exported"
+    if (state.exported > 0) {
+        parts.add("$verb ${state.exported}")
+    }
+    if (state.skippedAlreadyThere > 0) {
+        parts.add("${state.skippedAlreadyThere} already in folder")
+    }
+    if (state.copiedFallback > 0) {
+        parts.add("${state.copiedFallback} copied (original kept)")
+    }
+    if (state.skippedConflicts > 0) {
+        parts.add("${state.skippedConflicts} skipped (name conflict)")
+    }
+    if (state.failed > 0) {
+        parts.add("${state.failed} failed")
+    }
+    return if (parts.isEmpty()) "All downloads are already in this folder" else parts.joinToString(" · ")
+}
+
+@Composable
+private fun DownloadLocationSheet(
+    exportDownloads: Boolean,
+    downloadFolderUri: String,
+    onSelectPrivate: () -> Unit,
+    onSelectDefaultMusic: () -> Unit,
+    onPickCustomFolder: () -> Unit,
+) {
+    val haptics = LocalHapticFeedback.current
+    val customLabel = remember(downloadFolderUri) {
+        LocalMediaRepository.downloadFolderLabel(downloadFolderUri)
+    }
+    val isPrivate = !exportDownloads
+    val isDefaultMusic = exportDownloads && downloadFolderUri.isBlank()
+    val isCustom = exportDownloads && downloadFolderUri.isNotBlank()
+
+    Column(Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
+        Row(
+            modifier = Modifier.padding(start = 22.dp, end = 22.dp, bottom = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.Folder,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onBackground,
+                modifier = Modifier.size(22.dp),
+            )
+            Spacer(Modifier.width(14.dp))
+            Column {
+                Text(
+                    text = stringResource(R.string.download_location),
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onBackground,
+                )
+                Text(
+                    text = stringResource(R.string.download_location_subtitle),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outline)
+
+        DownloadLocationOptionRow(
+            title = stringResource(R.string.download_location_private),
+            subtitle = stringResource(R.string.download_location_private_subtitle),
+            chosen = isPrivate,
+            tag = "download_location_private_option",
+            onClick = {
+                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                onSelectPrivate()
+            },
+        )
+        DownloadLocationOptionRow(
+            title = stringResource(R.string.download_location_default_music),
+            subtitle = stringResource(R.string.download_location_default_music_subtitle),
+            chosen = isDefaultMusic,
+            tag = "download_location_default_option",
+            onClick = {
+                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                onSelectDefaultMusic()
+            },
+        )
+        DownloadLocationOptionRow(
+            title = stringResource(R.string.download_location_custom),
+            subtitle = if (isCustom && customLabel != null) {
+                "$customLabel · ${stringResource(R.string.download_location_custom_subtitle)}"
+            } else {
+                stringResource(R.string.download_location_custom_subtitle)
+            },
+            chosen = isCustom,
+            tag = "download_location_custom_option",
+            onClick = {
+                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                onPickCustomFolder()
+            },
+        )
+    }
+}
+
+@Composable
+private fun DownloadLocationOptionRow(
+    title: String,
+    subtitle: String,
+    chosen: Boolean,
+    tag: String,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag(tag)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 22.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onBackground,
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (chosen) {
+            Spacer(Modifier.width(12.dp))
+            Icon(
+                Icons.Rounded.Check,
+                contentDescription = stringResource(R.string.selected),
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(22.dp),
+            )
         }
     }
 }

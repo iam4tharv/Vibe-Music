@@ -171,6 +171,7 @@ fun BrowseActionsSheet(
      * also happens to be downloaded.
      */
     onDeleteDownload: (() -> Unit)? = null,
+    onSelectTracks: (() -> Unit)? = null,
     /**
      * [SongActionsPresentation.Menu] draws only the rows, compact, for the
      * popup a held card lifts into — [HeldContextMenu] shows the card itself,
@@ -224,6 +225,13 @@ fun BrowseActionsSheet(
                 stringResource(R.string.add_to_queue),
                 onClick = onAddToQueue,
             )
+            onSelectTracks?.let { select ->
+                ActionRow(
+                    VibeMusicIcons.Check,
+                    stringResource(R.string.batch_select_tracks),
+                    onClick = select,
+                )
+            }
             onDownloadAll?.let { download ->
                 // Saying which of the three it is, rather than offering the same row
                 // whatever the state — this is where a release is asked for now that

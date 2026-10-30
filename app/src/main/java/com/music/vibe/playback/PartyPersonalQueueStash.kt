@@ -3,18 +3,25 @@ package com.music.vibe.playback
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.media3.common.Player
+import com.music.vibe.data.db.LegacyDataMigrator
+import com.music.vibe.data.db.VibeDatabase
 import com.music.vibe.data.model.Song
+import com.music.vibe.data.model.SongJsonCodec
+import com.music.vibe.data.runCatchingLogged
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 
 /**
  * Persists the user's personal queue, index, playhead, and playing state before
  * entering a Listen Together party, and restores it when the user leaves.
  *
- * Backed by SharedPreferences so the personal queue survives process death or
- * recreation while in a party.
+ * Backed by [VibeDatabase] (`queue_snapshots` + `queue_items`) using canonical
+ * [SongJsonCodec] serialization so the personal queue survives process death or
+ * recreation while in a party without losing any [Song] metadata.
  */
 object PartyPersonalQueueStash {
+
+    private const val TAG = "PartyPersonalQueueStash"
+    private const val SNAPSHOT_KEY = LegacyDataMigrator.SNAPSHOT_PARTY_PERSONAL_STASH
 
     data class Snapshot(
         val songs: List<Song>,
@@ -23,22 +30,31 @@ object PartyPersonalQueueStash {
         val wasPlaying: Boolean,
     )
 
-    private lateinit var prefs: SharedPreferences
-    private val json = Json { ignoreUnknownKeys = true }
+    @Volatile
+    private var database: VibeDatabase? = null
+
+    @Volatile
+    private var testPrefs: SharedPreferences? = null
 
     fun init(context: Context) {
-        prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        database = VibeDatabase.getInstance(context.applicationContext)
+        testPrefs = null
     }
 
-    fun initForTesting(testPrefs: SharedPreferences) {
-        prefs = testPrefs
+    fun initForTesting(prefs: SharedPreferences, db: VibeDatabase? = null) {
+        testPrefs = prefs
+        database = db
+    }
+
+    fun initForTesting(db: VibeDatabase) {
+        database = db
+        testPrefs = null
     }
 
     /** Stash directly from a live player. */
     fun stashFromPlayer(player: Player): Boolean {
-        if (!::prefs.isInitialized) return false
+        if (database == null && testPrefs == null) return false
         if (player.mediaItemCount == 0) {
-            // Player is empty; check if LastPlayed holds a restorable personal queue
             val fallback = LastPlayed.load()
             if (fallback != null && fallback.songs.isNotEmpty()) {
                 stash(
@@ -66,124 +82,92 @@ object PartyPersonalQueueStash {
     }
 
     fun stash(songs: List<Song>, index: Int, positionMs: Long, wasPlaying: Boolean) {
-        if (!::prefs.isInitialized || songs.isEmpty()) return
+        if (songs.isEmpty()) return
         val safeIndex = index.coerceIn(songs.indices)
-        val stored = StoredQueue(
-            tracks = songs.map { StoredTrack.from(it) },
-            index = safeIndex,
-            positionMs = positionMs.coerceAtLeast(0L),
-            wasPlaying = wasPlaying,
-        )
-        val encoded = runCatching {
-            json.encodeToString(StoredQueue.serializer(), stored)
-        }.getOrNull() ?: return
-        prefs.edit().putString(KEY_STASH, encoded).commit()
+        val safePos = positionMs.coerceAtLeast(0L)
+        val db = database
+        val prefs = testPrefs
+        if (db != null) {
+            db.queueSnapshotDao.saveSnapshot(
+                snapshotKey = SNAPSHOT_KEY,
+                songs = songs,
+                currentIndex = safeIndex,
+                positionMs = safePos,
+                wasPlaying = wasPlaying,
+            )
+        } else if (prefs != null) {
+            val encoded = runCatchingLogged(TAG, "encodeTestStash") {
+                SongJsonCodec.json.encodeToString(
+                    TestStoredQueue.serializer(),
+                    TestStoredQueue(
+                        songs = songs,
+                        index = safeIndex,
+                        positionMs = safePos,
+                        wasPlaying = wasPlaying,
+                    ),
+                )
+            }.getOrNull() ?: return
+            prefs.edit().putString(KEY_STASH, encoded).commit()
+        }
     }
 
     fun hasStash(): Boolean {
-        if (!::prefs.isInitialized) return false
-        return prefs.contains(KEY_STASH)
+        val db = database
+        if (db != null) return db.queueSnapshotDao.hasSnapshot(SNAPSHOT_KEY)
+        return testPrefs?.contains(KEY_STASH) == true
     }
 
     fun load(): Snapshot? {
-        if (!::prefs.isInitialized) return null
+        val db = database
+        if (db != null) {
+            val snap = db.queueSnapshotDao.loadSnapshot(SNAPSHOT_KEY) ?: return null
+            if (snap.songs.isEmpty()) return null
+            return Snapshot(
+                songs = snap.songs,
+                index = snap.index.coerceIn(snap.songs.indices),
+                positionMs = snap.positionMs.coerceAtLeast(0L),
+                wasPlaying = snap.wasPlaying,
+            )
+        }
+        val prefs = testPrefs ?: return null
         val raw = prefs.getString(KEY_STASH, null) ?: return null
-        val stored = runCatching { json.decodeFromString<StoredQueue>(raw) }.getOrNull()
-            ?: return null
-        if (stored.tracks.isEmpty()) return null
-        val songs = stored.tracks.map(StoredTrack::toSong)
+        val stored = runCatchingLogged(TAG, "decodeTestStash") {
+            SongJsonCodec.json.decodeFromString(TestStoredQueue.serializer(), raw)
+        }.getOrNull() ?: runCatchingLogged(TAG, "decodeLegacyStash") {
+            SongJsonCodec.json.decodeFromString(LegacyDataMigrator.LegacyStoredQueue.serializer(), raw)
+                .let { legacy ->
+                    TestStoredQueue(
+                        songs = legacy.tracks.map { it.toSong() },
+                        index = legacy.index,
+                        positionMs = legacy.positionMs,
+                        wasPlaying = legacy.wasPlaying,
+                    )
+                }
+        }.getOrNull() ?: return null
+        if (stored.songs.isEmpty()) return null
         return Snapshot(
-            songs = songs,
-            index = stored.index.coerceIn(songs.indices),
+            songs = stored.songs,
+            index = stored.index.coerceIn(stored.songs.indices),
             positionMs = stored.positionMs.coerceAtLeast(0L),
             wasPlaying = stored.wasPlaying,
         )
     }
 
     fun clear() {
-        if (!::prefs.isInitialized) return
-        prefs.edit().remove(KEY_STASH).commit()
+        database?.queueSnapshotDao?.deleteSnapshot(SNAPSHOT_KEY)
+        testPrefs?.edit()?.remove(KEY_STASH)?.commit()
     }
 
     @Serializable
-    private data class StoredQueue(
-        val tracks: List<StoredTrack>,
+    private data class TestStoredQueue(
+        val songs: List<Song>,
         val index: Int = 0,
         val positionMs: Long = 0L,
         val wasPlaying: Boolean = false,
     )
 
-    @Serializable
-    private data class StoredTrack(
-        val id: String,
-        val title: String,
-        val artist: String,
-        val artwork: String? = null,
-        val auto: Boolean = false,
-        val tier: String? = null,
-        val entryId: String? = null,
-        val local: String? = null,
-        val path: String? = null,
-        val duration: String? = null,
-        val album: String? = null,
-        val explicit: Boolean? = null,
-        val video: Boolean = false,
-        val radio: String? = null,
-        val source: String? = null,
-        val sourceType: String? = null,
-        val sourceId: String? = null,
-    ) {
-        fun toSong(): Song {
-            val resolvedTier = tier?.let { runCatching { com.music.vibe.data.model.QueueTier.valueOf(it) }.getOrNull() }
-                ?: if (auto) com.music.vibe.data.model.QueueTier.AUTOPLAY else com.music.vibe.data.model.QueueTier.CONTEXT
-            return Song(
-                videoId = id,
-                title = title,
-                artist = artist,
-                thumbnailUrl = artwork,
-                durationText = duration,
-                albumName = album,
-                isExplicit = explicit,
-                isVideo = video,
-                queueTier = resolvedTier,
-                queueEntryId = entryId,
-                radioName = radio,
-                playbackSource = source,
-                playbackSourceType = sourceType?.let {
-                    runCatching { com.music.vibe.data.model.PlaybackSourceType.valueOf(it) }.getOrNull()
-                },
-                playbackSourceId = sourceId,
-                localUri = local,
-                localPath = path,
-            )
-        }
-
-        companion object {
-            fun from(song: Song) = StoredTrack(
-                id = song.videoId,
-                title = song.title,
-                artist = song.artist,
-                artwork = song.thumbnailUrl,
-                auto = song.fromAutoplay,
-                tier = song.queueTier.name,
-                entryId = song.queueEntryId,
-                local = song.localUri,
-                path = song.localPath,
-                duration = song.durationText,
-                album = song.albumName,
-                explicit = song.isExplicit,
-                video = song.isVideo,
-                radio = song.radioName,
-                source = song.playbackSource,
-                sourceType = song.playbackSourceType?.name,
-                sourceId = song.playbackSourceId,
-            )
-        }
-    }
-
     private fun Song.isDeviceFile(): Boolean =
         videoId.startsWith("content://") || videoId.startsWith("file://")
 
-    private const val PREFS_NAME = "vibemusic_party_queue_stash"
     private const val KEY_STASH = "stashed_queue"
 }
