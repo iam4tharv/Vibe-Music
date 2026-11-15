@@ -34,6 +34,7 @@ import com.music.vibe.data.model.Account
 import com.music.vibe.data.model.AccountChannel
 import com.music.vibe.data.model.BrowseType
 import com.music.vibe.data.model.DetailPage
+import com.music.vibe.data.model.HomeChip
 import com.music.vibe.data.model.HomeShelf
 import com.music.vibe.data.model.withoutRepeatsOf
 import com.music.vibe.data.model.LibraryPage
@@ -93,13 +94,22 @@ import java.util.concurrent.atomic.AtomicLong
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
 
-    private val authStore = AuthStore(app)
+    private val authStore = com.music.vibe.di.AppContainer.get(app).authStore
 
     private val _signedIn = MutableStateFlow(authStore.isSignedIn)
     val signedIn: StateFlow<Boolean> = _signedIn.asStateFlow()
 
     private val _home = MutableStateFlow<UiState<List<HomeShelf>>>(UiState.Loading)
     val home: StateFlow<UiState<List<HomeShelf>>> = _home.asStateFlow()
+
+    private val _homeChips = MutableStateFlow<List<HomeChip>>(DEFAULT_HOME_CHIPS)
+    val homeChips: StateFlow<List<HomeChip>> = _homeChips.asStateFlow()
+
+    private val _selectedHomeChip = MutableStateFlow<HomeChip?>(null)
+    val selectedHomeChip: StateFlow<HomeChip?> = _selectedHomeChip.asStateFlow()
+
+    private var unfilteredHomeShelves: List<HomeShelf> = emptyList()
+    private var homeChipJob: Job? = null
 
     /**
      * Token for the next page of Home shelves; null once there's nothing
@@ -124,8 +134,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /** True whenever shelves are still due at the end of the feed, from either source. */
     val homeLoadingMore: StateFlow<Boolean> =
-        combine(_homeLoadingMore, _homePendingShelves) { paging, pending -> paging || pending > 0 }
-            .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+        combine(_homeLoadingMore, _homePendingShelves, _selectedHomeChip) { paging, pending, chip ->
+            chip == null && (paging || pending > 0)
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     private val _homeRecentlyPlayedLoading = MutableStateFlow(false)
     val homeRecentlyPlayedLoading: StateFlow<Boolean> = _homeRecentlyPlayedLoading.asStateFlow()
@@ -308,15 +319,26 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private var selectedLyricsSource: LyricsSource? = null
 
     /**
-     * What the loaded lyrics are for. Both the track *and* the settings that
-     * chose them, so switching a source on or off re-runs the lookup rather
-     * than leaving the last answer sitting on a player that would now find a
-     * different one.
+     * Snapshot of both the track and the lyric lookup settings that produced
+     * the current answer, so changing provider priority, syllable-sync
+     * preference, original-title lookup, or the PaxSenix API key re-evaluates
+     * lyrics for the playing song immediately.
      */
-    private var lyricsFor: Pair<String, Set<LyricsSource>>? = null
+    internal data class LyricsLookupKey(
+        val videoId: String,
+        val title: String,
+        val artist: String,
+        val sources: Set<LyricsSource>,
+        val order: List<LyricsSource>,
+        val prioritizeSyllableSync: Boolean,
+        val paxSenixKeyHash: Int,
+    )
+
+    private var lyricsFor: LyricsLookupKey? = null
 
     /**
-     * Called as the playing track changes; cheap no-op when already loaded.
+     * Called as the playing track or lyric settings change; cheap no-op when
+     * already loaded for the exact same [LyricsLookupKey].
      *
      * [localUri] is the file this track plays from when it is on the device,
      * and it is tried before the network: a downloaded track had its lyrics
@@ -338,7 +360,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         } else {
             emptySet()
         }
-        val key = videoId to sources
+        val key = LyricsLookupKey(
+            videoId = videoId,
+            title = title,
+            artist = artist,
+            sources = sources,
+            order = AppSettings.lyricsSourceOrder.value,
+            prioritizeSyllableSync = AppSettings.prioritizeSyllableSync.value,
+            paxSenixKeyHash = AppSettings.paxSenixApiKey.value.hashCode(),
+        )
         if (lyricsFor == key) return
         // The duration lands a beat after the track, and a database match needs
         // it. Turned away here rather than inside the job below: claiming the
@@ -1631,6 +1661,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
         viewModelScope.launch {
+            AuthStore.restoredEvents.collect {
+                syncFromAuthStore()
+            }
+        }
+        viewModelScope.launch {
             com.music.vibe.data.spotify.SpotifyImportManager.events.collect { event ->
                 if (!event.savedLocally && event.browseId != null) {
                     val playlistId = event.browseId.removePrefix("VL")
@@ -1892,6 +1927,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun loadHome() {
         val identity = listenerKey()
         val generation = homeLoadGeneration.incrementAndGet()
+        homeChipJob?.cancel()
+        _selectedHomeChip.value = null
+        unfilteredHomeShelves = emptyList()
         _home.value = UiState.Loading
         homeContinuation = null
         homeSeenTitles.clear()
@@ -1908,6 +1946,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         .onSuccess { feed ->
                             if (!isCurrentHomeLoad(identity, generation)) return@onSuccess
                             homeContinuation = feed.continuation
+                            if (feed.chips.isNotEmpty()) {
+                                _homeChips.value = feed.chips
+                            }
                             publishHomeShelves(feed.shelves)
                         }
                         .onFailure { failure ->
@@ -1947,6 +1988,66 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Clears any active Home mood filter chip and restores the unfiltered Home shelves. */
+    fun clearHomeChip(): Boolean {
+        if (_selectedHomeChip.value == null) return false
+        homeChipJob?.cancel()
+        _selectedHomeChip.value = null
+        if (unfilteredHomeShelves.isNotEmpty()) {
+            _home.value = UiState.Success(unfilteredHomeShelves)
+        } else {
+            loadHome()
+        }
+        return true
+    }
+
+    /**
+     * Toggles a YouTube Music mood/activity chip on the Home screen (`Focus`,
+     * `Workout`, `Relax`, `Energize`, etc.). Tapping the active chip again clears
+     * the filter and immediately restores the unfiltered Home shelves.
+     */
+    fun selectHomeChip(chip: HomeChip) {
+        val current = _selectedHomeChip.value
+        if (current != null && current.title.equals(chip.title, ignoreCase = true)) {
+            clearHomeChip()
+            return
+        }
+        if (current == null) {
+            val currentShelves = (_home.value as? UiState.Success)?.data.orEmpty()
+            if (currentShelves.isNotEmpty()) {
+                unfilteredHomeShelves = currentShelves
+            }
+        }
+        _selectedHomeChip.value = chip
+        homeChipJob?.cancel()
+        _home.value = UiState.Loading
+        homeChipJob = viewModelScope.launch {
+            YtMusicRepository.homeChipShelves(chip)
+                .onSuccess { shelves ->
+                    if (_selectedHomeChip.value == chip) {
+                        if (shelves.isNotEmpty()) {
+                            _home.value = UiState.Success(shelves)
+                        } else if (unfilteredHomeShelves.isNotEmpty()) {
+                            _selectedHomeChip.value = null
+                            _home.value = UiState.Success(unfilteredHomeShelves)
+                        } else {
+                            _home.value = UiState.Error(text(R.string.failed))
+                        }
+                    }
+                }
+                .onFailure { failure ->
+                    if (_selectedHomeChip.value == chip) {
+                        if (unfilteredHomeShelves.isNotEmpty()) {
+                            _selectedHomeChip.value = null
+                            _home.value = UiState.Success(unfilteredHomeShelves)
+                        } else {
+                            _home.value = UiState.Error(failure.friendly())
+                        }
+                    }
+                }
+        }
+    }
+
     /**
      * One of the parallel first-page requests has finished. Ignored once a newer
      * load has taken over, which has already reset the count for its own fan-out.
@@ -1960,32 +2061,54 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         identity == listenerKey() && generation == homeLoadGeneration.get()
 
     private fun publishHomeShelves(shelves: List<HomeShelf>, prepend: Boolean = false) {
-        val existing = (_home.value as? UiState.Success)?.data.orEmpty()
+        val existing = if (_selectedHomeChip.value != null) {
+            unfilteredHomeShelves
+        } else {
+            (_home.value as? UiState.Success)?.data.orEmpty()
+        }
         if (prepend) {
             // YouTube's core home can also contain a stale "Recently played"
             // shelf. The dedicated history endpoint wins and replaces it.
             val replacing = shelves.map { it.title.lowercase(Locale.ROOT) }.toSet()
             homeSeenTitles.addAll(replacing)
-            _home.value = UiState.Success(shelves + existing.filterNot {
+            val updated = shelves + existing.filterNot {
                 it.title.lowercase(Locale.ROOT) in replacing
-            })
+            }
+            unfilteredHomeShelves = updated
+            if (_selectedHomeChip.value == null) {
+                _home.value = UiState.Success(updated)
+            }
             return
         }
         val added = shelves.withoutRepeatsOf(existing)
             .filter { homeSeenTitles.add(it.title.lowercase(Locale.ROOT)) }
-        if (added.isNotEmpty()) _home.value = UiState.Success(existing + added)
+        if (added.isNotEmpty()) {
+            val updated = existing + added
+            unfilteredHomeShelves = updated
+            if (_selectedHomeChip.value == null) {
+                _home.value = UiState.Success(updated)
+            }
+        }
     }
 
     /** Refreshes the core feed without blanking the current Play page first. */
     private suspend fun refreshHome(identity: String?) = coroutineScope {
+        homeChipJob?.cancel()
+        _selectedHomeChip.value = null
         val recent = if (_signedIn.value) async { YtMusicRepository.homeRecentlyPlayed() } else null
         YtMusicRepository.home().onSuccess { feed ->
             if (identity != listenerKey()) return@onSuccess
             homeContinuation = feed.continuation
+            if (feed.chips.isNotEmpty()) {
+                _homeChips.value = feed.chips
+            }
             homeSeenTitles.clear()
             val shelves = feed.shelves.withoutRepeatsOf(emptyList())
                 .filter { homeSeenTitles.add(it.title.lowercase(Locale.ROOT)) }
-            if (shelves.isNotEmpty()) _home.value = UiState.Success(shelves)
+            if (shelves.isNotEmpty()) {
+                unfilteredHomeShelves = shelves
+                _home.value = UiState.Success(shelves)
+            }
         }
         recent?.await()?.onSuccess { shelf ->
             if (identity == listenerKey()) shelf?.let { publishHomeShelves(listOf(it), prepend = true) }
@@ -1998,6 +2121,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * loaded — [homeContinuation] covers all three by construction.
      */
     fun loadMoreHome() {
+        if (_selectedHomeChip.value != null) return
         val token = homeContinuation ?: return
         if (_homeLoadingMore.value) return
         val identity = listenerKey()
@@ -2012,7 +2136,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     // itself rather than run dry with a token still attached —
                     // treat it the same as exhausted so scrolling can't spin here.
                     homeContinuation = feed.continuation.takeIf { added.isNotEmpty() }
-                    if (added.isNotEmpty()) _home.value = UiState.Success(existing + added)
+                    if (added.isNotEmpty()) {
+                        val updated = existing + added
+                        unfilteredHomeShelves = updated
+                        _home.value = UiState.Success(updated)
+                    }
                 }
             }
             if (identity == listenerKey()) _homeLoadingMore.value = false
@@ -2594,6 +2722,21 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     companion object {
+        /**
+         * Default YouTube Music mood/activity filter chips shown at the top of
+         * the Home screen before or when the server response omits `chipCloudRenderer`.
+         */
+        internal val DEFAULT_HOME_CHIPS = listOf(
+            HomeChip(title = "Focus", browseId = "FEmusic_moods_and_genres"),
+            HomeChip(title = "Workout", browseId = "FEmusic_moods_and_genres"),
+            HomeChip(title = "Relax", browseId = "FEmusic_moods_and_genres"),
+            HomeChip(title = "Energize", browseId = "FEmusic_moods_and_genres"),
+            HomeChip(title = "Commute", browseId = "FEmusic_moods_and_genres"),
+            HomeChip(title = "Party", browseId = "FEmusic_moods_and_genres"),
+            HomeChip(title = "Romance", browseId = "FEmusic_moods_and_genres"),
+            HomeChip(title = "Sleep", browseId = "FEmusic_moods_and_genres"),
+        )
+
         /** How many Spotify tracks are looked up on YouTube Music at once. */
         private const val SPOTIFY_MATCH_PARALLELISM = 6
 
@@ -3507,6 +3650,44 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             loadLibrary()
             loadAccount()
             loadPlaylists()
+        }
+    }
+
+    /**
+     * Synchronizes all Google account sessions, active channel profile, and
+     * signed-in listener state from [authStore] immediately after a backup import.
+     */
+    fun syncFromAuthStore() {
+        val allSessions = authStore.sessions
+        val active = authStore.activeSession
+        val profile = active?.profiles?.firstOrNull { it.profileId == authStore.activeProfileId }
+            ?: active?.profiles?.firstOrNull { it.profileId == active.activeProfileId }
+            ?: active?.profiles?.firstOrNull()
+        val nowSignedIn = authStore.isSignedIn
+
+        _googleAccounts.value = allSessions
+        _activeAccountId.value = active?.accountId
+        _activeProfileId.value = profile?.profileId ?: authStore.activeProfileId
+        _selectedChannelKey.value = profile?.profileId ?: authStore.channelPageId ?: authStore.channelDataSyncId
+        _selectedChannelName.value = profile?.name ?: authStore.channelName
+        _channels.value = emptyList()
+        _signedIn.value = nowSignedIn
+
+        Innertube.cookie = active?.cookie ?: authStore.cookie
+        Innertube.selectChannel(
+            profile?.pageId ?: authStore.channelPageId,
+            profile?.dataSyncId ?: authStore.channelDataSyncId,
+            profile?.authUser ?: authStore.channelAuthUser,
+        )
+        StreamResolver.onSessionChanged()
+        listenerCache.clear()
+        clearListenerState(restoreCached = false)
+        refreshSmartMixes()
+        if (nowSignedIn) {
+            reloadForAccount()
+            loadChannels(force = true)
+        } else {
+            loadHome()
         }
     }
 

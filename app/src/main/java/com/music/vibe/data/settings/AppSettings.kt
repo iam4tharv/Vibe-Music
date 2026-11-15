@@ -59,6 +59,21 @@ enum class OutputPcmMode(val label: String) {
 }
 
 /**
+ * How USB DAC bit-perfect audio transport is negotiated when a USB audio device is connected.
+ *
+ * - [AUTO]: Prefers Android 14+ (API 34) official `MIXER_BEHAVIOR_BIT_PERFECT` when supported by
+ *   device firmware and the connected DAC, automatically falling back to the custom userspace USB
+ *   Audio Class (UAC 1.0/2.0) driver on Android 13 and below or when the OS lacks mixer support.
+ * - [ANDROID_14_MIXER]: Uses Android 14+ `setPreferredMixerAttributes` bit-perfect API.
+ * - [CUSTOM_USB_DRIVER]: Claims the USB Audio Class interface directly via `UsbManager`.
+ */
+enum class UsbTransportMode(val label: String) {
+    AUTO("Auto"),
+    ANDROID_14_MIXER("Android 14+ API"),
+    CUSTOM_USB_DRIVER("Custom USB Driver"),
+}
+
+/**
  * What to keep when a track is saved to the device.
  *
  * Deliberately not [AudioQuality]. That enum budgets a *stream*, and is priced
@@ -265,10 +280,13 @@ object AppSettings {
     val highFidelityOutput = MutableStateFlow(true)
 
     /** Requested PCM representation at the Android AudioTrack boundary. */
-    val outputPcmMode = MutableStateFlow(OutputPcmMode.PCM_16)
+    val outputPcmMode = MutableStateFlow(OutputPcmMode.FLOAT_32)
 
     /** Prefer an attached USB audio output over the system's normal route. */
     val preferUsbDac = MutableStateFlow(false)
+
+    /** Preferred USB DAC bit-perfect transport mechanism. */
+    val usbTransportMode = MutableStateFlow(UsbTransportMode.AUTO)
 
     /**
      * Level every track to the same loudness, using YouTube's own
@@ -820,14 +838,21 @@ object AppSettings {
             )
         }.getOrDefault(AutomixPerformanceMode.BALANCED)
         skipSilence.value = prefs.getBoolean(KEY_SKIP_SILENCE, false)
+        highFidelityOutput.value = prefs.getBoolean(KEY_HIGH_FIDELITY_OUTPUT, true)
+        val defaultPcmMode = if (highFidelityOutput.value) OutputPcmMode.FLOAT_32 else OutputPcmMode.PCM_16
         outputPcmMode.value = runCatching {
             OutputPcmMode.valueOf(
-                prefs.getString(KEY_OUTPUT_PCM_MODE, OutputPcmMode.PCM_16.name)
-                    ?: OutputPcmMode.PCM_16.name,
+                prefs.getString(KEY_OUTPUT_PCM_MODE, defaultPcmMode.name)
+                    ?: defaultPcmMode.name,
             )
-        }.getOrDefault(OutputPcmMode.PCM_16)
+        }.getOrDefault(defaultPcmMode)
         preferUsbDac.value = prefs.getBoolean(KEY_PREFER_USB_DAC, false)
-        highFidelityOutput.value = prefs.getBoolean(KEY_HIGH_FIDELITY_OUTPUT, true)
+        usbTransportMode.value = runCatching {
+            UsbTransportMode.valueOf(
+                prefs.getString(KEY_USB_TRANSPORT_MODE, UsbTransportMode.AUTO.name)
+                    ?: UsbTransportMode.AUTO.name,
+            )
+        }.getOrDefault(UsbTransportMode.AUTO)
         loudnessNormalization.value = prefs.getBoolean(KEY_LOUDNESS_NORMALIZATION, false)
         loudnessOffOnSpeaker.value = prefs.getBoolean(KEY_LOUDNESS_OFF_ON_SPEAKER, false)
         dolbyAtmos.value = prefs.getBoolean(KEY_DOLBY_ATMOS, false)
@@ -897,6 +922,21 @@ object AppSettings {
         lastfmApiKey.value = prefs.getString(KEY_LASTFM_API_KEY, "").orEmpty().ifBlank { BuildConfig.LASTFM_API_KEY }
         lastfmSecret.value = prefs.getString(KEY_LASTFM_SECRET, "").orEmpty().ifBlank { BuildConfig.LASTFM_SECRET }
         lastfmEndpoint.value = prefs.getString(KEY_LASTFM_ENDPOINT, "").orEmpty()
+        if (lastfmSessionKey.value.isNotBlank() &&
+            lastfmApiKey.value.isNotBlank() &&
+            lastfmSecret.value.isNotBlank()
+        ) {
+            com.music.vibe.data.scrobbling.LastFM.configure(
+                endpoint = lastfmEndpoint.value.ifBlank {
+                    com.music.vibe.data.scrobbling.LastFM.DEFAULT_API_ENDPOINT
+                },
+                apiKey = lastfmApiKey.value.trim(),
+                secret = lastfmSecret.value.trim(),
+                sessionKey = lastfmSessionKey.value,
+            )
+        } else {
+            com.music.vibe.data.scrobbling.LastFM.sessionKey = null
+        }
         lastfmScrobbleEnabled.value = prefs.getBoolean(KEY_LASTFM_SCROBBLE_ENABLED, false)
         lastfmNowPlaying.value = prefs.getBoolean(KEY_LASTFM_NOW_PLAYING, false) && lastfmScrobbleEnabled.value
         lastfmPrimaryArtistOnly.value = prefs.getBoolean(KEY_LASTFM_PRIMARY_ARTIST_ONLY, false)
@@ -921,12 +961,16 @@ object AppSettings {
         localMusicFolderUri.value = prefs.getString(KEY_LOCAL_MUSIC_FOLDER_URI, "").orEmpty()
         webdavUrl.value = prefs.getString(KEY_WEBDAV_URL, "").orEmpty()
         webdavUsername.value = prefs.getString(KEY_WEBDAV_USERNAME, "").orEmpty()
-        webdavPassword.value = authStore.webdavPassword.orEmpty()
+        if (this::authStore.isInitialized) {
+            webdavPassword.value = authStore.webdavPassword.orEmpty()
+        }
         smbHost.value = prefs.getString(KEY_SMB_HOST, "").orEmpty()
         smbShare.value = prefs.getString(KEY_SMB_SHARE, "").orEmpty()
         smbBasePath.value = prefs.getString(KEY_SMB_BASE_PATH, "").orEmpty()
         smbUsername.value = prefs.getString(KEY_SMB_USERNAME, "").orEmpty()
-        smbPassword.value = authStore.smbPassword.orEmpty()
+        if (this::authStore.isInitialized) {
+            smbPassword.value = authStore.smbPassword.orEmpty()
+        }
         com.music.vibe.data.smb.SmbAuth.update(
             smbHost.value,
             smbShare.value,
@@ -940,7 +984,9 @@ object AppSettings {
             webdavPassword.value,
         )
         pinnedPlaylists.value = readPinnedPlaylists()
-        discordToken.value = authStore.discordToken.orEmpty()
+        if (this::authStore.isInitialized) {
+            discordToken.value = authStore.discordToken.orEmpty()
+        }
         discordUsername.value = prefs.getString(KEY_DISCORD_USERNAME, "").orEmpty()
         discordName.value = prefs.getString(KEY_DISCORD_NAME, "").orEmpty()
         discordAvatar.value = prefs.getString(KEY_DISCORD_AVATAR, "").orEmpty()
@@ -1520,9 +1566,19 @@ object AppSettings {
         prefs.edit().putBoolean(KEY_PREFER_USB_DAC, value).apply()
     }
 
+    fun setUsbTransportMode(value: UsbTransportMode) {
+        usbTransportMode.value = value
+        prefs.edit().putString(KEY_USB_TRANSPORT_MODE, value.name).apply()
+    }
+
     fun setHighFidelityOutput(value: Boolean) {
         highFidelityOutput.value = value
-        prefs.edit().putBoolean(KEY_HIGH_FIDELITY_OUTPUT, value).apply()
+        val editor = prefs.edit().putBoolean(KEY_HIGH_FIDELITY_OUTPUT, value)
+        if (value && outputPcmMode.value != OutputPcmMode.FLOAT_32) {
+            outputPcmMode.value = OutputPcmMode.FLOAT_32
+            editor.putString(KEY_OUTPUT_PCM_MODE, OutputPcmMode.FLOAT_32.name)
+        }
+        editor.apply()
     }
 
     fun setLoudnessOffOnSpeaker(value: Boolean) {
@@ -1905,42 +1961,64 @@ object AppSettings {
     // ── Backup ──────────────────────────────────────────────────────────────
 
     /**
-     * Every stored preference, for an export.
-     *
-     * Read off the preference file wholesale rather than assembled from the
-     * flows above, so a setting added in a later build is in the backup the day
-     * it is added instead of the day somebody remembers to list it here. What is
-     * *left out* is therefore the part worth stating explicitly, and it is
-     * [SECRETS]: an export is a file the user is about to put in Drive or a
-     * chat, and a scrobbler session key or an API secret in it is a credential
-     * that has left the device in plain text. Signing back in after a restore is
-     * a minute; a leaked session key is not recoverable at all.
-     *
-     * The Discord token is not here for the same reason and one more: it never
-     * reaches this file. It lives in the encrypted store — see [AuthStore] — and
-     * so does the YouTube cookie, which means neither can be exported by
-     * accident.
+     * Every stored preference, for an export, including connected service
+     * credentials (Last.fm, ListenBrainz, Spotify, PaxSenix) so restoring a
+     * backup reconnects all services automatically. Device-local storage paths
+     * in [DEVICE_LOCAL] remain excluded.
      */
     fun exportPrefs(): Map<String, Any?> {
         if (!this::prefs.isInitialized) return emptyMap()
-        return prefs.all.filterKeys { it !in SECRETS && it !in DEVICE_LOCAL }
+        return prefs.all.filterKeys { it !in DEVICE_LOCAL }
+    }
+
+    /**
+     * Exports YouTube Music accounts, channel profiles, cookies, Discord token,
+     * and WebDAV/SMB passwords from [AuthStore].
+     */
+    fun exportAuthBackup(): Map<String, String> {
+        if (!this::authStore.isInitialized) return emptyMap()
+        return authStore.exportBackupData()
+    }
+
+    /**
+     * Restores YouTube Music accounts, channel profiles, cookies, Discord token,
+     * and WebDAV/SMB passwords into [AuthStore] and refreshes dependent flows.
+     */
+    fun importAuthBackup(values: Map<String, String>, context: Context? = null) {
+        val targetStore = when {
+            this::authStore.isInitialized -> authStore
+            context != null -> com.music.vibe.di.AppContainer.get(context).authStore
+            else -> return
+        }
+        targetStore.importBackupData(values)
+        webdavPassword.value = targetStore.webdavPassword.orEmpty()
+        smbPassword.value = targetStore.smbPassword.orEmpty()
+        discordToken.value = targetStore.discordToken.orEmpty()
+        if (this::prefs.isInitialized) {
+            com.music.vibe.data.smb.SmbAuth.update(
+                smbHost.value,
+                smbShare.value,
+                smbBasePath.value,
+                smbUsername.value,
+                smbPassword.value,
+            )
+            com.music.vibe.data.webdav.WebDavAuth.update(
+                webdavUrl.value,
+                webdavUsername.value,
+                webdavPassword.value,
+            )
+        }
     }
 
     /**
      * Replaces the preference file with [values] and re-reads it.
-     *
-     * A replace, not a merge: a partial restore leaves a device holding half of
-     * one configuration and half of another, which is the one outcome nobody
-     * asked for. Keys in [SECRETS] survive untouched — they were never in the
-     * file being restored from, and clearing them would sign the user out of
-     * services the backup has nothing to say about.
      */
     fun importPrefs(values: Map<String, Any?>) {
         if (!this::prefs.isInitialized) return
-        val kept = prefs.all.filterKeys { it in SECRETS || it in DEVICE_LOCAL }
+        val kept = prefs.all.filterKeys { it in DEVICE_LOCAL }
         prefs.edit().apply {
             clear()
-            val incoming = values.filterKeys { it !in SECRETS && it !in DEVICE_LOCAL }
+            val incoming = values.filterKeys { it !in DEVICE_LOCAL }
             (kept + incoming).forEach { (key, value) ->
                 when (value) {
                     is Boolean -> putBoolean(key, value)
@@ -1955,19 +2033,6 @@ object AppSettings {
         }.apply()
         reload()
     }
-
-    /**
-     * Preferences an export must not carry — credentials, not configuration.
-     * See [exportPrefs].
-     */
-    private val SECRETS = setOf(
-        KEY_LASTFM_SESSION_KEY,
-        KEY_LASTFM_API_KEY,
-        KEY_LASTFM_SECRET,
-        KEY_LISTENBRAINZ_TOKEN,
-        KEY_SPOTIFY_SPDC_TOKEN,
-        KEY_PAXSENIX_API_KEY,
-    )
 
     /**
      * Preferences that describe *this device* rather than this configuration,
@@ -2022,6 +2087,7 @@ object AppSettings {
     private const val KEY_SKIP_SILENCE = "skip_silence"
     private const val KEY_OUTPUT_PCM_MODE = "output_pcm_mode"
     private const val KEY_PREFER_USB_DAC = "prefer_usb_dac"
+    private const val KEY_USB_TRANSPORT_MODE = "usb_transport_mode"
     private const val KEY_HIGH_FIDELITY_OUTPUT = "high_fidelity_output"
     private const val KEY_LOUDNESS_NORMALIZATION = "loudness_normalization"
     private const val KEY_LOUDNESS_OFF_ON_SPEAKER = "loudness_off_on_speaker"

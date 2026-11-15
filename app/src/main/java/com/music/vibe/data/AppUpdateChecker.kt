@@ -44,8 +44,12 @@ object AppUpdateChecker {
 
     private const val LATEST_RELEASE_URL =
         "https://api.github.com/repos/iam4tharv/vibe-music/releases/latest"
+    private const val TAG_RELEASE_URL_PREFIX =
+        "https://api.github.com/repos/iam4tharv/vibe-music/releases/tags/v"
 
     private val json = Json { ignoreUnknownKeys = true }
+
+    private val releaseNotesCache = java.util.concurrent.ConcurrentHashMap<String, List<String>>()
 
     private val _available = MutableStateFlow<UpdateInfo?>(null)
     val available = _available.asStateFlow()
@@ -65,6 +69,85 @@ object AppUpdateChecker {
     @Volatile
     private var downloadCancelled = false
 
+    /**
+     * Fetches the release changelog for [versionName] from GitHub Releases (trying the
+     * matching tag first and falling back to `/releases/latest`), parses its markdown body
+     * into concise bullet lines, and caches the result in memory for the session.
+     */
+    suspend fun fetchReleaseNotes(versionName: String): List<String> = withContext(Dispatchers.IO) {
+        val cleanVersion = versionName.removePrefix("v").trim()
+        releaseNotesCache[cleanVersion]?.let { return@withContext it }
+
+        // Reuse already-fetched notes if `check()` already populated `_available`
+        _available.value?.notes?.let { cachedNotes ->
+            val parsed = parseReleaseBodyToBullets(cachedNotes)
+            if (parsed.isNotEmpty()) {
+                releaseNotesCache[cleanVersion] = parsed
+                return@withContext parsed
+            }
+        }
+
+        val baseVersion = cleanVersion.substringBefore('-').trim()
+        val urlsToTry = buildList {
+            add("$TAG_RELEASE_URL_PREFIX$cleanVersion")
+            if (baseVersion.isNotEmpty() && baseVersion != cleanVersion) {
+                add("$TAG_RELEASE_URL_PREFIX$baseVersion")
+            }
+            add(LATEST_RELEASE_URL)
+        }
+        for (url in urlsToTry) {
+            val notes = runCatching {
+                val request = Request.Builder()
+                    .url(url)
+                    .header("User-Agent", "VibeMusic-Android")
+                    .build()
+                val rawJson = Http.client.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) null else response.body.string()
+                } ?: return@runCatching emptyList()
+                val release = json.parseToJsonElement(rawJson) as? JsonObject ?: return@runCatching emptyList()
+                val body = release["body"]?.jsonPrimitive?.contentOrNull.orEmpty()
+                parseReleaseBodyToBullets(body)
+            }.getOrDefault(emptyList())
+
+            if (notes.isNotEmpty()) {
+                releaseNotesCache[cleanVersion] = notes
+                return@withContext notes
+            }
+        }
+        emptyList()
+    }
+
+    internal fun parseReleaseBodyToBullets(body: String): List<String> {
+        if (body.isBlank()) return emptyList()
+        val bullets = body.lines()
+            .map { it.trim() }
+            .filter { line ->
+                line.isNotEmpty() &&
+                    !line.startsWith("#") &&
+                    !line.startsWith("```") &&
+                    !line.startsWith("---") &&
+                    !line.startsWith("![") &&
+                    !line.startsWith("<img", ignoreCase = true) &&
+                    !line.startsWith("**Full Changelog**", ignoreCase = true)
+            }
+            .map { line ->
+                line
+                    .removePrefix("- ")
+                    .removePrefix("* ")
+                    .removePrefix("• ")
+                    .replace(Regex("^\\d+\\.\\s+"), "")
+                    .replace("**", "")
+                    .replace("__", "")
+                    .replace("`", "")
+                    .replace(Regex("\\[([^]]+)]\\([^)]+\\)"), "$1")
+                    .trim()
+            }
+            .filter { it.length >= 4 }
+            .distinct()
+            .take(8)
+        return bullets
+    }
+
     suspend fun check(): Result<UpdateInfo?> = withContext(Dispatchers.IO) {
         runCatching {
             val request = Request.Builder()
@@ -72,7 +155,7 @@ object AppUpdateChecker {
                 .header("User-Agent", "VibeMusic-Android")
                 .build()
             val body = Http.client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) null else response.body?.string()
+                if (!response.isSuccessful) null else response.body.string()
             } ?: error("Failed to fetch release info")
             val release = json.parseToJsonElement(body) as? JsonObject ?: error("Failed to parse release JSON")
             val tag = release["tag_name"]?.jsonPrimitive?.contentOrNull ?: error("No tag_name in release")
@@ -140,7 +223,7 @@ object AppUpdateChecker {
             val request = Request.Builder().url(url).build()
             Http.client.newCall(request).execute().use { response ->
                 check(response.isSuccessful) { "Download failed: HTTP ${response.code}" }
-                val body = response.body ?: error("Empty download body")
+                val body = response.body
                 val total = body.contentLength().takeIf { it > 0 }
 
                 body.byteStream().use { input ->
@@ -149,8 +232,7 @@ object AppUpdateChecker {
                         var readTotal = 0L
                         while (true) {
                             if (downloadCancelled) {
-                                _download.value = DownloadState.Idle
-                                return@withContext
+                                break
                             }
                             val read = input.read(buffer)
                             if (read == -1) break
@@ -163,9 +245,17 @@ object AppUpdateChecker {
                         }
                     }
                 }
+                if (downloadCancelled) {
+                    target.delete()
+                    _download.value = DownloadState.Idle
+                    return@withContext
+                }
             }
             _download.value = DownloadState.Ready(target)
         }.onFailure { error ->
+            runCatching {
+                File(context.cacheDir, CACHE_SUBDIR).listFiles()?.forEach { it.delete() }
+            }
             _download.value = if (downloadCancelled) {
                 DownloadState.Idle
             } else {

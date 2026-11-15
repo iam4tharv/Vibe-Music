@@ -28,8 +28,27 @@
     <string name="about_community_subtitle" translatable="false">t.me/vibemusicupdates</string>
     <string name="about_donate_title" translatable="false">Donate with UPI</string>
     <string name="about_donate_subtitle" translatable="false">Support Vibe Music development</string>
-    <string name="about_source_code_title" translatable="false">Source Code</string>
+    <string name="about_source_code_title" translatable="false">Star on GitHub</string>
     <string name="about_source_code_subtitle" translatable="false">github.com/iam4tharv/vibe-music</string>
+    <string name="welcome_to_vibe_music">Welcome to Vibe Music</string>
+    <string name="whats_new_in_vibe_music">What’s New in %1$s</string>
+    <string name="release_subtitle_fresh">Lossless Audio Player · v%1$s</string>
+    <string name="release_subtitle_update">Updated &amp; Ready · v%1$s</string>
+    <string name="release_action_donate">Donate with UPI</string>
+    <string name="release_action_community">Join Community</string>
+    <string name="release_action_star">Star on GitHub</string>
+    <string name="release_action_view_changelog">View Changelog</string>
+    <string name="release_action_hide_changelog">Hide Changelog</string>
+    <string name="release_view_github_releases">View full changelog on GitHub</string>
+    <string name="release_action_get_started">Get Started</string>
+    <string name="release_action_continue">Continue to Music</string>
+    <string-array name="release_highlights">
+        <item>Background Spotify Imports: Match 200+ track playlists and albums in the background with progress notifications and partial save.</item>
+        <item>Smart Playlists: Auto-updating dynamic mixes for Most Played (30 Days), Recently Added, and Forgotten Favorites.</item>
+        <item>Batch Track Actions: Long-press or tap Select to download, queue, add to playlists, or remove multiple tracks in one action.</item>
+        <item>Full Account &amp; Service Backups: Back up and restore YouTube Music logins, sessions, and connected service credentials seamlessly.</item>
+        <item>Enhanced Audio &amp; UI Polish: SQLite-backed history and downloads, instant startup, and refined lossless playback.</item>
+    </string-array>
     <string name="search">Search</string>
     <string name="clear_search">Clear search</string>
     <string name="library">Library</string>
@@ -842,7 +861,7 @@
     <string name="replay_genres_disabled_subtitle">The Replay genre chart stays hidden while this is off</string>
     <string name="swipe_plays_next">Swiping a song plays it next</string>
     <string name="swipe_adds_to_queue">When disabled, swiping adds the song to the end of the queue</string>
-    <string name="import_backup_warning">This replaces this device’s settings and listening history with the contents of the file. Export the current data first if you want to keep it.</string>
+    <string name="import_backup_warning">This replaces this device’s settings, connected accounts, and listening history with the contents of the file. Export the current data first if you want to keep it.</string>
     <string name="youtube_music_account">YouTube Music account</string>
     <string name="tap_to_sign_in_google">Tap to sign in with Google</string>
     <string name="export_succeeded">Exported settings and %1$s</string>
@@ -1223,4 +1242,17 @@
     <string name="select_tracks" translatable="false">Select tracks</string>
     <string name="batch_add_to_queue" translatable="false">Add to queue</string>
     <string name="batch_add_to_playlist" translatable="false">Add to playlist</string>
+    <string name="sleep_timer_custom">Custom</string>
+    <string name="start_sleep_timer">Start sleep timer</string>
+    <string name="backup_restored_title" translatable="false">Backup Restored</string>
+    <string name="backup_restored_subtitle" translatable="false">Restored from %1$s</string>
+    <string name="backup_restored_playlists" translatable="false">Playlists</string>
+    <string name="backup_restored_tracks" translatable="false">Saved &amp; Playlist Tracks</string>
+    <string name="backup_restored_months" translatable="false">Listening History</string>
+    <string name="backup_restored_settings" translatable="false">Preferences</string>
+    <string name="backup_restored_accounts" translatable="false">Connected Accounts</string>
+    <string name="backup_restored_done" translatable="false">Done</string>
+    <string name="whats_new_badge" translatable="false">What’s New</string>
+    <string name="release_changelog_header" translatable="false">Highlights in %1$s</string>
 </resources>
+

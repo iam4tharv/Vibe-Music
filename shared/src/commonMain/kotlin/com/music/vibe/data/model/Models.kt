@@ -421,10 +421,18 @@ private const val REPEAT_SHELF_SHARE = 0.6
 
 private fun HomeShelf.browseKeys(): Set<String> = items.mapNotNullTo(HashSet()) { it.browseId }
 
+/** A mood or activity filter chip shown at the top of the Home feed (e.g., Focus, Workout, Relax). */
+data class HomeChip(
+    val title: String,
+    val browseId: String,
+    val params: String? = null,
+)
+
 /** A page of the Home feed, plus the token for the next one — null once exhausted. */
 data class HomeFeed(
     val shelves: List<HomeShelf>,
     val continuation: String?,
+    val chips: List<HomeChip> = emptyList(),
 )
 
 /** One server-defined group of the buttons shown on Explore. */

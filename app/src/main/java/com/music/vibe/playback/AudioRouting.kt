@@ -119,7 +119,7 @@ object AudioRouting {
             // normal, and which one survives matters: see [preferenceWithin],
             // and the class comment for what happens when it is the wrong one.
             .groupBy { it.name to it.kind }
-            .map { (_, sameDevice) -> sameDevice.minByOrNull { preferenceWithin(it.type) }!! }
+            .mapNotNull { (_, sameDevice) -> sameDevice.minByOrNull { preferenceWithin(it.type) } }
             .sortedBy { it.kind.ordinal }
     }
 

@@ -6,10 +6,6 @@
  * You may obtain a copy of the License at
  *
  *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Architectural concepts for USB descriptor parsing adapted from:
- * decent-player (https://github.com/Ma145/decent-player)
- * Copyright (c) 2026 Ma145 (MIT License)
  */
 
 package com.music.vibe.playback.audio.usb
@@ -24,8 +20,12 @@ data class DirectUsbProbeResult(
     val productName: String?,
     /** USB Vendor ID (VID). */
     val vendorId: Int = 0,
+    /** Formatted hex Vendor ID. */
+    val vendorIdHex: String = "",
     /** USB Product ID (PID). */
     val productId: Int = 0,
+    /** Formatted hex Product ID. */
+    val productIdHex: String = "",
     /** USB Audio Class version: 1 for UAC1, 2 for UAC2, 0 if not audio class. */
     val uacVersion: Int = 0,
     /** Whether Android USB host permission has been granted for this device. */

@@ -575,10 +575,10 @@ private fun ColumnScope.Minutes(summary: ReplaySummary, headline: List<HeadlineR
                 summary.totalPlays,
                 grouped(summary.totalPlays.toLong()),
             ))
-            // Replace period+comma with just a comma
-            if (summary.peakHour != null) {
+            val peakHour = summary.peakHour
+            if (peakHour != null) {
                 append(", mostly around ")
-                append(formatHour(context, summary.peakHour!!))
+                append(formatHour(context, peakHour))
                 append(".")
             } else {
                 append(".")

@@ -274,6 +274,9 @@ import com.music.vibe.ui.components.TranslationLanguageDialog
 import com.music.vibe.ui.components.LyricsSourcesDialog
 import com.music.vibe.ui.components.ServerEditorHost
 import com.music.vibe.ui.components.UpdateAvailableDialog
+import com.music.vibe.ui.components.ReleasePromptDialog
+import com.music.vibe.ui.components.BackupRestoreSummaryDialog
+import com.music.vibe.data.AppLaunchTracker
 import com.music.vibe.ui.components.WebDavConflictAlert
 import com.music.vibe.ui.components.FieldConfig
 import com.music.vibe.ui.icons.VibeMusicIcons
@@ -727,6 +730,19 @@ private fun VibeMusicApp(
     var showUpdateBanner by rememberSaveable { mutableStateOf(false) }
     val updateAvailable by viewModel.updateAvailable.collectAsStateWithLifecycle()
 
+    var releasePromptState by remember {
+        mutableStateOf(
+            AppLaunchTracker.checkLaunchPrompt(
+                context = context,
+                currentVersionCode = BuildConfig.VERSION_CODE,
+                currentVersionName = BuildConfig.VERSION_NAME,
+            ),
+        )
+    }
+    var backupRestoreSummary by remember {
+        mutableStateOf<com.music.vibe.data.stats.Backup.Summary?>(null)
+    }
+
     /**
      * The single gate both surfaces read, so the icon can't announce the update
      * a beat before the popup does — they're one piece of news, and staggering
@@ -743,6 +759,7 @@ private fun VibeMusicApp(
     val query by viewModel.query.collectAsStateWithLifecycle()
     val results by viewModel.results.collectAsStateWithLifecycle()
     val selectedMoodGenre by viewModel.selectedMoodGenre.collectAsStateWithLifecycle()
+    val selectedHomeChip by viewModel.selectedHomeChip.collectAsStateWithLifecycle()
     val libraryState by viewModel.library.collectAsStateWithLifecycle()
     val filter by viewModel.filter.collectAsStateWithLifecycle()
     val searchSource by viewModel.searchSource.collectAsStateWithLifecycle()
@@ -1041,15 +1058,25 @@ private fun VibeMusicApp(
     var hasAlternateVersion by remember { mutableStateOf(false) }
 
     // Lyrics follow whatever is playing; duration lands a beat after the track.
-    // Keyed on the lyric settings too, so turning a source on or off applies to
-    // the track already playing rather than only the next one.
+    // Keyed on all lyric settings so toggling a source, reordering provider
+    // priority, toggling syllable sync, toggling original-title lookup, or
+    // updating the PaxSenix API key immediately reloads lyrics for the track
+    // already playing.
     val syncedLyricsEnabled by AppSettings.syncedLyrics.collectAsStateWithLifecycle()
     val lyricsSources by AppSettings.lyricsSources.collectAsStateWithLifecycle()
+    val lyricsSourceOrder by AppSettings.lyricsSourceOrder.collectAsStateWithLifecycle()
+    val prioritizeSyllableSync by AppSettings.prioritizeSyllableSync.collectAsStateWithLifecycle()
+    val paxSenixApiKey by AppSettings.paxSenixApiKey.collectAsStateWithLifecycle()
     LaunchedEffect(
         player.song?.videoId,
+        player.song?.title,
+        player.song?.artist,
         player.durationMs,
         syncedLyricsEnabled,
         lyricsSources,
+        lyricsSourceOrder,
+        prioritizeSyllableSync,
+        paxSenixApiKey,
         showNowPlaying,
         player.isPlaying,
     ) {
@@ -1465,7 +1492,7 @@ private fun VibeMusicApp(
                 }.getOrDefault(false)
             }
         }
-        if (player.song?.videoId == song.videoId) {
+        if (player.song.videoId == song.videoId) {
             hasAlternateVersion = exists
         }
     }
@@ -2580,6 +2607,13 @@ private fun VibeMusicApp(
         BackHandler(enabled = selectedMoodGenre != null && detail == null && !showSettings && !showReplay) {
             viewModel.closeMoodGenre()
         }
+        BackHandler(
+            enabled = selectedHomeChip != null && selectedTab == TAB_HOME && detail == null &&
+                !showSettings && !showReplay && !showAccountScrobbling && !showSpotify &&
+                !showSources && !showListenTogether && !showEqualizer && !showHistory,
+        ) {
+            viewModel.clearHomeChip()
+        }
         BackHandler(enabled = showDiscord) {
             showDiscord = false
         }
@@ -2619,6 +2653,17 @@ private fun VibeMusicApp(
         ) {
             selectedTab = TAB_HOME
         }
+        BackHandler(enabled = releasePromptState != null) {
+            releasePromptState?.let { prompt ->
+                AppLaunchTracker.acknowledgeLaunchPrompt(
+                    context = context,
+                    versionCode = prompt.versionCode,
+                    versionName = prompt.versionName,
+                )
+            }
+            releasePromptState = null
+        }
+        BackHandler(enabled = backupRestoreSummary != null) { backupRestoreSummary = null }
         BackHandler(enabled = showUpdateDialog) { showUpdateDialog = false }
         BackHandler(enabled = showListenBrainzLogin) { showListenBrainzLogin = false }
         BackHandler(enabled = showLastfmLogin) { showLastfmLogin = false }
@@ -2707,14 +2752,28 @@ private fun VibeMusicApp(
                             }
                         )
                         .then(
-                            if (glassActive) {
+                            if (
+                                glassActive ||
+                                (
+                                    (releasePromptState != null || backupRestoreSummary != null || showUpdateDialog || showLyricsSources) &&
+                                        isGlassSupported() &&
+                                        !reduceDynamicBlur
+                                    )
+                            ) {
                                 Modifier
                                     // Not under "reduce dynamic blur": nothing
                                     // samples the layer then, and recording a
                                     // whole page into one for no reader is the
                                     // cost that setting exists to remove.
                                     .then(
-                                        if (glassSamplesBackdrop) {
+                                        if (
+                                            glassSamplesBackdrop ||
+                                            (
+                                                (releasePromptState != null || backupRestoreSummary != null || showUpdateDialog || showLyricsSources) &&
+                                                    isGlassSupported() &&
+                                                    !reduceDynamicBlur
+                                                )
+                                        ) {
                                             Modifier.layerBackdrop(appBackdrop)
                                         } else {
                                             Modifier
@@ -2723,7 +2782,7 @@ private fun VibeMusicApp(
                                     // Every page's scroll passes through here, so
                                     // the glass bar collapses on all of them
                                     // without each one having to know about it.
-                                    .nestedScroll(navBarScroll)
+                                    .then(if (glassActive) Modifier.nestedScroll(navBarScroll) else Modifier)
                             } else {
                                 Modifier
                             },
@@ -2922,6 +2981,17 @@ private fun VibeMusicApp(
                             onSpotifyCanvasAuth = { showSpotifyCanvasAuth = true },
                             onAppLanguage = { showAppLanguage = true },
                             onOpenUpdateDialog = { showUpdateDialog = true },
+                            onShowWhatsNew = {
+                                releasePromptState = AppLaunchTracker.LaunchPromptState(
+                                    type = AppLaunchTracker.LaunchPromptType.UPDATE,
+                                    versionCode = BuildConfig.VERSION_CODE,
+                                    versionName = BuildConfig.VERSION_NAME,
+                                )
+                            },
+                            onBackupRestored = { summary ->
+                                viewModel.syncFromAuthStore()
+                                backupRestoreSummary = summary
+                            },
                             contentPadding = listPadding,
                         )
                     } else if (page != null && page.browseId.isDeviceFolder()) {
@@ -3154,6 +3224,7 @@ private fun VibeMusicApp(
                             val homeState by viewModel.home.collectAsStateWithLifecycle()
                             val homeLoadingMore by viewModel.homeLoadingMore.collectAsStateWithLifecycle()
                             val homeRecentlyPlayedLoading by viewModel.homeRecentlyPlayedLoading.collectAsStateWithLifecycle()
+                            val homeChips by viewModel.homeChips.collectAsStateWithLifecycle()
                             HomeScreen(
                                 state = homeState,
                                 listState = homeListState,
@@ -3162,6 +3233,9 @@ private fun VibeMusicApp(
                                 title = rememberHomeGreeting(selectedChannelName?.takeIf { it.isNotBlank() } ?: account?.name),
                                 signedIn = signedIn,
                                 onSignIn = { webSession = WebSessionMode.SIGN_IN },
+                                chips = homeChips,
+                                selectedChip = selectedHomeChip,
+                                onChipClick = viewModel::selectHomeChip,
                                 onItemClick = { item, shelfTitle ->
                                     val song = shelfSong(item)
                                     // Hoisted because ShelfItem lives in :shared, and
@@ -3189,7 +3263,7 @@ private fun VibeMusicApp(
                                 contentPadding = listPadding,
                                 onLoadMore = viewModel::loadMoreHome,
                                 loadingMore = homeLoadingMore,
-                                recentlyPlayedLoading = homeRecentlyPlayedLoading,
+                                recentlyPlayedLoading = homeRecentlyPlayedLoading && selectedHomeChip == null,
                             )
                         }
                         TAB_EXPLORE -> {
@@ -3291,7 +3365,7 @@ private fun VibeMusicApp(
                             },
                             onBrowseClick = { item ->
                                 viewModel.recordEntity(SearchHistoryEntity(
-                                    id = item.browseId ?: "",
+                                    id = item.browseId,
                                     title = item.title,
                                     subtitle = item.subtitle.ifBlank { "" },
                                     artworkUrl = item.thumbnailUrl,
@@ -3577,18 +3651,34 @@ private fun VibeMusicApp(
                 // bar, and a fade across them would only muddy them. It comes in as
                 // the page scrolls past that header, when content starts passing
                 // under the bar and needs the cover.
+                val isHomeVisible = selectedTab == TAB_HOME && detail == null &&
+                    libraryShowAll == null && !showSpotify && !showDiscord && !showHistory &&
+                    !showSettings && !showAccountScrobbling && !showSources &&
+                    !showListenTogether && !showEqualizer && !showReplay
                 val artistListState = detail
                     ?.takeIf { isDetailVisible && it.type == BrowseType.ARTIST }
                     ?.let { detailListStates.getOrPut(it.browseId) { LazyListState() } }
-                val topFadeAlpha by remember(artistListState) {
+                val topFadeAlpha by remember(artistListState, isHomeVisible, homeListState) {
                     derivedStateOf {
-                        val list = artistListState ?: return@derivedStateOf 1f
-                        if (list.firstVisibleItemIndex > 0) return@derivedStateOf 1f
-                        val header = list.layoutInfo.visibleItemsInfo
-                            .firstOrNull { it.index == 0 }?.size?.toFloat()
-                            ?: return@derivedStateOf 0f
-                        ((list.firstVisibleItemScrollOffset - header * TOP_FADE_START) /
-                            (header * TOP_FADE_RAMP)).coerceIn(0f, 1f)
+                        if (isHomeVisible) {
+                            when {
+                                homeListState.firstVisibleItemIndex > 1 -> 1f
+                                homeListState.firstVisibleItemIndex == 1 -> {
+                                    (0.45f + homeListState.firstVisibleItemScrollOffset / 180f).coerceIn(0f, 1f)
+                                }
+                                else -> {
+                                    (homeListState.firstVisibleItemScrollOffset / 220f).coerceIn(0f, 1f)
+                                }
+                            }
+                        } else {
+                            val list = artistListState ?: return@derivedStateOf 1f
+                            if (list.firstVisibleItemIndex > 0) return@derivedStateOf 1f
+                            val header = list.layoutInfo.visibleItemsInfo
+                                .firstOrNull { it.index == 0 }?.size?.toFloat()
+                                ?: return@derivedStateOf 0f
+                            ((list.firstVisibleItemScrollOffset - header * TOP_FADE_START) /
+                                (header * TOP_FADE_RAMP)).coerceIn(0f, 1f)
+                        }
                     }
                 }
                 BottomFadeScrim(
@@ -3911,6 +4001,9 @@ private fun VibeMusicApp(
                 val onTabSelected: (Int) -> Unit = { index ->
                     viewModel.clearDetail()
                     viewModel.closeMoodGenre()
+                    if (index == TAB_HOME) {
+                        viewModel.clearHomeChip()
+                    }
                     showSettings = false
                     showAccountScrobbling = false
                     showSources = false
@@ -4252,8 +4345,9 @@ private fun VibeMusicApp(
             fun versionAlignmentPending(targetId: String): Boolean =
                 AppSettings.smartVersionAlignment.value &&
                     VersionAudioAligner.getCachedOffsetMs(song.videoId, targetId) == null
-            val menuIsAudioVersion = if (optimisticVersionSong != null) {
-                !optimisticVersionSong!!.isVideo
+            val currentOptimisticSong = optimisticVersionSong
+            val menuIsAudioVersion = if (currentOptimisticSong != null) {
+                !currentOptimisticSong.isVideo
             } else {
                 !song.isVideo && convertedVideoId != song.videoId
             }
@@ -4268,7 +4362,6 @@ private fun VibeMusicApp(
                     val original = convertedFromVideo
                     val originalAudio = convertedFromAudio
                     when {
-                        c == null -> Unit
                         original != null && (
                             convertedAudioId == song.videoId ||
                                 convertedAudioId == versionEffectiveSong.videoId ||
@@ -4444,7 +4537,7 @@ private fun VibeMusicApp(
                     controller?.currentMediaItem?.mediaId == song.videoId
                 ) {
                     {
-                        controller?.revertToOriginal()
+                        controller.revertToOriginal()
                         songActions = null
                     }
                 } else {
@@ -5167,47 +5260,87 @@ private fun VibeMusicApp(
         }
 
         // ---- Update available (once per launch) ----
-        if (showUpdateDialog) {
-            updateNotice?.let { update ->
-                UpdateAvailableDialog(
-                    version = update.version,
-                    notes = update.notes,
-                    hazeState = hazeState,
-                    // A download in progress keeps running behind the closed
-                    // sheet — only the sheet itself goes away. The top bar's
-                    // update icon reopens it onto whatever state it reached.
-                    onDismiss = { showUpdateDialog = false },
-                    onDownload = {
-                        if (update.apkUrl != null) {
-                            scope.launch { AppUpdateChecker.downloadApk(context) }
-                        } else {
-                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(update.releaseUrl)))
-                            showUpdateDialog = false
-                        }
-                    },
-                    onCancelDownload = {
-                        AppUpdateChecker.cancelDownload()
-                    },
-                    onInstall = {
-                        val ready = AppUpdateChecker.download.value as? AppUpdateChecker.DownloadState.Ready
-                        ready?.let { AppUpdateChecker.installApk(context, it.file) }
-                    },
-                    onOpenReleasePage = {
-                        AppUpdateChecker.resetDownload()
-                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(update.releaseUrl)))
-                        showUpdateDialog = false
-                    },
-                )
-            }
+        var lastShownUpdate by remember { mutableStateOf<AppUpdateChecker.UpdateInfo?>(null) }
+        if (updateNotice != null) {
+            lastShownUpdate = updateNotice
         }
+        val displayedUpdate = updateNotice ?: lastShownUpdate
+        UpdateAvailableDialog(
+            version = displayedUpdate?.version.orEmpty(),
+            notes = displayedUpdate?.notes,
+            hazeState = hazeState,
+            visible = showUpdateDialog && displayedUpdate != null,
+            // A download in progress keeps running behind the closed
+            // sheet — only the sheet itself goes away. The top bar's
+            // update icon reopens it onto whatever state it reached.
+            onDismiss = { showUpdateDialog = false },
+            onDownload = {
+                val update = displayedUpdate ?: return@UpdateAvailableDialog
+                if (update.apkUrl != null) {
+                    scope.launch { AppUpdateChecker.downloadApk(context) }
+                } else {
+                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(update.releaseUrl)))
+                    showUpdateDialog = false
+                }
+            },
+            onCancelDownload = {
+                AppUpdateChecker.cancelDownload()
+            },
+            onInstall = {
+                val ready = AppUpdateChecker.download.value as? AppUpdateChecker.DownloadState.Ready
+                ready?.let { AppUpdateChecker.installApk(context, it.file) }
+            },
+            onOpenReleasePage = {
+                val update = displayedUpdate ?: return@UpdateAvailableDialog
+                AppUpdateChecker.resetDownload()
+                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(update.releaseUrl)))
+                showUpdateDialog = false
+            },
+        )
 
-        if (showLyricsSources) {
-            BackHandler { showLyricsSources = false }
-            LyricsSourcesDialog(
-                hazeState = hazeState,
-                onDismiss = { showLyricsSources = false },
-            )
-        }
+        // ---- Welcome / What's New popup on fresh install, update, or Settings -> About ----
+        ReleasePromptDialog(
+            promptState = releasePromptState,
+            hazeState = hazeState,
+            onDismiss = {
+                releasePromptState?.let { prompt ->
+                    AppLaunchTracker.acknowledgeLaunchPrompt(
+                        context = context,
+                        versionCode = prompt.versionCode,
+                        versionName = prompt.versionName,
+                    )
+                }
+                releasePromptState = null
+            },
+            onOpenUrl = { rawUrl ->
+                val fullUrl = if (!rawUrl.startsWith("http://") && !rawUrl.startsWith("https://") && !rawUrl.contains("://")) {
+                    "https://$rawUrl"
+                } else {
+                    rawUrl
+                }
+                runCatching {
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(fullUrl)).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    context.startActivity(intent)
+                }.onFailure {
+                    Toast.makeText(context, "Could not open link", Toast.LENGTH_SHORT).show()
+                }
+            },
+        )
+
+        // ---- Backup & Restore Liquid Glass Summary Card ----
+        BackupRestoreSummaryDialog(
+            summary = backupRestoreSummary,
+            hazeState = hazeState,
+            onDismiss = { backupRestoreSummary = null },
+        )
+
+        LyricsSourcesDialog(
+            hazeState = hazeState,
+            visible = showLyricsSources,
+            onDismiss = { showLyricsSources = false },
+        )
 
         if (songSortMenuOpen) {
             BackHandler { songSortMenuOpen = false }

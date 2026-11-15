@@ -1288,4 +1288,6 @@
     <string name="spotify_library_subtitle">आपकी Spotify प्लेलिस्ट</string>
     <string name="spotify_sign_in">Spotify से साइन इन करें</string>
     <string name="spotify_track_unavailable">वह गाना YouTube Music पर नहीं मिला</string>
+    <string name="sleep_timer_custom">कस्टम</string>
+    <string name="start_sleep_timer">स्लीप टाइमर शुरू करें</string>
 </resources>

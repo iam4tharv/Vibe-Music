@@ -68,7 +68,13 @@ object Backup {
             val mergedPrefs = LinkedHashMap<String, Any?>().apply {
                 putAll(AppSettings.exportPrefs())
                 put("search_history", SearchHistory.exportJson())
+                com.music.vibe.data.spotify.LocalPlaylistStore.exportJson()?.let {
+                    put("local_playlists_json", it)
+                }
                 putAll(com.music.vibe.download.Downloads.exportForBackup())
+            }
+            val authData = AppSettings.exportAuthBackup().ifEmpty {
+                com.music.vibe.di.AppContainer.get(context).authStore.exportBackupData()
             }
             val file = BackupFile(
                 versionName = BuildConfig.VERSION_NAME,
@@ -77,6 +83,7 @@ object Backup {
                     PrefValue.of(value)?.let { key to it }
                 }.toMap(),
                 listening = buckets,
+                auth = authData,
             )
             val text = json.encodeToString(BackupFile.serializer(), file)
             context.contentResolver.openOutputStream(target, "wt")
@@ -87,12 +94,11 @@ object Backup {
     }
 
     /**
-     * Reads [source] and replaces this device's settings and listening with it.
+     * Reads [source] and replaces this device's settings, accounts, and listening with it.
      *
      * Validated before anything is written: a file that isn't one of ours, or is
-     * from a schema this build can't read, is refused whole. A half-applied
-     * import is worse than a refused one — it leaves settings from two devices
-     * mixed together with nothing to say which came from where.
+     * from a schema this build can't read, is refused whole. Accepts both
+     * current `vibemusic` backups and legacy `bitchord` backups.
      */
     suspend fun importFrom(context: Context, source: Uri): Result<Summary> = withContext(Dispatchers.IO) {
         runCatching {
@@ -101,8 +107,8 @@ object Backup {
                 ?: error("Couldn't open that file")
             val file = runCatching { json.decodeFromString(BackupFile.serializer(), text) }
                 .getOrElse { error("That doesn't look like a Vibe Music backup") }
-            require(file.app == APP_TAG) { "That backup is from another app" }
-            require(file.version <= SCHEMA_VERSION) {
+            require(file.app in ACCEPTED_APP_TAGS) { "That backup is from another app" }
+            require(file.version in 1..SCHEMA_VERSION) {
                 "That backup was written by a newer version of Vibe Music"
             }
 
@@ -117,18 +123,44 @@ object Backup {
                         raw
                     }
                 }
-            AppSettings.importPrefs(decodedSettings)
+            AppSettings.importPrefs(
+                decodedSettings.filterKeys { it != "search_history" && it != "local_playlists_json" },
+            )
             if (decodedSettings.containsKey("search_history")) {
                 SearchHistory.importJson(decodedSettings["search_history"] as? String)
             } else {
                 SearchHistory.reload()
             }
+            if (decodedSettings.containsKey("local_playlists_json")) {
+                com.music.vibe.data.spotify.LocalPlaylistStore.importJson(
+                    decodedSettings["local_playlists_json"] as? String,
+                )
+            }
             com.music.vibe.download.Downloads.importFromBackup(decodedSettings)
+            if (file.auth.isNotEmpty() || file.version >= 2) {
+                AppSettings.importAuthBackup(file.auth, context)
+            }
+            val playlists = com.music.vibe.data.spotify.LocalPlaylistStore.playlists.value
+            val playlistTracksCount = playlists.sumOf { it.songs.size }
+            val savedDownloadsCount = com.music.vibe.download.Downloads.saved.value.size
+            val restoredAccounts = buildList {
+                val ytSignedIn = runCatching {
+                    com.music.vibe.di.AppContainer.get(context).authStore.isSignedIn
+                }.getOrDefault(false) || !com.music.vibe.data.innertube.Innertube.cookie.isNullOrBlank()
+                if (ytSignedIn) add("YouTube Music")
+                if (AppSettings.discordToken.value.isNotBlank()) add("Discord")
+                if (AppSettings.lastfmSessionKey.value.isNotBlank()) add("Last.fm")
+                if (AppSettings.listenBrainzToken.value.isNotBlank()) add("ListenBrainz")
+                if (AppSettings.spotifySpdcToken.value.isNotBlank()) add("Spotify")
+            }
             Summary(
                 months = file.listening.size,
                 settings = file.settings.size,
                 from = file.versionName,
                 at = file.exportedAt,
+                playlistsCount = playlists.size,
+                tracksCount = playlistTracksCount + savedDownloadsCount,
+                restoredAccounts = restoredAccounts,
             )
         }
     }
@@ -150,22 +182,27 @@ object Backup {
         json.encodeToString(mapSerializer, filtered)
     }.getOrDefault(rawJson)
 
-    /** What an import turned out to contain, for the line shown afterwards. */
+    /** What an import turned out to contain, for the summary card shown afterwards. */
     data class Summary(
         val months: Int,
         val settings: Int,
         val from: String,
         val at: String,
+        val playlistsCount: Int = 0,
+        val tracksCount: Int = 0,
+        val restoredAccounts: List<String> = emptyList(),
     )
 
-    private const val APP_TAG = "vibemusic"
+    const val APP_TAG = "vibemusic"
+    const val LEGACY_APP_TAG = "bitchord"
+    internal val ACCEPTED_APP_TAGS = setOf(APP_TAG, LEGACY_APP_TAG)
 
     /**
      * Bump when the shape below stops being readable by an older build. A file
      * from a *newer* schema is refused rather than partially read; one from an
      * older schema is read as-is, since every field has a default.
      */
-    private const val SCHEMA_VERSION = 1
+    const val SCHEMA_VERSION = 2
 
     @Serializable
     data class BackupFile(
@@ -176,6 +213,7 @@ object Backup {
         val exportedAt: String = "",
         val settings: Map<String, PrefValue> = emptyMap(),
         val listening: List<StoredBucket> = emptyList(),
+        val auth: Map<String, String> = emptyMap(),
     )
 
     /** One preference, with the type it has to be restored as. */

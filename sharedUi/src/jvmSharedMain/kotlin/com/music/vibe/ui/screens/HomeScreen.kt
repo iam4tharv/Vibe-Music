@@ -73,8 +73,17 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import androidx.compose.foundation.border
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.text.font.FontWeight
 import com.music.vibe.data.model.CARD_ART_PX
 import com.music.vibe.data.model.HEADER_ART_PX
+import com.music.vibe.data.model.HomeChip
 import com.music.vibe.data.model.HomeShelf
 import com.music.vibe.data.model.ROW_ART_PX
 import com.music.vibe.data.model.ShelfItem
@@ -100,6 +109,8 @@ import com.music.vibe.ui.components.thumbnailBorder
 import com.music.vibe.ui.components.trackColumnWidth
 import com.music.vibe.ui.player.MeshGradientBackground
 import com.music.vibe.ui.player.MeshPalette
+import com.music.vibe.ui.theme.ArtworkPalette
+import com.music.vibe.ui.theme.rememberArtworkPalette
 
 /** How far the Listen now heading and feed sit above the shared top inset. */
 private val HOME_TITLE_LIFT = 28.dp
@@ -149,8 +160,46 @@ fun HomeScreen(
     leadHero: Boolean = true,
     currentSong: Song? = null,
     isPlaying: Boolean = false,
+    chips: List<HomeChip> = emptyList(),
+    selectedChip: HomeChip? = null,
+    onChipClick: ((HomeChip) -> Unit)? = null,
 ) {
     val recentsViewType by AppUi.host.homeRecentsViewType.collectAsStateWithLifecycle()
+
+    // Resolve the album art that drives the YouTube Music-style top gradient:
+    // 1. Currently playing song's artwork, falling back to
+    // 2. First available artwork in the Home feed shelves.
+    // Held in `lastFeedArtUrl` so switching mood chips or refreshing never flashes flat black.
+    val firstShelfArtUrl = remember(state) {
+        (state as? UiState.Success)?.data
+            ?.firstNotNullOfOrNull { shelf ->
+                shelf.items.firstOrNull { !it.thumbnailUrl.isNullOrBlank() }?.thumbnailUrl
+            }
+    }
+    var lastFeedArtUrl by remember { mutableStateOf<String?>(null) }
+    if (firstShelfArtUrl != null) {
+        lastFeedArtUrl = firstShelfArtUrl
+    }
+    val activeHeaderArtUrl = currentSong?.thumbnailUrl?.takeIf { it.isNotBlank() }
+        ?: firstShelfArtUrl
+        ?: lastFeedArtUrl
+    val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    val headerPalette = rememberArtworkPalette(
+        imageUrl = activeHeaderArtUrl,
+        dark = isDark,
+        artPx = CARD_ART_PX,
+    )
+    val scrollFade by remember(listState) {
+        derivedStateOf {
+            when {
+                listState.firstVisibleItemIndex > 1 -> 0f
+                listState.firstVisibleItemIndex == 1 ->
+                    (1f - (listState.firstVisibleItemScrollOffset / 600f)).coerceIn(0f, 0.45f)
+                else ->
+                    (1f - (listState.firstVisibleItemScrollOffset / 900f)).coerceIn(0.35f, 1f)
+            }
+        }
+    }
 
     PullToRefresh(
         refreshing = refreshing,
@@ -158,9 +207,25 @@ fun HomeScreen(
         state = pullState,
         modifier = modifier,
     ) {
-        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        BoxWithConstraints(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background),
+        ) {
             val trackColWidth = trackColumnWidth(maxWidth)
             val heroWidth = heroCardWidth(maxWidth)
+
+            HomeTopArtworkGradient(
+                palette = headerPalette,
+                hasArtwork = activeHeaderArtUrl != null,
+                isDark = isDark,
+                scrollFade = scrollFade,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(460.dp)
+                    .align(Alignment.TopCenter),
+            )
+
             LazyColumn(
                 state = listState,
                 modifier = Modifier.fillMaxSize(),
@@ -176,10 +241,20 @@ fun HomeScreen(
                 },
             ) {
                 if (title != null) {
-                    item { HomeTitle(title) }
+                    item(key = "home_title") { HomeTitle(title) }
+                }
+                if (chips.isNotEmpty() && onChipClick != null) {
+                    item(key = "home_mood_chips") {
+                        HomeMoodChipsRow(
+                            chips = chips,
+                            selectedChip = selectedChip,
+                            onChipClick = onChipClick,
+                            isDark = isDark,
+                        )
+                    }
                 }
                 if (!signedIn && onSignIn != null) {
-                    item {
+                    item(key = "home_sign_in_banner") {
                         SignInBanner(onSignIn = onSignIn, modifier = Modifier.padding(bottom = 8.dp))
                     }
                 }
@@ -568,21 +643,17 @@ fun CompactTrackRow(
 private fun HomeTitle(title: String, modifier: Modifier = Modifier) {
     val style = MaterialTheme.typography.displayLarge
     val logoHeight = with(LocalDensity.current) { (style.fontSize * LOGO_TO_FONT).toDp() }
-    val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
-    val logoPainter = if (isDark) {
-        painterResource(Res.drawable.vibemusichome)
-    } else {
-        painterResource(Res.drawable.ic_vibe_logo)
-    }
+    val cornerRadius = logoHeight * 0.28f
     Column(modifier = modifier.padding(horizontal = PAGE_GUTTER, vertical = 8.dp)) {
         androidx.compose.foundation.Image(
-            painter = logoPainter,
+            painter = painterResource(Res.drawable.ic_vibe_logo),
             contentDescription = "Vibe Music",
+            contentScale = ContentScale.Crop,
             modifier = Modifier
                 .testTag("vibe_home_logo")
-                .padding(bottom = 14.dp)
-                .height(logoHeight)
-                .aspectRatio(1f),
+                .padding(bottom = 10.dp)
+                .size(logoHeight)
+                .clip(RoundedCornerShape(cornerRadius)),
         )
         Text(
             text = title,
@@ -592,8 +663,126 @@ private fun HomeTitle(title: String, modifier: Modifier = Modifier) {
     }
 }
 
+/**
+ * YouTube Music-style dynamic top atmospheric color gradient that shifts hues
+ * smoothly based on the currently playing track's album art (or lead Home item
+ * artwork) and dissolves into the dark theme background.
+ */
+@Composable
+private fun HomeTopArtworkGradient(
+    palette: ArtworkPalette,
+    hasArtwork: Boolean,
+    isDark: Boolean,
+    scrollFade: Float,
+    modifier: Modifier = Modifier,
+) {
+    val bg = MaterialTheme.colorScheme.background
+    val baseAccent = if (hasArtwork) {
+        palette.accent
+    } else if (isDark) {
+        Color(0xFF1E5B6E)
+    } else {
+        MaterialTheme.colorScheme.primary
+    }
+    val baseWash = if (hasArtwork) {
+        palette.wash
+    } else if (isDark) {
+        Color(0xFF102A36)
+    } else {
+        MaterialTheme.colorScheme.surfaceVariant
+    }
+    val topAlpha = (if (isDark) 0.44f else 0.24f) * scrollFade
+    val midAlpha = (if (isDark) 0.68f else 0.36f) * scrollFade
+    val lowAlpha = (if (isDark) 0.32f else 0.16f) * scrollFade
+
+    Box(
+        modifier = modifier
+            .background(
+                brush = Brush.verticalGradient(
+                    0.00f to baseAccent.copy(alpha = topAlpha),
+                    0.34f to baseWash.copy(alpha = midAlpha),
+                    0.68f to baseWash.copy(alpha = lowAlpha),
+                    1.00f to bg.copy(alpha = 0f),
+                ),
+            )
+            .background(
+                brush = Brush.radialGradient(
+                    colors = listOf(
+                        baseAccent.copy(alpha = topAlpha * 0.75f),
+                        baseWash.copy(alpha = midAlpha * 0.45f),
+                        Color.Transparent,
+                    ),
+                    center = Offset(180f, 80f),
+                    radius = 950f,
+                ),
+            ),
+    )
+}
+
+/**
+ * Horizontally scrollable YouTube Music-inspired mood filter chips (`Focus`,
+ * `Workout`, `Relax`, `Energize`, etc.) anchored inside the dynamic top gradient.
+ */
+@Composable
+private fun HomeMoodChipsRow(
+    chips: List<HomeChip>,
+    selectedChip: HomeChip?,
+    onChipClick: (HomeChip) -> Unit,
+    isDark: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = PAGE_GUTTER, vertical = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        chips.forEach { chip ->
+            val selected = selectedChip != null &&
+                selectedChip.title.equals(chip.title, ignoreCase = true)
+            val shape = RoundedCornerShape(10.dp)
+            val containerColor = when {
+                selected && isDark -> Color.White
+                selected && !isDark -> Color(0xFF141416)
+                isDark -> Color.White.copy(alpha = 0.10f)
+                else -> Color.Black.copy(alpha = 0.06f)
+            }
+            val borderColor = when {
+                selected -> Color.Transparent
+                isDark -> Color.White.copy(alpha = 0.16f)
+                else -> Color.Black.copy(alpha = 0.12f)
+            }
+            val contentColor = when {
+                selected && isDark -> Color(0xFF0E0E12)
+                selected && !isDark -> Color.White
+                else -> MaterialTheme.colorScheme.onBackground
+            }
+            Box(
+                modifier = Modifier
+                    .clip(shape)
+                    .background(containerColor, shape)
+                    .border(width = 0.75.dp, color = borderColor, shape = shape)
+                    .clickable { onChipClick(chip) }
+                    .padding(horizontal = 16.dp, vertical = 9.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = chip.title,
+                    style = MaterialTheme.typography.labelLarge.copy(
+                        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                    ),
+                    color = contentColor,
+                    maxLines = 1,
+                )
+            }
+        }
+    }
+}
+
 /** The wordmark's height against the heading's font size. */
-private const val LOGO_TO_FONT = 2.2f
+private const val LOGO_TO_FONT = 1.45f
 
 /** ic_logo's viewport, 730 x 484. */
 private const val LOGO_ASPECT = 730f / 484f

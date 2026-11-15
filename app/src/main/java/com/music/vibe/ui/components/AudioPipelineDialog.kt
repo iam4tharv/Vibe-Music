@@ -144,6 +144,8 @@ fun AudioPipelineDialog(
     val nerdStats by NerdStats.current.collectAsStateWithLifecycle()
     val outputStatus by AudioOutputStatus.current.collectAsStateWithLifecycle()
 
+    val highFidelityOutput by AppSettings.highFidelityOutput.collectAsStateWithLifecycle()
+    val usbTransportMode by AppSettings.usbTransportMode.collectAsStateWithLifecycle()
     val eqEnabled by AppSettings.equalizerEnabled.collectAsStateWithLifecycle()
     val eqPreset by AppSettings.equalizerPreset.collectAsStateWithLifecycle()
     val spatialAudio by AppSettings.spatialAudio.collectAsStateWithLifecycle()
@@ -207,7 +209,6 @@ fun AudioPipelineDialog(
         calculateStageActivation(idx, pulseProgress, flowAlpha, stageCenters, interactionRadiusPx)
     }
     val onStageIconPositioned: (Int, Offset) -> Unit = { idx, center ->
-        // Reported on every layout pass; only a real move should redraw.
         if (stageCenters[idx] != center) stageCenters[idx] = center
     }
 
@@ -219,9 +220,6 @@ fun AudioPipelineDialog(
         onDismiss = onDismiss,
         modifier = modifier,
     ) {
-        // The signal flow redraws every frame while playing. On its own
-        // layer, each frame re-records just these lines rather than every
-        // stage row and the frosted card they sit on.
         Spacer(
             Modifier
                 .matchParentSize()
@@ -235,18 +233,92 @@ fun AudioPipelineDialog(
                 .fillMaxWidth()
                 .onGloballyPositioned { columnCoordinates = it },
         ) {
+            // Bit-Perfect Mode Quick Control Header
+            PipelineRule(Modifier.padding(horizontal = 16.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { AppSettings.setHighFidelityOutput(!highFidelityOutput) }
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(R.string.high_fidelity_output),
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                        ),
+                        color = Color.White,
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = if (highFidelityOutput) {
+                            "Active · Bypasses EQ, Spatial, Loudness & System Effects"
+                        } else {
+                            stringResource(R.string.high_fidelity_output_subtitle)
+                        },
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontSize = 11.5.sp,
+                            lineHeight = 15.sp,
+                        ),
+                        color = Color.White.copy(alpha = 0.68f),
+                    )
+                }
+                Spacer(Modifier.width(12.dp))
+                androidx.compose.material3.Switch(
+                    checked = highFidelityOutput,
+                    onCheckedChange = AppSettings::setHighFidelityOutput,
+                )
+            }
+
+            if (outputStatus.isUsb) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, end = 16.dp, bottom = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "USB Transport:",
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                        ),
+                        color = Color.White.copy(alpha = 0.85f),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    com.music.vibe.data.settings.UsbTransportMode.entries.forEach { mode ->
+                        val selected = usbTransportMode == mode
+                        Box(
+                            modifier = Modifier
+                                .padding(end = 6.dp)
+                                .background(
+                                    color = if (selected) Color.White.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.08f),
+                                    shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
+                                )
+                                .clickable { AppSettings.setUsbTransportMode(mode) }
+                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                        ) {
+                            Text(
+                                text = mode.label,
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    fontSize = 11.sp,
+                                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                                ),
+                                color = if (selected) Color.White else Color.White.copy(alpha = 0.68f),
+                            )
+                        }
+                    }
+                }
+            }
+
             // 1. Track Info Stage
             val sourceName = nerdStats?.sourceName ?: "—"
-            // DSD is the one source whose own rate is not the rate the
-            // rest of the pipeline runs at: DsdExtractor hands the
-            // renderer 176.4 kHz PCM, so every stage after this one has
-            // to be told that rate instead of the DSD bit rate.
             val dsdRateHz = nerdStats?.takeIf { it.mimeType?.startsWith("audio/dsd") == true }?.sampleRateHz
             val pcmRateHz = if (dsdRateHz != null) DsdFormat.PCM_RATE else nerdStats?.sampleRateHz
             val codec = NerdStats.codecLabel(nerdStats?.mimeType) ?: nerdStats?.mimeType ?: "—"
             val format = nerdStats?.container?.let { "$codec ($it)" } ?: codec
-            // A lossy codec has no bit depth of its own; the decoder's PCM
-            // depth is not the source's, so it is only shown for lossless.
             val bitDepth = if (nerdStats?.isLossless == true) {
                 nerdStats?.bitDepth?.let { "$it-bit" }
                     ?: nerdStats?.claimed?.bitDepth?.let { "$it-bit" }
@@ -308,11 +380,7 @@ fun AudioPipelineDialog(
             }
 
             // 3. Resampler Stage
-            // For DSD this is the decimation DsdExtractor did: the one
-            // step that actually changes the rate, so it is described
-            // as what it is rather than as a resample, and its output
-            // side is the PCM it produced, not the DSD rate.
-            val inRate = dsdRateHz ?: nerdStats?.sampleRateHz
+            val inRate = dsdRateHz ?: outputStatus.sourceSampleRateHz ?: nerdStats?.sampleRateHz
             val outRate = if (dsdRateHz != null) DsdFormat.PCM_RATE else outputStatus.actualSampleRateHz
             val isPassthrough = inRate != null && outRate != null && inRate == outRate
             val ioRateText = if (inRate != null && outRate != null) {
@@ -328,15 +396,22 @@ fun AudioPipelineDialog(
                 dsdRateHz != null ->
                     "FIR decimation ×${dsdRateHz / DsdFormat.PCM_RATE}, ${DsdFormat.tapsFor(dsdRateHz)} taps"
                 inRate == null || outRate == null -> "—"
-                isPassthrough -> "None"
-                else -> "Resampler"
+                isPassthrough -> "None (Bit-Exact Passthrough)"
+                else -> outputStatus.resamplerType ?: com.music.vibe.playback.audio.HighPrecisionResampler.TYPE_LABEL
             }
-            val cutoffText = if (dsdRateHz != null) rateText(DsdFilter.CUTOFF_HZ) else "—"
+            val cutoffHz = outputStatus.resamplerCutoffHz
+            val cutoffText = when {
+                dsdRateHz != null -> rateText(DsdFilter.CUTOFF_HZ)
+                !isPassthrough && cutoffHz != null -> rateText(cutoffHz)
+                else -> "—"
+            }
             val qualityText = when {
                 dsdRateHz != null -> "DSD to PCM, full band below the cutoff"
                 inRate == null || outRate == null -> "—"
-                isPassthrough -> "Passthrough"
-                else -> "Resampled"
+                isPassthrough -> "Passthrough (Bit-Exact)"
+                outputStatus.routeKind == com.music.vibe.playback.AudioRouting.Kind.BLUETOOTH ->
+                    "Matched to Bluetooth native rate (Bypasses OS resampler)"
+                else -> "Matched to hardware DAC rate (Bypasses OS resampler)"
             }
 
             PipelineRule()
@@ -358,12 +433,16 @@ fun AudioPipelineDialog(
             val pcmFormat = outputStatus.dspFormat
             val dspRate = outputStatus.actualSampleRateHz ?: pcmRateHz
             val dspRateText = dspRate?.let(::rateText) ?: "—"
-            val eqPresetText = if (eqEnabled) {
-                eqPreset.name.lowercase().replace('_', ' ').replaceFirstChar { it.uppercase() }
-            } else {
-                "Flat"
+            val eqPresetText = when {
+                highFidelityOutput -> "Bypassed (Bit-Perfect)"
+                eqEnabled -> eqPreset.name.lowercase().replace('_', ' ').replaceFirstChar { it.uppercase() }
+                else -> "Flat"
             }
-            val stereoExpandText = if (spatialAudio) "250%" else "100%"
+            val stereoExpandText = when {
+                highFidelityOutput -> "Bypassed (100%)"
+                spatialAudio -> "250%"
+                else -> "100%"
+            }
             val buffersText = outputStatus.bufferSize?.let { size ->
                 val rate = outputStatus.actualSampleRateHz
                 val bytesPerSample = when (outputStatus.actualEncoding) {
@@ -382,10 +461,8 @@ fun AudioPipelineDialog(
                 }
             } ?: "—"
 
-            // Loudness reads before the rest of the DSP stage because
-            // that is the order the samples meet them in — see
-            // [DspChain] on why the level correction goes first.
             val loudnessGainText = when {
+                highFidelityOutput -> "Bypassed (Bit-Perfect)"
                 !loudnessNormalization -> stringResource(R.string.off)
                 outputStatus.loudnessGainDb == null -> "—"
                 else -> stringResource(
@@ -414,20 +491,15 @@ fun AudioPipelineDialog(
                 PipelineRow(stringResource(R.string.pipeline_stereo_expand), stereoExpandText)
                 PipelineRow(stringResource(R.string.pipeline_buffers), buffersText)
                 PipelineRow(stringResource(R.string.pipeline_output_api), outputStatus.sink.ifBlank { "AAudio" })
-                // The verdict, rather than the settings. Names whichever
-                // stage is altering samples — or, when none is, whether
-                // the route can carry the decoder's own encoding —
-                // instead of leaving the reader to infer it from four
-                // rows above.
                 PipelineRow(
                     stringResource(R.string.pipeline_bit_exact),
                     bitExactVerdict(
                         dsd = dsdRateHz != null,
                         outputExact = outputStatus.outputExact,
                         outputExactDetail = outputStatus.outputExactDetail,
-                        loudnessActive = loudnessNormalization && outputStatus.loudnessGainDb != null,
-                        eqActive = eqEnabled,
-                        spatialActive = spatialAudio,
+                        loudnessActive = !highFidelityOutput && loudnessNormalization && outputStatus.loudnessGainDb != null,
+                        eqActive = !highFidelityOutput && eqEnabled,
+                        spatialActive = !highFidelityOutput && spatialAudio,
                     ),
                 )
             }
@@ -464,12 +536,14 @@ fun AudioPipelineDialog(
                 PipelineRow("Transport", outputStatus.transportType.label)
 
                 val directStatusText = when {
+                    outputStatus.transportType == com.music.vibe.playback.audio.TransportType.BIT_PERFECT_USB ->
+                        "Active (Android 14+ Bit-Perfect USB Mixer)"
                     outputStatus.transportType == com.music.vibe.playback.audio.TransportType.AAUDIO_EXCLUSIVE ->
                         "Active (AAudio Exclusive MMAP, Bypasses Mixer)"
                     outputStatus.transportType == com.music.vibe.playback.audio.TransportType.AAUDIO_SHARED ->
                         "Active (AAudio Low-Latency Native)"
                     outputStatus.transportType == com.music.vibe.playback.audio.TransportType.DIRECT_USB ->
-                        "Active (Direct Userspace USB)"
+                        "Active (Custom Userspace USB Driver)"
                     outputStatus.directPlaybackActual ->
                         "Active (Direct AudioTrack, Bypasses Mixer)"
                     outputStatus.directPlaybackRejected ->
@@ -483,12 +557,14 @@ fun AudioPipelineDialog(
                 PipelineRow("AudioTrack", audioTrackText)
 
                 val mixerText = when {
+                    outputStatus.transportType == com.music.vibe.playback.audio.TransportType.BIT_PERFECT_USB ->
+                        "Direct USB Endpoint (Bypasses AudioFlinger, Volume & Resampler)"
                     outputStatus.transportType == com.music.vibe.playback.audio.TransportType.AAUDIO_EXCLUSIVE ->
                         "Direct MMAP (Bypasses AudioFlinger Mixer)"
                     outputStatus.transportType == com.music.vibe.playback.audio.TransportType.AAUDIO_SHARED ->
                         "AAudio Native Low-Latency FastMixer"
                     outputStatus.transportType == com.music.vibe.playback.audio.TransportType.DIRECT_USB ->
-                        "Direct (Bypasses System Mixer)"
+                        "Direct Userspace USB (Bypasses System Mixer)"
                     outputStatus.directPlaybackActual ->
                         "Direct path active; endpoint format not independently verified"
                     outputStatus.systemMixerRateHz != null -> {

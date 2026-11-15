@@ -13,4 +13,5 @@
     <exclude domain="sharedpref" path="vibemusic_auth_plain.xml" />
     <exclude domain="sharedpref" path="vibemusic_sources.xml" />
     <exclude domain="sharedpref" path="vibemusic_sources_plain.xml" />
+    <exclude domain="no_backup" path="vibe_install_launch_state.json" />
 </full-backup-content>

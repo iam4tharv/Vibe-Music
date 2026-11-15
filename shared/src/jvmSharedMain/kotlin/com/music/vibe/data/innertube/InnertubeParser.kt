@@ -9,6 +9,7 @@ import com.music.vibe.data.model.ArtistRef
 import com.music.vibe.data.model.completeArtistCredits
 import com.music.vibe.data.model.BrowseItem
 import com.music.vibe.data.model.BrowseType
+import com.music.vibe.data.model.HomeChip
 import com.music.vibe.data.model.HomeShelf
 import com.music.vibe.data.model.LibraryState
 import com.music.vibe.data.model.LikeStatus
@@ -201,6 +202,44 @@ object InnertubeParser {
         return sections.mapNotNull { section ->
             section.o("musicCarouselShelfRenderer")?.let(::carouselShelf)
                 ?: section.o("musicShelfRenderer")?.let(::plainShelf)
+                ?: section.o("gridRenderer")?.let(::gridShelf)
+        }
+    }
+
+    /**
+     * Parses YouTube Music's header mood/activity filter chips (`Focus`, `Workout`,
+     * `Relax`, `Energize`, `Commute`, etc.) from `sectionListRenderer.header.chipCloudRenderer`.
+     */
+    fun parseHomeChips(response: JsonObject): List<HomeChip> {
+        val sectionList = response.o("contents")
+            .o("singleColumnBrowseResultsRenderer").a("tabs")?.firstOrNull()
+            .o("tabRenderer").o("content").o("sectionListRenderer")
+        val chipCloud = sectionList.o("header").o("chipCloudRenderer")
+            ?: collectRenderers(response, "chipCloudRenderer").firstOrNull()
+            ?: return emptyList()
+        val seen = HashSet<String>()
+        return chipCloud.a("chips").orEmpty().mapNotNull { item ->
+            val chip = item.o("chipCloudChipRenderer") ?: return@mapNotNull null
+            val title = chip.o("text").runs()
+                .ifBlank { chip.o("text").s("simpleText").orEmpty() }
+                .trim()
+            if (title.isBlank() || !seen.add(title.lowercase(Locale.ROOT))) return@mapNotNull null
+            val endpoint = chip.o("navigationEndpoint").o("browseEndpoint")
+                ?: chip.o("onSelectCommand").o("browseEndpoint")
+                ?: return@mapNotNull null
+            val browseId = endpoint.s("browseId")?.takeIf { it.isNotBlank() } ?: "FEmusic_home"
+            if (PODCAST_WORD.containsMatchIn(title) ||
+                browseId.contains("non_music_audio", ignoreCase = true) ||
+                browseId.contains("podcast", ignoreCase = true)
+            ) {
+                return@mapNotNull null
+            }
+            val params = endpoint.s("params")?.takeIf { it.isNotBlank() }
+            HomeChip(
+                title = title,
+                browseId = browseId,
+                params = params,
+            )
         }
     }
 
@@ -266,6 +305,8 @@ object InnertubeParser {
                         ?.let(::carouselShelf)?.let(out::add)
                     (node["musicShelfRenderer"] as? JsonObject)
                         ?.let(::plainShelf)?.let(out::add)
+                    (node["gridRenderer"] as? JsonObject)
+                        ?.let(::gridShelf)?.let(out::add)
                     node.values.forEach(::walk)
                 }
                 is JsonArray -> node.forEach(::walk)
@@ -283,7 +324,7 @@ object InnertubeParser {
         // Whole shelves like "Video charts" carry nothing but video
         // compilations — each card would fail its own video check on the
         // way to a dead-end page, so the shelf is dropped outright.
-        if (VIDEO_WORD.containsMatchIn(title)) return null
+        if (VIDEO_WORD.containsMatchIn(title) || PODCAST_WORD.containsMatchIn(title)) return null
         val items = carousel.a("contents").orEmpty().mapNotNull { item ->
             parseTwoRowItem(item.o("musicTwoRowItemRenderer"))
                 ?: parseResponsiveListItem(item.o("musicResponsiveListItemRenderer"))
@@ -301,12 +342,23 @@ object InnertubeParser {
 
     private fun plainShelf(shelf: JsonObject): HomeShelf? {
         val title = shelf.o("title").runs()
-        if (VIDEO_WORD.containsMatchIn(title)) return null
+        if (VIDEO_WORD.containsMatchIn(title) || PODCAST_WORD.containsMatchIn(title)) return null
         val items = shelf.a("contents").orEmpty().mapNotNull {
             parseResponsiveListItem(it.o("musicResponsiveListItemRenderer"))
         }.filterNot { it.isVideo }
             .map { ShelfItem(it.title, it.artist, it.thumbnailUrl, it.videoId, null) }
         return if (items.isEmpty()) null else HomeShelf(title.ifBlank { "For you" }, items)
+    }
+
+    private fun gridShelf(grid: JsonObject): HomeShelf? {
+        val header = grid.o("header").o("gridHeaderRenderer")
+        val title = header.o("title").runs()
+        val strapline = header.o("strapline").runs()
+        if (VIDEO_WORD.containsMatchIn(title) || PODCAST_WORD.containsMatchIn(title)) return null
+        val items = grid.a("items").orEmpty().mapNotNull { item ->
+            parseTwoRowItem(item.o("musicTwoRowItemRenderer"))
+        }
+        return if (items.isEmpty()) null else HomeShelf(title.ifBlank { "Featured" }, items, strapline)
     }
 
     /**
@@ -1461,6 +1513,7 @@ object InnertubeParser {
      * "Daily Top Music Videos".
      */
     private val VIDEO_WORD = Regex("""\bvideos?\b""", RegexOption.IGNORE_CASE)
+    private val PODCAST_WORD = Regex("""\bpodcasts?\b""", RegexOption.IGNORE_CASE)
 }
 
 // ---- Tiny JSON navigation helpers (null-safe, never throw) ------------------

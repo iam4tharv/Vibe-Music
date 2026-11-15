@@ -205,9 +205,10 @@ internal class PlayerScrub {
     /** Where the handle is drawn. */
     fun shown(positionMs: Long, durationMs: Long): Float {
         val fraction = if (durationMs > 0) positionMs.toFloat() / durationMs else 0f
+        val pending = pendingSeek
         return when {
             scrubbing -> value
-            pendingSeek != null -> pendingSeek!!
+            pending != null -> pending
             else -> fraction.coerceIn(0f, 1f)
         }
     }

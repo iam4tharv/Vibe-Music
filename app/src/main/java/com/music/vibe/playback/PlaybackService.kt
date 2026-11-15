@@ -7,13 +7,16 @@ import android.media.AudioDeviceCallback
 import android.media.AudioDeviceInfo
 import android.media.AudioFormat
 import android.media.AudioManager
+import android.media.AudioRecordingConfiguration
 import android.media.MediaMetadataRetriever
 import android.media.audiofx.AudioEffect
 import android.net.Uri
+import android.os.Build
 import android.widget.Toast
 import android.os.Bundle
 import android.os.Handler
 import android.os.SystemClock
+import android.view.KeyEvent
 import com.music.vibe.data.TelemetryProvenance
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -75,6 +78,7 @@ import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import kotlinx.coroutines.guava.future
+import com.music.vibe.data.model.durationMillis
 import com.music.vibe.playback.audio.DspChain
 import com.music.vibe.playback.cast.CastController
 import com.music.vibe.playback.cast.CastPlayback
@@ -521,7 +525,61 @@ class PlaybackService : MediaLibraryService() {
     private var currentAudioInputFormat: Format? = null
     private var lastAppliedPreferredDevice: AudioDeviceInfo? = null
     private var hasAppliedPreferredDevice: Boolean = false
-    private var pausedForTransientAudioFocus: Boolean = false
+    private var activeVoiceRecording: Boolean = false
+    private var activeCallAudioMode: Boolean = false
+    private var lastCallOrRecordingEndedAtElapsedMs: Long = 0L
+    private var pausedBeforeOrDuringCallOrRecording: Boolean = true
+
+    private fun isCallAudioMode(mode: Int?): Boolean =
+        mode == AudioManager.MODE_RINGTONE ||
+            mode == AudioManager.MODE_IN_CALL ||
+            mode == AudioManager.MODE_IN_COMMUNICATION ||
+            (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && mode == AudioManager.MODE_CALL_SCREENING)
+
+    private fun onAudioModeObserved(mode: Int?) {
+        val inCallNow = isCallAudioMode(mode)
+        if (inCallNow && !activeCallAudioMode) {
+            if (player?.playWhenReady != true) {
+                pausedBeforeOrDuringCallOrRecording = true
+            }
+        } else if (!inCallNow && activeCallAudioMode) {
+            lastCallOrRecordingEndedAtElapsedMs = SystemClock.elapsedRealtime()
+        }
+        activeCallAudioMode = inCallNow
+    }
+
+    private fun isCallOrVoiceRecordingActive(): Boolean {
+        onAudioModeObserved(audioManager?.mode)
+        return activeVoiceRecording || activeCallAudioMode
+    }
+
+    private fun shouldSuppressPostInterruptionAutoResume(): Boolean {
+        val activeNow = isCallOrVoiceRecordingActive()
+        val recentlyEnded = lastCallOrRecordingEndedAtElapsedMs > 0L &&
+            (SystemClock.elapsedRealtime() - lastCallOrRecordingEndedAtElapsedMs) < CALL_OR_RECORDING_RESUME_GUARD_MS
+        return pausedBeforeOrDuringCallOrRecording && (activeNow || recentlyEnded)
+    }
+
+    private val audioRecordingCallback = object : AudioManager.AudioRecordingCallback() {
+        override fun onRecordingConfigChanged(configs: List<AudioRecordingConfiguration>) {
+            val recordingNow = configs.isNotEmpty()
+            if (recordingNow && !activeVoiceRecording) {
+                if (player?.playWhenReady != true) {
+                    pausedBeforeOrDuringCallOrRecording = true
+                }
+            } else if (!recordingNow && activeVoiceRecording) {
+                lastCallOrRecordingEndedAtElapsedMs = SystemClock.elapsedRealtime()
+            }
+            activeVoiceRecording = recordingNow
+        }
+    }
+
+    private val audioModeChangedListener: AudioManager.OnModeChangedListener? =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            AudioManager.OnModeChangedListener { mode -> onAudioModeObserved(mode) }
+        } else {
+            null
+        }
 
     private fun isPhysicalMediaDevice(device: AudioDeviceInfo): Boolean {
         return when (device.type) {
@@ -547,6 +605,7 @@ class PlaybackService : MediaLibraryService() {
 
     private val outputDeviceCallback = object : AudioDeviceCallback() {
         override fun onAudioDevicesAdded(addedDevices: Array<AudioDeviceInfo>) {
+            onAudioModeObserved(audioManager?.mode)
             // Plugging something in moves the music to it. Always — a choice
             // made an hour ago about the speaker is not a standing instruction
             // to ignore the headphones now going in.
@@ -559,6 +618,7 @@ class PlaybackService : MediaLibraryService() {
             }
         }
         override fun onAudioDevicesRemoved(removedDevices: Array<AudioDeviceInfo>) {
+            onAudioModeObserved(audioManager?.mode)
             val realMediaRemoved = removedDevices.filter { it.isSink && isPhysicalMediaDevice(it) }
             if (realMediaRemoved.isNotEmpty()) {
                 if (removedDevices.any { it.id == AudioRouting.selectedId.value }) {
@@ -916,25 +976,22 @@ class PlaybackService : MediaLibraryService() {
          * response is to tap it again. `playWhenReady` flips on the command, not
          * on the audio, which is what the media notification shows too.
          */
-        override fun onPlaybackSuppressionReasonChanged(reason: Int) {
-            val exoPlayer = player ?: return
-            if (reason == Player.PLAYBACK_SUPPRESSION_REASON_TRANSIENT_AUDIO_FOCUS_LOSS) {
-                pausedForTransientAudioFocus = true
-            } else if (reason == Player.PLAYBACK_SUPPRESSION_REASON_NONE) {
-                if (pausedForTransientAudioFocus) {
-                    pausedForTransientAudioFocus = false
-                    if (!exoPlayer.isPlaying && exoPlayer.playbackState == Player.STATE_READY) {
-                        exoPlayer.play()
-                    }
-                }
-            }
-        }
-
         override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
-            if (!playWhenReady && reason == Player.PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST) {
-                pausedForTransientAudioFocus = false
+            val exoPlayer = player
+            if (exoPlayer != null) {
+                // Only hold system audio focus while playWhenReady is true.
+                // When paused (playWhenReady == false), immediately abandon
+                // audio focus so incoming phone calls or voice recordings do
+                // not treat the paused player as an interrupted focus holder
+                // and auto-resume it on completion.
+                exoPlayer.setAudioAttributes(AUDIO_ATTRIBUTES, /* handleAudioFocus = */ playWhenReady)
             }
-            if (playWhenReady) player?.let(castPlayback::onLocalStartedPlaying)
+            if (!playWhenReady) {
+                pausedBeforeOrDuringCallOrRecording = true
+            } else if (!isCallOrVoiceRecordingActive()) {
+                pausedBeforeOrDuringCallOrRecording = false
+            }
+            if (playWhenReady) exoPlayer?.let(castPlayback::onLocalStartedPlaying)
             publishWidgetState(playing = playWhenReady)
             partySync?.onPlayWhenReadyChanged(playWhenReady, reason)
         }
@@ -1644,6 +1701,16 @@ class PlaybackService : MediaLibraryService() {
         // through, and again at every handoff.
         sparePlayer.audioSessionId = exoPlayer.audioSessionId
         audioManager?.registerAudioDeviceCallback(outputDeviceCallback, null)
+        audioManager?.registerAudioRecordingCallback(audioRecordingCallback, null)
+        activeVoiceRecording = audioManager?.activeRecordingConfigurations?.isNotEmpty() == true
+        onAudioModeObserved(audioManager?.mode)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            audioModeChangedListener?.let { listener ->
+                runCatching {
+                    audioManager?.addOnModeChangedListener(mainExecutor, listener)
+                }
+            }
+        }
         applyOutputRoute()
 
         AppSettings.audioSessionId.value = exoPlayer.audioSessionId
@@ -1733,6 +1800,9 @@ class PlaybackService : MediaLibraryService() {
         deferPlayToParty = { partySync?.shouldDeferPlay() == true },
         lockedTransport = { playing -> partySync?.onLockedTransport(playing) == true },
         cast = castPlayback,
+        onBeforePlay = {
+            this.player?.setAudioAttributes(AUDIO_ATTRIBUTES, /* handleAudioFocus = */ true)
+        },
     ) { lastPublishedSubtitle }
 
     /**
@@ -2012,8 +2082,14 @@ class PlaybackService : MediaLibraryService() {
                 val canCrossfade = standbyPlayer != null &&
                     (activePlayer.isPlaying || activePlayer.playbackState == Player.STATE_READY)
 
-                if (!canCrossfade || standbyPlayer == null) {
+                if (!canCrossfade) {
+                    val alignedStartPos = (activePlayer.currentPosition + alignmentOffsetMs).coerceAtLeast(0L)
+                    activePlayer.replaceMediaItem(currentIndex, targetMediaItem)
+                    if (alignedStartPos > 0L) {
+                        activePlayer.seekTo(currentIndex, alignedStartPos)
+                    }
                     swappingMediaId = null
+                    onSwapCommitted?.invoke()
                     return@launch
                 }
 
@@ -2710,7 +2786,9 @@ class PlaybackService : MediaLibraryService() {
         .setRenderersFactory(silenceSkippingRenderers(spatial, equalizer, filter, loudness))
         .setMediaSourceFactory(requireNotNull(mediaSourceFactory))
         .setLoadControl(farBufferingLoadControl())
-        .setAudioAttributes(AUDIO_ATTRIBUTES, /* handleAudioFocus = */ ownsSession)
+        // Start with handleAudioFocus = false while idle/paused; focus is
+        // requested only when playWhenReady becomes true.
+        .setAudioAttributes(AUDIO_ATTRIBUTES, /* handleAudioFocus = */ false)
         .setHandleAudioBecomingNoisy(ownsSession)
         // Back restarts the track once you're this far into it; only a
         // press before that steps to the previous one.
@@ -2779,7 +2857,7 @@ class PlaybackService : MediaLibraryService() {
      * the song you are listening to, which is whichever one the session is on.
      */
     private fun setSessionOwner(target: ExoPlayer, owns: Boolean) {
-        target.setAudioAttributes(AUDIO_ATTRIBUTES, /* handleAudioFocus = */ owns)
+        target.setAudioAttributes(AUDIO_ATTRIBUTES, /* handleAudioFocus = */ owns && target.playWhenReady)
         target.setHandleAudioBecomingNoisy(owns)
     }
 
@@ -5664,12 +5742,13 @@ class PlaybackService : MediaLibraryService() {
                 delegate = defaultSink,
                 dspChain = dspChain,
                 enableFloatOutput = enableFloatOutput,
+                directAudioOutput = com.music.vibe.playback.audio.usb.DefaultDirectAudioOutput(context),
                 preferredOutputEncodingProvider = { format -> resolvePreferredOutputEncoding(format) },
-                // Which of the two sinks the listener can hear, told by the
-                // role its transition filter currently holds — [activeFilter]
-                // and [spareFilter] trade places at every handoff. Only the
-                // audible one writes telemetry, so the idle player's reset
-                // cannot publish "not exact" over the playing track's verdict.
+                targetSampleRateProvider = { format -> resolveTargetSampleRate(format) },
+                bitPerfectModeProvider = { AppSettings.highFidelityOutput.value },
+                usbDirectModeProvider = {
+                    AppSettings.usbTransportMode.value == com.music.vibe.data.settings.UsbTransportMode.CUSTOM_USB_DRIVER
+                },
                 isAudible = { transition === activeFilter },
             )
         }
@@ -5740,15 +5819,33 @@ class PlaybackService : MediaLibraryService() {
             ?: measured?.channels?.takeIf { it > 0 }
             ?: lastReportedChannelCount()
             ?: 2
+        val wantsBitPerfectMixer = AppSettings.highFidelityOutput.value &&
+            routeKind == AudioRouting.Kind.USB &&
+            AppSettings.usbTransportMode.value != com.music.vibe.data.settings.UsbTransportMode.CUSTOM_USB_DRIVER
+        if (!wantsBitPerfectMixer) {
+            DirectAudioProbe.clearBitPerfectMixerAttributes(manager, activeDevice)
+        }
         val directSupport = if (sampleRate != null) {
             DirectAudioProbe.probeDirectSupport(
                 audioManager = manager,
                 sampleRateHz = sampleRate,
                 channelCount = channels,
                 activeDevice = activeDevice,
+                applyBitPerfectMixerIfSupported = wantsBitPerfectMixer,
             )
         } else {
             DirectAudioProbe.DirectSupport.NONE
+        }
+        if (routeKind == AudioRouting.Kind.USB &&
+            AppSettings.highFidelityOutput.value &&
+            (AppSettings.usbTransportMode.value == com.music.vibe.data.settings.UsbTransportMode.CUSTOM_USB_DRIVER ||
+                (AppSettings.usbTransportMode.value == com.music.vibe.data.settings.UsbTransportMode.AUTO &&
+                    !directSupport.isBitPerfectMixerSupported))
+        ) {
+            UsbDirectManager.requestPermissionIfNeeded(this)
+        }
+        if (directSupport.isBitPerfectMixerActive && AppSettings.highFidelityOutput.value) {
+            eachPlayer { it.volume = 1f }
         }
         val btTelemetry = if (routeKind == AudioRouting.Kind.BLUETOOTH) bluetoothTracker.telemetry.value else null
 
@@ -5769,6 +5866,48 @@ class PlaybackService : MediaLibraryService() {
         if (format != null) {
             resolvePreferredOutputEncoding(format)
         }
+    }
+
+    /**
+     * Resolves the optimal output sample rate for [format] on the active route:
+     * - Bluetooth: matches the Bluetooth device's native sample rate (`AudioDeviceInfo.getSampleRates()`
+     *   or negotiated codec rate) so our in-app `HighPrecisionResampler` converts the stream cleanly
+     *   and prevents Android's lower-quality system resampler from touching the audio.
+     * - Wired / Internal DAC: matches `AudioManager.PROPERTY_OUTPUT_SAMPLE_RATE` unless direct playback
+     *   is active for the source rate.
+     * - USB DAC: keeps the source sample rate bit-exact.
+     */
+    private fun resolveTargetSampleRate(format: Format): Int {
+        val sourceRate = format.sampleRate.takeIf { it > 0 }
+            ?: currentAudioInputFormat?.sampleRate?.takeIf { it > 0 }
+            ?: lastReportedSampleRateHz()
+            ?: 48000
+        val activeDevice = resolveActiveOutputDevice()
+        val routeKind = resolveActiveRouteKind(activeDevice)
+        val hardwareRate = com.music.vibe.playback.audio.AudioNativeBridge.hardwareSampleRate
+            .takeIf { it > 0 } ?: 48000
+        val btCodecRate = if (routeKind == AudioRouting.Kind.BLUETOOTH) {
+            bluetoothTracker.telemetry.value.sampleRateHz
+        } else {
+            null
+        }
+        val directSupport = audioManager?.let { mgr ->
+            DirectAudioProbe.probeDirectSupport(
+                audioManager = mgr,
+                sampleRateHz = sourceRate,
+                channelCount = format.channelCount.takeIf { it > 0 } ?: 2,
+                activeDevice = activeDevice,
+            )
+        } ?: DirectAudioProbe.DirectSupport.NONE
+
+        return DirectAudioProbe.resolveOptimalTargetSampleRate(
+            sourceSampleRateHz = sourceRate,
+            routeKind = routeKind,
+            activeDevice = activeDevice,
+            bluetoothCodecSampleRateHz = btCodecRate,
+            hardwareSampleRateHz = hardwareRate,
+            isDirectActive = directSupport.isDirectSupported,
+        )
     }
 
     private fun resolvePreferredOutputEncoding(format: Format): PcmEncoding? {
@@ -5816,11 +5955,9 @@ class PlaybackService : MediaLibraryService() {
             }
         }
 
-        val sourceEncoding = if (inputFormat.sampleMimeType != null && inputFormat.sampleMimeType != "audio/raw") {
-            inputFormat.sampleMimeType!!
-        } else {
-            format.sampleMimeType ?: "audio/raw"
-        }
+        val sourceEncoding = inputFormat.sampleMimeType?.takeIf { it != "audio/raw" }
+            ?: format.sampleMimeType
+            ?: "audio/raw"
 
         val source = SourceDescriptor(
             encoding = sourceEncoding,
@@ -5829,39 +5966,39 @@ class PlaybackService : MediaLibraryService() {
             bitDepth = bitDepth,
         )
 
+        val wantsBitPerfectMixer = AppSettings.highFidelityOutput.value &&
+            routeKind == AudioRouting.Kind.USB &&
+            AppSettings.usbTransportMode.value != com.music.vibe.data.settings.UsbTransportMode.CUSTOM_USB_DRIVER
         val directSupport = DirectAudioProbe.probeDirectSupport(
             audioManager = manager,
             sampleRateHz = sampleRate,
             channelCount = channels,
             activeDevice = activeDevice,
+            applyBitPerfectMixerIfSupported = wantsBitPerfectMixer,
         )
         val directUsbProbe = if (routeKind == AudioRouting.Kind.USB) UsbDirectManager.probe(this) else null
         val btTelemetry = if (routeKind == AudioRouting.Kind.BLUETOOTH) bluetoothTracker.telemetry.value else null
 
         val advertisedEncodings = activeDevice?.encodings?.toList() ?: emptyList()
         val advertisedSampleRates = activeDevice?.sampleRates?.toList() ?: emptyList()
+        val targetRateHz = resolveTargetSampleRate(format)
 
         val negotiation = OutputNegotiator.negotiate(
             source = source,
             decoderName = AudioOutputStatus.current.value.decoderName,
             sampleRateHz = sampleRate,
+            targetSampleRateHz = targetRateHz,
             channelCount = channels,
             routeKind = routeKind,
             deviceName = activeDevice?.productName?.toString()?.ifBlank { null } ?: "System default",
             advertisedEncodings = advertisedEncodings,
             advertisedSampleRates = advertisedSampleRates,
             requestedMode = AppSettings.outputPcmMode.value,
+            usbTransportMode = AppSettings.usbTransportMode.value,
             directUsbProbe = directUsbProbe,
             directSupport = directSupport,
             bluetoothTelemetry = btTelemetry,
             delegateSupportsFloat = shouldEnableFloatOutput(),
-            // Never, on any route. `DefaultAudioSink.configure` inserts either
-            // `ToFloatPcmAudioProcessor` or `ToInt16PcmAudioProcessor` for every
-            // linear-PCM input encoding, so there is no packed-24-bit AudioTrack
-            // to be had through it however loudly the device advertises one.
-            // Claiming otherwise here selected a 24-bit path that Media3 then
-            // silently re-converted, costing an extra quantization and leaving
-            // this readout naming a bit depth that was never written.
             delegateSupportsPcm24 = false,
             knownSystemMixerRateHz = if (directSupport != DirectAudioProbe.DirectSupport.NONE) {
                 null
@@ -5955,6 +6092,7 @@ class PlaybackService : MediaLibraryService() {
         mediaSession?.player = newSessionPlayer(newActive, newCrossfade)
         applyOutputRoute()
         if (items.isNotEmpty()) newActive.prepare()
+        newActive.setAudioAttributes(AUDIO_ATTRIBUTES, /* handleAudioFocus = */ playWhenReady)
         newActive.playWhenReady = playWhenReady
 
         oldActive.release()
@@ -6029,6 +6167,17 @@ class PlaybackService : MediaLibraryService() {
             AppSettings.preferUsbDac.drop(1).collect { requestOutputReconfiguration() }
         }
         scope.launch {
+            AppSettings.usbTransportMode.drop(1).collect { requestOutputReconfiguration() }
+        }
+        scope.launch {
+            AppSettings.highFidelityOutput.drop(1).collect {
+                applyEqualizer()
+                applySpatialAudioEnabled()
+                setupLoudness(player?.currentMediaItem?.mediaId)
+                requestOutputReconfiguration()
+            }
+        }
+        scope.launch {
             AudioRouting.selectedId.drop(1).collect { requestOutputReconfiguration() }
         }
         scope.launch {
@@ -6051,8 +6200,9 @@ class PlaybackService : MediaLibraryService() {
                 AppSettings.lyricsSources,
                 AppSettings.lyricsSourceOrder,
                 AppSettings.prioritizeSyllableSync,
-            ) { synced, sources, order, prio ->
-                synced to sources
+                AppSettings.paxSenixApiKey,
+            ) { synced, sources, order, prio, apiKey ->
+                listOf(synced, sources, order, prio, apiKey.hashCode())
             }.distinctUntilChanged().collect {
                 loadLyricsForCurrentTrack()
             }
@@ -6109,7 +6259,7 @@ class PlaybackService : MediaLibraryService() {
      * audio thread is the one place that must not do that.
      */
     private fun applyEqualizer() {
-        val enabled = AppSettings.equalizerEnabled.value
+        val enabled = AppSettings.equalizerEnabled.value && !AppSettings.highFidelityOutput.value
         val curve = when (AppSettings.equalizerMode.value) {
             EqualizerMode.DYNAMIC -> toneCurve(
                 x = AppSettings.equalizerToneX.value,
@@ -6126,36 +6276,22 @@ class PlaybackService : MediaLibraryService() {
     /**
      * The effective spatial-audio state: the user's toggle, unless the
      * active player's decoder is currently on a Dolby Atmos (E-AC-3 JOC)
-     * stream, in which case it's forced off. [activeTrackIsDolbyAtmos] only
-     * ever describes the active player — see [formatListener] — so both
-     * processors are kept in lockstep rather than tracking a role swap.
+     * stream or Bit-Perfect mode is enabled, in which case it's forced off.
      */
     private fun applySpatialAudioEnabled() {
-        val enabled = AppSettings.spatialAudio.value && !activeTrackIsDolbyAtmos
+        val enabled = AppSettings.spatialAudio.value &&
+            !AppSettings.highFidelityOutput.value &&
+            !activeTrackIsDolbyAtmos
         spatialAudioProcessorA.enabled = enabled
         spatialAudioProcessorB.enabled = enabled
     }
 
-    /**
-     * The linear gain [LoudnessProcessor] applies to [mediaId]: YouTube's own
-     * normalization figure — see
-     * [com.music.vibe.data.innertube.StreamResolver.loudnessDbFor] —
-     * bounded the way the platform effect this replaced was, or exactly 1 when
-     * nothing is known yet or the setting is off.
-     *
-     * Called on the audio thread, so it only reads things that are safe there:
-     * a StateFlow value and a ConcurrentHashMap.
-     *
-     * A track substituted to JioSaavn or an addon still carries a figure here
-     * as long as it was queued from YouTube, because [StreamResolver] resolves
-     * the YouTube stream alongside the substitute lookup rather than only when
-     * one fails — see [StreamResolver.loudnessDbFor]'s own doc.
-     */
     private fun loudnessGainFor(mediaId: String): Float = loudnessGainMb(mediaId)
         ?.let { 10.0.pow(it / 2000.0).toFloat() }
         ?: 1f
 
     private fun loudnessGainMb(mediaId: String?): Int? {
+        if (AppSettings.highFidelityOutput.value) return null
         if (!AppSettings.loudnessNormalization.value) return null
         if (AppSettings.loudnessOffOnSpeaker.value &&
             AudioOutputStatus.current.value.routeKind == AudioRouting.Kind.PHONE
@@ -6564,6 +6700,14 @@ class PlaybackService : MediaLibraryService() {
         closeAudioEffectSession()
         bluetoothTracker.stop()
         audioManager?.unregisterAudioDeviceCallback(outputDeviceCallback)
+        audioManager?.unregisterAudioRecordingCallback(audioRecordingCallback)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            audioModeChangedListener?.let { listener ->
+                runCatching {
+                    audioManager?.removeOnModeChangedListener(listener)
+                }
+            }
+        }
         partySync?.stop()
         partySync = null
         player?.let(::savePlaybackState)
@@ -6660,7 +6804,7 @@ class PlaybackService : MediaLibraryService() {
             return
         }
 
-        val trackDurationMs = (player?.duration ?: 0L).takeIf { it > 0 } ?: 0L
+        val trackDurationMs = (player?.duration ?: 0L).takeIf { it > 0 } ?: currentSong.durationMillis()
 
         serviceLyricsJob?.cancel()
         serviceLyricsJob = scope.launch(Dispatchers.IO) {
@@ -6685,6 +6829,9 @@ class PlaybackService : MediaLibraryService() {
             withContext(Dispatchers.Main) {
                 serviceLyrics = lines
                 if (player?.isPlaying == true) {
+                    if (!lines.isNullOrEmpty()) {
+                        startLyricsTicker()
+                    }
                     updateLyricSubtitle()
                 }
             }
@@ -6711,7 +6858,7 @@ class PlaybackService : MediaLibraryService() {
         val exoPlayer = player ?: return
         val currentSong = exoPlayer.currentMediaItem?.toSong() ?: return
         val lines = serviceLyrics
-        val pos = exoPlayer.currentPosition
+        val pos = exoPlayer.currentPosition - AppSettings.lyricsOffsetMs.value
         val subtitleText = if (lines != null && lines.isNotEmpty() && AppSettings.syncedLyrics.value) {
             val idx = lines.indexOfLast { it.timeMs <= pos }
             val currentLine = lines.getOrNull(idx)
@@ -6772,6 +6919,32 @@ class PlaybackService : MediaLibraryService() {
 
         override fun onDisconnected(session: MediaSession, controller: MediaSession.ControllerInfo) {
             if (carControllers.remove(controller)) refreshCustomLayouts()
+        }
+
+        override fun onMediaButtonEvent(
+            session: MediaSession,
+            controllerInfo: MediaSession.ControllerInfo,
+            intent: Intent,
+        ): Boolean {
+            val keyEvent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                intent.getParcelableExtra(Intent.EXTRA_KEY_EVENT, KeyEvent::class.java)
+            } else {
+                @Suppress("DEPRECATION")
+                intent.getParcelableExtra(Intent.EXTRA_KEY_EVENT)
+            }
+            if (keyEvent != null &&
+                (keyEvent.keyCode == KeyEvent.KEYCODE_MEDIA_PLAY ||
+                    keyEvent.keyCode == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE) &&
+                player?.playWhenReady != true &&
+                shouldSuppressPostInterruptionAutoResume()
+            ) {
+                TrackLog.i(
+                    "VibeMusic",
+                    "Ignoring spurious media button resume (${keyEvent.keyCode}) after call/voice recording while paused",
+                )
+                return true
+            }
+            return super.onMediaButtonEvent(session, controllerInfo, intent)
         }
 
         override fun onCustomCommand(
@@ -7311,24 +7484,29 @@ class PlaybackService : MediaLibraryService() {
                         local.forEach { songCache[it.videoId] = it }
                         resolved.addAll(local.map { it.toMediaItem() })
                     }
-                    songCache.containsKey(id) -> {
-                        resolved.add(songCache[id]!!.toMediaItem())
+                    songCache[id] != null -> {
+                        val cached = songCache[id] ?: item.toSong()
+                        resolved.add(cached.toMediaItem())
                     }
                     item.localConfiguration != null -> {
                         resolved.add(item)
                     }
                     item.requestMetadata.mediaUri != null -> {
-                        val uri = item.requestMetadata.mediaUri!!
-                        val videoId = uri.getQueryParameter("v") ?: uri.lastPathSegment.orEmpty()
-                        if (videoId.isNotEmpty() && !videoId.startsWith("http")) {
-                            val cached = songCache[videoId]
-                            if (cached != null) {
-                                resolved.add(cached.toMediaItem())
+                        val uri = item.requestMetadata.mediaUri
+                        if (uri != null) {
+                            val videoId = uri.getQueryParameter("v") ?: uri.lastPathSegment.orEmpty()
+                            if (videoId.isNotEmpty() && !videoId.startsWith("http")) {
+                                val cached = songCache[videoId]
+                                if (cached != null) {
+                                    resolved.add(cached.toMediaItem())
+                                } else {
+                                    resolved.add(Song(videoId = videoId, title = item.mediaMetadata.title?.toString() ?: "Track", artist = item.mediaMetadata.artist?.toString() ?: "Artist", thumbnailUrl = null).toMediaItem())
+                                }
                             } else {
-                                resolved.add(Song(videoId = videoId, title = item.mediaMetadata.title?.toString() ?: "Track", artist = item.mediaMetadata.artist?.toString() ?: "Artist", thumbnailUrl = null).toMediaItem())
+                                resolved.add(item.buildUpon().setUri(uri).build())
                             }
                         } else {
-                            resolved.add(item.buildUpon().setUri(uri).build())
+                            resolved.add(item.toSong().toMediaItem())
                         }
                     }
                     else -> {
@@ -7706,5 +7884,13 @@ class PlaybackService : MediaLibraryService() {
          * would throw away a top-up that did land.
          */
         const val PARTY_QUEUE_ECHO_TIMEOUT_MS = 5_000L
+
+        /**
+         * Settling window after a phone call or microphone voice recording ends
+         * during which Bluetooth SCO -> A2DP handoff or OEM telecom services may
+         * emit a spurious KEYCODE_MEDIA_PLAY / KEYCODE_MEDIA_PLAY_PAUSE to a
+         * session that the listener had already paused prior to the interruption.
+         */
+        const val CALL_OR_RECORDING_RESUME_GUARD_MS = 2_500L
     }
 }

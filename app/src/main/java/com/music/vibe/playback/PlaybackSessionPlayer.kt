@@ -32,6 +32,7 @@ internal class SessionPlayer(
     private val deferPlayToParty: () -> Boolean,
     private val lockedTransport: (Boolean) -> Boolean,
     private val cast: CastPlayback,
+    private val onBeforePlay: () -> Unit = {},
     private val getSubtitle: () -> String?,
 ) : ForwardingPlayer(player), CastSink {
 
@@ -205,6 +206,7 @@ internal class SessionPlayer(
             cast.play()
             return
         }
+        onBeforePlay()
         super.play()
     }
 
@@ -232,6 +234,7 @@ internal class SessionPlayer(
             if (playWhenReady) cast.play() else cast.pause()
             return
         }
+        if (playWhenReady) onBeforePlay()
         super.setPlayWhenReady(playWhenReady)
     }
 

@@ -2,21 +2,17 @@ package com.music.vibe.auth
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.music.vibe.data.innertube.Innertube
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 
 /**
  * Encrypted-at-rest storage for credentials.
  *
- * Two live here: the YouTube Music session cookie, and — if the user turns on
- * the Discord integration — that account's own bearer token. Neither is a
- * password: the Google one is typed into accounts.google.com inside a WebView,
- * and the Discord one is read out of a completed login session. But both grant
- * full access to their account, so they don't go in the plain prefs the
- * scrobbler tokens use.
- *
- * A restored file whose keyset this device can't unwrap is recreated, and a
- * Keystore that can't be used at all degrades to plain prefs rather than
- * crashing on launch; see [EncryptedPrefs]. Kept out of backups for the first
- * reason, in backup_rules.xml and data_extraction_rules.xml.
+ * Holds YouTube Music multi-account sessions, channel profiles, cookies,
+ * Discord bearer token, and WebDAV/SMB passwords.
  */
 class AuthStore(context: Context) {
 
@@ -96,20 +92,12 @@ class AuthStore(context: Context) {
         get() = prefs.getString(KEY_DISCORD_TOKEN, null)
         set(value) = prefs.edit().putString(KEY_DISCORD_TOKEN, value).apply()
 
-    /**
-     * The WebDAV server password. Encrypted like every other credential here:
-     * a backup export carries the server URL and username in plain prefs, but
-     * never this.
-     */
+    /** The WebDAV server password. */
     var webdavPassword: String?
         get() = prefs.getString(KEY_WEBDAV_PASSWORD, null)
         set(value) = prefs.edit().putString(KEY_WEBDAV_PASSWORD, value).apply()
 
-    /**
-     * The SMB share password. Encrypted like every other credential here:
-     * exports carry the server, share and username in plain prefs, but never
-     * this.
-     */
+    /** The SMB share password. */
     var smbPassword: String?
         get() = prefs.getString(KEY_SMB_PASSWORD, null)
         set(value) = prefs.edit().putString(KEY_SMB_PASSWORD, value).apply()
@@ -189,18 +177,90 @@ class AuthStore(context: Context) {
         BrowserSession.clearGoogleCookies()
     }
 
+    /**
+     * Exports all YouTube Music accounts, channel profiles, active session cookies,
+     * and connected service secrets stored in [AuthStore] for backup archives.
+     */
+    fun exportBackupData(): Map<String, String> {
+        val currentSessions = sessions
+        val currentActive = activeSession
+        if (currentActive != null && activeAccountId == null) {
+            select(currentActive.accountId, currentActive.activeProfileId)
+        }
+        val result = LinkedHashMap<String, String>()
+        for (key in BACKUP_KEYS) {
+            val value = prefs.getString(key, null)
+            if (!value.isNullOrEmpty()) {
+                result[key] = value
+            }
+        }
+        if (currentSessions.isNotEmpty() && KEY_SESSIONS !in result) {
+            result[KEY_SESSIONS] = currentSessions.toJson()
+        }
+        return result
+    }
+
+    /**
+     * Restores YouTube Music accounts, channel profiles, session cookies, and
+     * service secrets from a backup archive and immediately activates the
+     * restored session on [Innertube] and notifies active UI observers.
+     */
+    fun importBackupData(values: Map<String, String>) {
+        prefs.edit().apply {
+            for (key in BACKUP_KEYS) {
+                remove(key)
+            }
+            for ((key, value) in values) {
+                if (key in BACKUP_KEYS && value.isNotEmpty()) {
+                    putString(key, value)
+                }
+            }
+        }.apply()
+
+        // Ensure legacy single-cookie backups are promoted into structured sessions
+        val restoredSessions = sessions
+        val active = activeSession
+        if (active != null) {
+            val resolvedProfile = active.profiles.firstOrNull { it.profileId == activeProfileId }
+                ?: active.profiles.firstOrNull { it.profileId == active.activeProfileId }
+                ?: active.profiles.firstOrNull()
+            select(active.accountId, resolvedProfile?.profileId ?: active.activeProfileId)
+            cookie = active.cookie
+            Innertube.cookie = active.cookie
+            if (resolvedProfile != null) {
+                selectChannel(
+                    pageId = resolvedProfile.pageId,
+                    dataSyncId = resolvedProfile.dataSyncId,
+                    name = resolvedProfile.name,
+                    authUser = resolvedProfile.authUser,
+                )
+                Innertube.selectChannel(
+                    resolvedProfile.pageId,
+                    resolvedProfile.dataSyncId,
+                    resolvedProfile.authUser,
+                )
+            } else {
+                Innertube.selectChannel(channelPageId, channelDataSyncId, channelAuthUser)
+            }
+        } else if (restoredSessions.isEmpty()) {
+            Innertube.cookie = null
+            Innertube.selectChannel(null, null, null)
+        }
+        _restoredEvents.tryEmit(Unit)
+    }
+
     companion object {
+        private val _restoredEvents = MutableSharedFlow<Unit>(
+            extraBufferCapacity = 1,
+            onBufferOverflow = BufferOverflow.DROP_OLDEST,
+        )
+
+        /** Emits whenever [importBackupData] restores auth credentials so the UI updates immediately. */
+        val restoredEvents: SharedFlow<Unit> = _restoredEvents.asSharedFlow()
+
         /**
          * Whether a cookie header carries a secret Innertube requests can be
          * signed with.
-         *
-         * Matched on the cookie *name*, which reads as pedantry and is not. The
-         * test used to be `cookie.contains("SAPISID")`, and `__Secure-3PAPISID`
-         * contains "SAPISID" — so a jar holding only the `__Secure-` forms, which
-         * is what a partitioned-cookie login produces, passed a check for a
-         * cookie it did not have. The app then declared itself signed in and made
-         * every request unsigned, which Google answers as a stranger. Library
-         * reads degraded quietly and history was never written at all.
          */
         fun hasApiSid(cookieHeader: String): Boolean =
             cookieHeader.split(';').any { entry ->
@@ -223,5 +283,19 @@ class AuthStore(context: Context) {
         private const val KEY_DISCORD_TOKEN = "discord_token"
         private const val KEY_WEBDAV_PASSWORD = "webdav_password"
         private const val KEY_SMB_PASSWORD = "smb_password"
+
+        private val BACKUP_KEYS = setOf(
+            KEY_COOKIE,
+            KEY_SESSIONS,
+            KEY_ACTIVE_ACCOUNT,
+            KEY_ACTIVE_PROFILE,
+            KEY_CHANNEL_PAGE_ID,
+            KEY_CHANNEL_DATASYNC_ID,
+            KEY_CHANNEL_NAME,
+            KEY_CHANNEL_AUTH_USER,
+            KEY_DISCORD_TOKEN,
+            KEY_WEBDAV_PASSWORD,
+            KEY_SMB_PASSWORD,
+        )
     }
 }

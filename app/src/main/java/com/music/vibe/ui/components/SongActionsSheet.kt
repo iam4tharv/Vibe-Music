@@ -5,7 +5,9 @@ import com.music.vibe.data.settings.AppSettings
 
 import android.net.Uri
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -52,12 +54,17 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -73,6 +80,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -86,7 +94,10 @@ import com.music.vibe.download.DownloadState
 import com.music.vibe.download.Downloads
 import com.music.vibe.playback.SleepTimer
 import com.music.vibe.ui.components.thumbnailBorder
+import com.music.vibe.ui.haptics.Haptic
+import com.music.vibe.ui.haptics.rememberHaptics
 import com.music.vibe.ui.icons.VibeMusicIcons
+import com.music.vibe.ui.player.ThinSlider
 import com.music.vibe.ui.theme.ArtworkPalette
 import com.music.vibe.ui.theme.rememberArtworkPalette
 import kotlinx.coroutines.delay
@@ -674,45 +685,192 @@ private fun WebDavUploadRow(
     }
 }
 
-/** End of track or a duration, plus a way out once one is running. */
+/** End of track, a preset duration, or a custom duration (5 min to 12 hr). */
 @Composable
 private fun SleepTimerPicker(palette: ArtworkPalette, onBack: () -> Unit) {
     val chosen by SleepTimer.minutes.collectAsStateWithLifecycle()
     val afterTrack by SleepTimer.afterTrack.collectAsStateWithLifecycle()
     val countdown = sleepTimerCountdown()
+    var showCustomPage by remember { mutableStateOf(false) }
 
-    Column(Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 8.dp, end = 22.dp, bottom = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            IconButton(onClick = onBack) {
-                Icon(
-                    Icons.AutoMirrored.Rounded.ArrowBack,
-                    contentDescription = stringResource(R.string.back),
-                    tint = MaterialTheme.colorScheme.onBackground,
-                )
-            }
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = stringResource(R.string.sleep_timer),
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onBackground,
-                )
-                Text(
-                    text = when {
-                        countdown != null -> stringResource(R.string.pause_countdown, countdown)
-                        afterTrack -> stringResource(R.string.pause_after_song)
-                        else -> stringResource(R.string.pause_after_a_while)
-                    },
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+    if (showCustomPage) {
+        BackHandler { showCustomPage = false }
+        val haptics = rememberHaptics()
+        var customMinutes by remember {
+            mutableIntStateOf(
+                chosen?.coerceIn(SleepTimer.MIN_MINUTES, SleepTimer.MAX_MINUTES) ?: 35,
+            )
         }
-        HorizontalDivider(thickness = 0.5.dp, color = palette.divider)
+        Column(Modifier.fillMaxWidth()) {
+            SleepTimerHeader(
+                palette = palette,
+                countdown = countdown,
+                afterTrack = afterTrack,
+                onBack = { showCustomPage = false },
+            )
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 18.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(MaterialTheme.colorScheme.onBackground.copy(alpha = 0.06f))
+                        .padding(horizontal = 12.dp, vertical = 16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text(
+                        text = formatSleepDurationLabel(customMinutes),
+                        style = MaterialTheme.typography.headlineMedium.copy(
+                            fontWeight = FontWeight.SemiBold,
+                        ),
+                        color = MaterialTheme.colorScheme.onBackground,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        val canDecrease = customMinutes > SleepTimer.MIN_MINUTES
+                        IconButton(
+                            onClick = {
+                                haptics.play(Haptic.Select)
+                                customMinutes = (customMinutes - SleepTimer.STEP_MINUTES)
+                                    .coerceAtLeast(SleepTimer.MIN_MINUTES)
+                            },
+                            enabled = canDecrease,
+                        ) {
+                            Text(
+                                text = "−",
+                                style = MaterialTheme.typography.titleLarge,
+                                color = MaterialTheme.colorScheme.onBackground.copy(
+                                    alpha = if (canDecrease) 0.85f else 0.25f,
+                                ),
+                            )
+                        }
+                        ThinSlider(
+                            value = SleepTimer.fractionOf(customMinutes),
+                            onValueChange = { fraction ->
+                                val next = SleepTimer.minutesAt(fraction)
+                                if (next != customMinutes) {
+                                    customMinutes = next
+                                }
+                            },
+                            idleHeight = 6.dp,
+                            activeHeight = 10.dp,
+                            activeColor = palette.accent,
+                            inactiveColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.22f),
+                            modifier = Modifier.weight(1f),
+                        )
+                        val canIncrease = customMinutes < SleepTimer.MAX_MINUTES
+                        IconButton(
+                            onClick = {
+                                haptics.play(Haptic.Select)
+                                customMinutes = (customMinutes + SleepTimer.STEP_MINUTES)
+                                    .coerceAtMost(SleepTimer.MAX_MINUTES)
+                            },
+                            enabled = canIncrease,
+                        ) {
+                            Text(
+                                text = "+",
+                                style = MaterialTheme.typography.titleLarge,
+                                color = MaterialTheme.colorScheme.onBackground.copy(
+                                    alpha = if (canIncrease) 0.85f else 0.25f,
+                                ),
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        SleepTimer.QUICK_CUSTOM_MINUTES.forEach { presetMins ->
+                            val isSelected = customMinutes == presetMins
+                            val chipShape = RoundedCornerShape(999.dp)
+                            Box(
+                                modifier = Modifier
+                                    .clip(chipShape)
+                                    .background(
+                                        if (isSelected) {
+                                            palette.accent.copy(alpha = 0.22f)
+                                        } else {
+                                            MaterialTheme.colorScheme.onBackground.copy(alpha = 0.08f)
+                                        },
+                                    )
+                                    .border(
+                                        width = 1.dp,
+                                        color = if (isSelected) {
+                                            palette.accent.copy(alpha = 0.65f)
+                                        } else {
+                                            MaterialTheme.colorScheme.onBackground.copy(alpha = 0.12f)
+                                        },
+                                        shape = chipShape,
+                                    )
+                                    .clickable {
+                                        haptics.play(Haptic.Select)
+                                        customMinutes = presetMins
+                                    }
+                                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(
+                                    text = SleepTimer.formatQuickChipLabel(presetMins),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
+                                    color = if (isSelected) {
+                                        palette.accent
+                                    } else {
+                                        MaterialTheme.colorScheme.onBackground.copy(alpha = 0.80f)
+                                    },
+                                )
+                            }
+                        }
+                    }
+                }
+                Spacer(Modifier.height(18.dp))
+                Button(
+                    onClick = {
+                        haptics.play(Haptic.Tap)
+                        SleepTimer.start(customMinutes)
+                        onBack()
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = palette.accent,
+                        contentColor = Color.White,
+                    ),
+                ) {
+                    Text(
+                        text = stringResource(R.string.start_sleep_timer),
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+            }
+            Spacer(Modifier.height(16.dp))
+        }
+        return
+    }
+
+    val isCustomActive = chosen != null && chosen !in SleepTimer.PRESETS
+    Column(Modifier.fillMaxWidth()) {
+        SleepTimerHeader(
+            palette = palette,
+            countdown = countdown,
+            afterTrack = afterTrack,
+            onBack = onBack,
+        )
 
         // Finishing the song is the one people reach for at the end of a
         // listen, so it leads rather than sitting under the durations.
@@ -738,6 +896,17 @@ private fun SleepTimerPicker(palette: ArtworkPalette, onBack: () -> Unit) {
                 onBack()
             }
         }
+        SleepOption(
+            label = stringResource(R.string.sleep_timer_custom),
+            value = chosen?.takeIf { isCustomActive }?.let { mins ->
+                val durationLabel = formatSleepDurationLabel(mins)
+                if (countdown != null) "$durationLabel · $countdown" else durationLabel
+            },
+            selected = isCustomActive,
+            accent = palette.accent,
+        ) {
+            showCustomPage = true
+        }
         if (chosen != null || afterTrack) {
             ActionRow(Icons.Rounded.Close, stringResource(R.string.turn_off_timer), accent = palette.accent) {
                 SleepTimer.cancel()
@@ -749,8 +918,61 @@ private fun SleepTimerPicker(palette: ArtworkPalette, onBack: () -> Unit) {
 }
 
 @Composable
+private fun SleepTimerHeader(
+    palette: ArtworkPalette,
+    countdown: String?,
+    afterTrack: Boolean,
+    onBack: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 8.dp, end = 22.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        IconButton(onClick = onBack) {
+            Icon(
+                Icons.AutoMirrored.Rounded.ArrowBack,
+                contentDescription = stringResource(R.string.back),
+                tint = MaterialTheme.colorScheme.onBackground,
+            )
+        }
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = stringResource(R.string.sleep_timer),
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onBackground,
+            )
+            Text(
+                text = when {
+                    countdown != null -> stringResource(R.string.pause_countdown, countdown)
+                    afterTrack -> stringResource(R.string.pause_after_song)
+                    else -> stringResource(R.string.pause_after_a_while)
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+    HorizontalDivider(thickness = 0.5.dp, color = palette.divider)
+}
+
+@Composable
+private fun formatSleepDurationLabel(minutes: Int): String {
+    val hours = minutes / 60
+    val remMinutes = minutes % 60
+    return when {
+        hours == 0 -> pluralStringResource(R.plurals.minute_count, remMinutes, remMinutes)
+        hours == 1 && remMinutes == 0 -> stringResource(R.string.one_hour)
+        remMinutes == 0 -> "$hours hr"
+        else -> "$hours hr $remMinutes min"
+    }
+}
+
+@Composable
 private fun SleepOption(
     label: String,
+    value: String? = null,
     selected: Boolean,
     accent: Color,
     onClick: () -> Unit,
@@ -768,6 +990,14 @@ private fun SleepOption(
             color = MaterialTheme.colorScheme.onBackground,
             modifier = Modifier.weight(1f),
         )
+        if (value != null) {
+            Text(
+                text = value,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.width(10.dp))
+        }
         if (selected) {
             Icon(
                 Icons.Rounded.Check,
@@ -786,7 +1016,7 @@ private fun sleepTimerStatus(): String? {
     return sleepTimerCountdown() ?: stringResource(R.string.after_this_song).takeIf { afterTrack }
 }
 
-/** Live "m:ss" until the sleep timer fires, or null when none is running. */
+/** Live "h:mm:ss" or "m:ss" until the sleep timer fires, or null when none is running. */
 @Composable
 private fun sleepTimerCountdown(): String? {
     val deadline by SleepTimer.deadline.collectAsStateWithLifecycle()
@@ -797,10 +1027,7 @@ private fun sleepTimerCountdown(): String? {
         }
         value = null
     }
-    return remaining?.let {
-        val seconds = it / 1000
-        "%d:%02d".format(Locale.ROOT, seconds / 60, seconds % 60)
-    }
+    return remaining?.let(SleepTimer::formatRemaining)
 }
 
 /**

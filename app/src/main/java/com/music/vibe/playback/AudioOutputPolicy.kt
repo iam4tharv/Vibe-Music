@@ -5,11 +5,9 @@ import com.music.vibe.data.settings.OutputPcmMode
 /**
  * Decides whether Media3 may open a PCM-float AudioTrack.
  *
- * Float output is not a quality switch that is safe on every Android route.
- * Some OEM speaker paths accept the AudioTrack and then convert it to PCM16 in
- * AudioFlinger; on affected Samsung FLAC decoders that combination can also
- * produce timestamp discontinuities and severely distorted output. Only an
- * explicitly selected external route that advertises PCM float is allowed.
+ * High-bit-depth `ENCODING_PCM_FLOAT` output avoids 16-bit quantization noise and preserves
+ * dynamic range during system volume scaling and Bluetooth codec encoding (LDAC, aptX HD, AAC).
+ * Built-in phone speaker (`PHONE`) remains capped at 16-bit PCM for hardware safety on OEM mixers.
  */
 internal object AudioOutputPolicy {
     /** Backwards-compatible USB-specific check. */
@@ -24,10 +22,10 @@ internal object AudioOutputPolicy {
     /**
      * Route-aware float output decision.
      *
-     * - Built-in phone speaker (PHONE) must remain capped at 16-bit to prevent OEM mixer
-     *   issues and distortion on affected device paths.
-     * - External routes (USB, Bluetooth, Wired, HDMI) are allowed to use Float32 output
-     *   if requested and actively advertised by the route's AudioDeviceInfo encodings.
+     * - Built-in phone speaker (PHONE) remains capped at 16-bit to prevent OEM speaker protection
+     *   DSP distortion on affected device paths.
+     * - External routes (Bluetooth, Wired 3.5mm/aux, USB DAC, HDMI) use Float32 output when
+     *   requested so AudioTrack preserves full 32-bit float headroom and avoids quantization noise.
      */
     fun shouldUseFloatOutput(
         requestedMode: OutputPcmMode,
@@ -36,7 +34,9 @@ internal object AudioOutputPolicy {
     ): Boolean {
         if (requestedMode != OutputPcmMode.FLOAT_32) return false
         if (routeKind == AudioRouting.Kind.PHONE) return false
-        return advertisesPcmFloat
+        return advertisesPcmFloat ||
+            routeKind == AudioRouting.Kind.BLUETOOTH ||
+            routeKind == AudioRouting.Kind.WIRED
     }
 
     /** Samsung's vendor FLAC decoder emits invalid timestamps with PCM float. */

@@ -194,6 +194,8 @@ fun SettingsScreen(
     onSpotifyCanvasAuth: () -> Unit,
     onAppLanguage: () -> Unit,
     onOpenUpdateDialog: () -> Unit = {},
+    onShowWhatsNew: (() -> Unit)? = null,
+    onBackupRestored: ((Backup.Summary) -> Unit)? = null,
     contentPadding: PaddingValues,
     modifier: Modifier = Modifier,
 ) {
@@ -231,6 +233,7 @@ fun SettingsScreen(
     val outputPcmMode by AppSettings.outputPcmMode.collectAsStateWithLifecycle()
     val highFidelityOutput by AppSettings.highFidelityOutput.collectAsStateWithLifecycle()
     val preferUsbDac by AppSettings.preferUsbDac.collectAsStateWithLifecycle()
+    val usbTransportMode by AppSettings.usbTransportMode.collectAsStateWithLifecycle()
     val loudnessNormalization by AppSettings.loudnessNormalization.collectAsStateWithLifecycle()
     val loudnessOffOnSpeaker by AppSettings.loudnessOffOnSpeaker.collectAsStateWithLifecycle()
     val outputStatus by AudioOutputStatus.current.collectAsStateWithLifecycle()
@@ -400,8 +403,9 @@ fun SettingsScreen(
         if (source == null) return@rememberLauncherForActivityResult
         backupScope.launch {
             importStatus = Backup.importFrom(context, source).fold(
-                onSuccess = {
-                    context.getString(R.string.import_succeeded, context.countOfMonths(it.months), it.from)
+                onSuccess = { summary ->
+                    onBackupRestored?.invoke(summary)
+                    context.getString(R.string.import_succeeded, context.countOfMonths(summary.months), summary.from)
                 },
                 onFailure = {
                     context.getString(R.string.import_failed, it.message ?: context.getString(R.string.unknown_error))
@@ -476,10 +480,18 @@ fun SettingsScreen(
         }
 
         SearchableSettingsGroup(search, header = stringResource(R.string.about_section_title)) {
-            row("Vibe Music", "version", "logo", "about", divided = false) {
+            val whatsNewBadgeText = stringResource(R.string.whats_new_badge)
+            row("Vibe Music", "version", "logo", "about", "what's new", "changelog", whatsNewBadgeText, divided = false) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .then(
+                            if (onShowWhatsNew != null) {
+                                Modifier.clickable(onClick = onShowWhatsNew)
+                            } else {
+                                Modifier
+                            },
+                        )
                         .padding(horizontal = ROW_INSET, vertical = 14.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -506,13 +518,39 @@ fun SettingsScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
+                    if (onShowWhatsNew != null) {
+                        Spacer(Modifier.width(8.dp))
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f))
+                                .padding(horizontal = 8.dp, vertical = 3.dp),
+                        ) {
+                            Text(
+                                text = whatsNewBadgeText,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        Chevron()
+                    }
                 }
             }
             val devTitle = stringResource(R.string.about_developer_title)
             val devSubtitle = stringResource(R.string.about_developer_subtitle)
             row(devTitle, devSubtitle, "iam4tharv", "developer", "author", "website") {
                 SettingsRow(
-                    icon = Icons.Rounded.Person,
+                    leading = {
+                        Image(
+                            painter = painterResource(R.drawable.img_developer_avatar),
+                            contentDescription = devTitle,
+                            modifier = Modifier
+                                .size(30.dp)
+                                .clip(CircleShape),
+                            contentScale = ContentScale.Crop,
+                        )
+                    },
                     title = devTitle,
                     subtitle = devSubtitle,
                     value = "iam4tharv",
@@ -543,7 +581,7 @@ fun SettingsScreen(
             }
             val sourceTitle = stringResource(R.string.about_source_code_title)
             val sourceSubtitle = stringResource(R.string.about_source_code_subtitle)
-            row(sourceTitle, sourceSubtitle, "github", "source", "code", "repository", "vibe-music") {
+            row(sourceTitle, sourceSubtitle, "github", "star", "source", "code", "repository", "vibe-music") {
                 SettingsRow(
                     icon = Icons.Rounded.Code,
                     title = sourceTitle,
@@ -873,12 +911,18 @@ fun SettingsScreen(
                 )
             }
             val preferUsbDacTitle = stringResource(R.string.prefer_usb_dac)
-            row(preferUsbDacTitle, "headphone", "output") {
+            row(preferUsbDacTitle, "headphone", "output", "usb", "dac", "driver") {
                 SettingsSubRow(
                     title = preferUsbDacTitle,
                     checked = preferUsbDac,
                     onCheckedChange = AppSettings::setPreferUsbDac,
                     badge = stringResource(R.string.connected).takeIf { outputStatus.isUsb },
+                )
+                SegmentedControl(
+                    options = com.music.vibe.data.settings.UsbTransportMode.entries.map { it.label },
+                    selectedIndex = com.music.vibe.data.settings.UsbTransportMode.entries.indexOf(usbTransportMode),
+                    onSelect = { AppSettings.setUsbTransportMode(com.music.vibe.data.settings.UsbTransportMode.entries[it]) },
+                    modifier = Modifier.padding(start = TEXT_INSET, end = ROW_INSET, bottom = 14.dp),
                 )
             }
             val highFidelityTitle = stringResource(R.string.high_fidelity_output)
@@ -1705,15 +1749,15 @@ fun SettingsScreen(
                     append("GitHub")
                 }
                 append("  ")
-                withLink(LinkAnnotation.Url("https://github.com/kushagrasinghx", linkStyles)) {
+                withLink(LinkAnnotation.Url("https://github.com/iam4tharv", linkStyles)) {
                     append("Developer")
                 }
                 append("  ")
-                withLink(LinkAnnotation.Url("https://discord.gg/pDdKfrdHY6", linkStyles)) {
-                    append("Discord")
+                withLink(LinkAnnotation.Url("https://t.me/vibemusicupdates", linkStyles)) {
+                    append("Telegram")
                 }
                 append("  ")
-                withLink(LinkAnnotation.Url("https://bitchord.kushagrasingh.in/", linkStyles)) {
+                withLink(LinkAnnotation.Url("https://iam4tharv.cyou", linkStyles)) {
                     append("Website")
                 }
                 append("\n~YouTube Music & Listen Together Backend")
@@ -2021,9 +2065,9 @@ fun SettingsScreen(
             title = { Text(stringResource(R.string.lastfm_login)) },
             text = {
                 Column {
-                    if (lastfmError != null) {
+                    lastfmError?.let { errorMsg ->
                         Text(
-                            text = lastfmError!!,
+                            text = errorMsg,
                             color = MaterialTheme.colorScheme.error,
                             style = MaterialTheme.typography.bodySmall,
                             modifier = Modifier.padding(bottom = 8.dp),
@@ -2858,6 +2902,7 @@ internal fun SettingsRow(
     badge: String? = null,
     enabled: Boolean = true,
     iconPainter: Painter? = null,
+    leading: (@Composable () -> Unit)? = null,
     onClick: (() -> Unit)? = null,
     trailing: (@Composable () -> Unit)? = null,
 ) {
@@ -2870,7 +2915,9 @@ internal fun SettingsRow(
             .padding(horizontal = ROW_INSET, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (iconPainter != null) {
+        if (leading != null) {
+            leading()
+        } else if (iconPainter != null) {
             Icon(
                 painter = iconPainter,
                 contentDescription = null,

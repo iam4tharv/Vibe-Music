@@ -402,7 +402,7 @@ class TrackAnalyzer(private val context: Context, private val cache: AudioCache)
                         store.save(trackId, whole)
                         restoreAttempted.add(trackId)
                     } else if (outcome.decodedShort &&
-                        shortDecodes.merge(trackId, 1, Int::plus)!! >= MAX_SHORT_DECODE_ATTEMPTS
+                        (shortDecodes.merge(trackId, 1, Int::plus) ?: 0) >= MAX_SHORT_DECODE_ATTEMPTS
                     ) {
                         // Bounded, so a container that is genuinely truncated
                         // isn't re-decoded on every tick for the rest of the
@@ -417,11 +417,11 @@ class TrackAnalyzer(private val context: Context, private val cache: AudioCache)
                             )
                         }
                     }
-                } else {
+                } else if (headRendition != null) {
                     // Marked before it is published, so a reader on the playback
                     // thread can never see a provisional result that is not
                     // flagged as one.
-                    analyzeHead(trackId, analysisUri, durationSeconds, headRendition!!)?.let { head ->
+                    analyzeHead(trackId, analysisUri, durationSeconds, headRendition)?.let { head ->
                         provisional.add(trackId)
                         results[trackId] = head
                     }

@@ -32,7 +32,11 @@ object LocalPlaylistStore {
 
     private fun load() {
         if (!this::prefs.isInitialized) return
-        val raw = prefs.getString(KEY_PLAYLISTS, null) ?: return
+        val raw = prefs.getString(KEY_PLAYLISTS, null)
+        if (raw.isNullOrBlank()) {
+            _playlists.value = emptyList()
+            return
+        }
         runCatching {
             val list = mutableListOf<LocalPlaylist>()
             val jsonArray = JSONArray(raw)
@@ -48,11 +52,11 @@ object LocalPlaylistStore {
                         videoId = sObj.optString("videoId", ""),
                         title = sObj.optString("title", ""),
                         artist = sObj.optString("artist", ""),
-                        thumbnailUrl = sObj.optString("thumbnailUrl", null).takeIf { !it.isNullOrBlank() && it != "null" },
-                        durationText = sObj.optString("durationText", null).takeIf { !it.isNullOrBlank() && it != "null" },
-                        artistId = sObj.optString("artistId", null).takeIf { !it.isNullOrBlank() && it != "null" },
-                        albumId = sObj.optString("albumId", null).takeIf { !it.isNullOrBlank() && it != "null" },
-                        albumName = sObj.optString("albumName", null).takeIf { !it.isNullOrBlank() && it != "null" },
+                        thumbnailUrl = sObj.optString("thumbnailUrl", "").takeIf { it.isNotBlank() && it != "null" },
+                        durationText = sObj.optString("durationText", "").takeIf { it.isNotBlank() && it != "null" },
+                        artistId = sObj.optString("artistId", "").takeIf { it.isNotBlank() && it != "null" },
+                        albumId = sObj.optString("albumId", "").takeIf { it.isNotBlank() && it != "null" },
+                        albumName = sObj.optString("albumName", "").takeIf { it.isNotBlank() && it != "null" },
                         isVideo = sObj.optBoolean("isVideo", false),
                     )
                     songs.add(song)
@@ -60,6 +64,22 @@ object LocalPlaylistStore {
                 list.add(LocalPlaylist(id, title, songs))
             }
             _playlists.value = list
+        }
+    }
+
+    fun exportJson(): String? {
+        if (!this::prefs.isInitialized) return null
+        return prefs.getString(KEY_PLAYLISTS, null)
+    }
+
+    fun importJson(raw: String?) {
+        if (!this::prefs.isInitialized) return
+        if (raw.isNullOrBlank()) {
+            prefs.edit().remove(KEY_PLAYLISTS).apply()
+            _playlists.value = emptyList()
+        } else {
+            prefs.edit().putString(KEY_PLAYLISTS, raw).apply()
+            load()
         }
     }
 

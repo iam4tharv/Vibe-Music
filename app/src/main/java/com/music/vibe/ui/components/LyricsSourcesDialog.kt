@@ -2,7 +2,17 @@ package com.music.vibe.ui.components
 
 import com.music.vibe.R
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.rememberScrollState
@@ -15,14 +25,18 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.DragHandle
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
@@ -44,6 +58,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -66,19 +81,9 @@ import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
 import dev.chrisbanes.haze.materials.HazeMaterials
 
 /**
- * Which lyric databases the player is allowed to ask.
- *
- * Same frosted iOS alert as [UpdateAvailableDialog], down to the shared
- * [ALERT_WIDTH]/[ALERT_CORNER] metrics and hairline [AlertRule]s, with the
- * action rows swapped for checkable ones. Checkmarks rather than Material
- * checkboxes: that is what a multiple-selection list looks like in this
- * lineage, and a column of square boxes would be the one Material thing left
- * on an otherwise Apple-shaped alert.
- *
- * The order shown is the order they are tried, and it is the user's to set:
- * drag a row by its handle to move it, which reorders independently of
- * whether the row is ticked — priority and participation are different
- * questions, and this is the one dialog for both.
+ * Light-black Liquid Glass modal for selecting and drag-reordering lyric
+ * providers, toggling word-by-word syllable sync priority, and configuring the
+ * PaxSenix API key.
  */
 @OptIn(ExperimentalHazeMaterialsApi::class)
 @Composable
@@ -86,6 +91,7 @@ fun LyricsSourcesDialog(
     hazeState: HazeState,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
+    visible: Boolean = true,
 ) {
     val reduceDynamicBlur by AppSettings.reduceDynamicBlur.collectAsStateWithLifecycle()
     val selected by AppSettings.lyricsSources.collectAsStateWithLifecycle()
@@ -93,116 +99,221 @@ fun LyricsSourcesDialog(
     val prioritizeSyllableSync by AppSettings.prioritizeSyllableSync.collectAsStateWithLifecycle()
     val paxSenixApiKey by AppSettings.paxSenixApiKey.collectAsStateWithLifecycle()
     var showPaxSenixKeyDialog by remember { mutableStateOf(false) }
-    val shape = RoundedCornerShape(ALERT_CORNER)
+
+    val glassSupported = isGlassSupported()
+    val isLightSurface = MaterialTheme.colorScheme.surface.luminance() > 0.5f
+
+    val innerGroupFill = if (isLightSurface) {
+        Color.Black.copy(alpha = 0.05f)
+    } else {
+        Color(0xFF282830).copy(alpha = 0.88f)
+    }
+    val innerGroupBorder = if (isLightSurface) {
+        Color.Black.copy(alpha = 0.08f)
+    } else {
+        Color.White.copy(alpha = 0.10f)
+    }
+
+    if (visible) {
+        BackHandler(onBack = onDismiss)
+    }
 
     Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(SCRIM_COLOR)
-            .clickable(
-                indication = null,
-                interactionSource = remember { MutableInteractionSource() },
-                onClick = onDismiss,
-            ),
+        modifier = modifier.fillMaxSize(),
         contentAlignment = Alignment.Center,
     ) {
-        Column(
-            modifier = Modifier
-                .width(ALERT_WIDTH)
-                .clip(shape)
-                .then(
-                    if (reduceDynamicBlur) {
-                        Modifier.background(MaterialTheme.colorScheme.surface)
-                    } else {
-                        Modifier.optimizedHazeEffect(
-                            state = hazeState,
-                            style = HazeMaterials.regular(MaterialTheme.colorScheme.surface),
-                        )
-                    },
-                )
-                // Swallows the tap before it reaches the scrim behind, so
-                // touching the card itself never dismisses it.
-                .clickable(
-                    indication = null,
-                    interactionSource = remember { MutableInteractionSource() },
-                    onClick = {},
+        AnimatedVisibility(
+            visible = visible,
+            enter = fadeIn(tween(220)),
+            exit = fadeOut(tween(180)),
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.60f))
+                    .clickable(
+                        indication = null,
+                        interactionSource = remember { MutableInteractionSource() },
+                        onClick = onDismiss,
+                    ),
+            )
+        }
+
+        AnimatedVisibility(
+            visible = visible,
+            enter = scaleIn(
+                initialScale = 0.94f,
+                animationSpec = spring(
+                    dampingRatio = 0.78f,
+                    stiffness = Spring.StiffnessMediumLow,
                 ),
+            ) + fadeIn(tween(220)),
+            exit = scaleOut(
+                targetScale = 0.94f,
+                animationSpec = tween(160),
+            ) + fadeOut(tween(160)),
         ) {
             Column(
                 modifier = Modifier
+                    .padding(horizontal = 24.dp)
+                    .widthIn(max = 340.dp)
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 19.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Text(
-                    text = stringResource(R.string.lyrics_sources),
-                    style = MaterialTheme.typography.bodyLarge.copy(
-                        fontSize = 17.sp,
-                        fontWeight = FontWeight.W600,
-                    ),
-                    color = MaterialTheme.colorScheme.onSurface,
-                    textAlign = TextAlign.Center,
-                )
-                Text(
-                    text = stringResource(R.string.lyrics_sources_order),
-                    modifier = Modifier.padding(top = 4.dp),
-                    style = MaterialTheme.typography.bodyMedium.copy(
-                        fontSize = 13.sp,
-                        lineHeight = 17.sp,
-                    ),
-                    color = MaterialTheme.colorScheme.onSurface,
-                    textAlign = TextAlign.Center,
-                )
-            }
-
-            // Capped and scrolled rather than laid out at full height: there
-            // are enough providers now that the card ran off both ends of a
-            // phone, taking Reset and Done with it. Still a plain Column
-            // inside — the drag measures itself against a fixed row pitch and
-            // a lazy list would recycle the row being dragged out from under
-            // the finger. The cap and its scroll state live inside
-            // [ReorderableSourceList] itself, since the edge auto-scroll needs
-            // both.
-            ReorderableSourceList(
-                order = savedOrder,
-                selected = selected,
-                onReorder = AppSettings::setLyricsSourceOrder,
-                onToggle = { source ->
-                    val checked = source in selected
-                    // The last one standing can't be unchecked — an empty
-                    // list is indistinguishable from switching lyrics off,
-                    // and there is already a switch for that a row above
-                    // this dialog.
-                    if (checked && selected.size <= 1) return@ReorderableSourceList
-                    AppSettings.setLyricsSources(
-                        if (checked) selected - source else selected + source,
+                    .clip(POPUP_CORNER_SHAPE)
+                    .then(
+                        when {
+                            glassSupported && !reduceDynamicBlur -> {
+                                Modifier.popupLiquidGlass(
+                                    shape = POPUP_CORNER_SHAPE,
+                                    isLightSurface = isLightSurface,
+                                )
+                            }
+                            !reduceDynamicBlur -> {
+                                Modifier
+                                    .optimizedHazeEffect(
+                                        state = hazeState,
+                                        style = HazeMaterials.regular(
+                                            if (isLightSurface) Color(0xFFF2F2F7) else Color(0xFF1C1C22),
+                                        ),
+                                    )
+                                    .background(
+                                        if (isLightSurface) {
+                                            Color(0xFFF2F2F7).copy(alpha = 0.90f)
+                                        } else {
+                                            Color(0xFF1C1C22).copy(alpha = 0.90f)
+                                        },
+                                    )
+                                    .border(
+                                        width = 0.75.dp,
+                                        color = if (isLightSurface) {
+                                            Color.Black.copy(alpha = 0.10f)
+                                        } else {
+                                            Color.White.copy(alpha = 0.16f)
+                                        },
+                                        shape = POPUP_CORNER_SHAPE,
+                                    )
+                            }
+                            else -> {
+                                Modifier
+                                    .background(
+                                        if (isLightSurface) Color(0xFFF2F2F7) else Color(0xFF1C1C22),
+                                    )
+                                    .border(
+                                        width = 0.75.dp,
+                                        color = if (isLightSurface) {
+                                            Color.Black.copy(alpha = 0.10f)
+                                        } else {
+                                            Color.White.copy(alpha = 0.14f)
+                                        },
+                                        shape = POPUP_CORNER_SHAPE,
+                                    )
+                            }
+                        },
                     )
-                },
-            )
+                    .clickable(
+                        indication = null,
+                        interactionSource = remember { MutableInteractionSource() },
+                        onClick = {},
+                    )
+                    .padding(horizontal = 18.dp, vertical = 20.dp),
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 6.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text(
+                        text = stringResource(R.string.lyrics_sources),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        textAlign = TextAlign.Center,
+                    )
+                    Text(
+                        text = stringResource(R.string.lyrics_sources_order),
+                        modifier = Modifier.padding(top = 4.dp),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                    )
+                }
 
-            AlertRule()
-            AlertAction(
-                label = stringResource(
-                    if (paxSenixApiKey.isBlank()) R.string.paxsenix_api_key_missing
-                    else R.string.paxsenix_api_key_configured,
-                ),
-                emphasised = false,
-                onClick = { showPaxSenixKeyDialog = true },
-            )
-            AlertRule()
-            SyllableSyncToggle(
-                checked = prioritizeSyllableSync,
-                onToggle = { AppSettings.setPrioritizeSyllableSync(!prioritizeSyllableSync) },
-            )
+                Spacer(Modifier.height(14.dp))
 
-            AlertRule()
-            AlertAction(
-                label = stringResource(R.string.reset_to_default),
-                emphasised = false,
-                onClick = AppSettings::resetLyricsSourceSettings,
-            )
-            AlertRule()
-            AlertAction(label = stringResource(R.string.done), emphasised = true, onClick = onDismiss)
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(GROUP_CORNER_SHAPE)
+                        .background(innerGroupFill)
+                        .border(0.5.dp, innerGroupBorder, GROUP_CORNER_SHAPE),
+                ) {
+                    ReorderableSourceList(
+                        order = savedOrder,
+                        selected = selected,
+                        onReorder = AppSettings::setLyricsSourceOrder,
+                        onToggle = { source ->
+                            val checked = source in selected
+                            if (checked && selected.size <= 1) return@ReorderableSourceList
+                            AppSettings.setLyricsSources(
+                                if (checked) selected - source else selected + source,
+                            )
+                        },
+                    )
+                }
+
+                Spacer(Modifier.height(10.dp))
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(GROUP_CORNER_SHAPE)
+                        .background(innerGroupFill)
+                        .border(0.5.dp, innerGroupBorder, GROUP_CORNER_SHAPE),
+                ) {
+                    AlertAction(
+                        label = stringResource(
+                            if (paxSenixApiKey.isBlank()) R.string.paxsenix_api_key_missing
+                            else R.string.paxsenix_api_key_configured,
+                        ),
+                        emphasised = false,
+                        onClick = { showPaxSenixKeyDialog = true },
+                    )
+                    AlertRule()
+                    SyllableSyncToggle(
+                        checked = prioritizeSyllableSync,
+                        onToggle = { AppSettings.setPrioritizeSyllableSync(!prioritizeSyllableSync) },
+                    )
+                    AlertRule()
+                    AlertAction(
+                        label = stringResource(R.string.reset_to_default),
+                        emphasised = false,
+                        onClick = AppSettings::resetLyricsSourceSettings,
+                    )
+                }
+
+                Spacer(Modifier.height(14.dp))
+
+                val primaryContainerColor = if (isLightSurface) Color(0xFF141416) else Color.White
+                val primaryContentColor = if (isLightSurface) Color.White else Color.Black
+
+                Button(
+                    onClick = onDismiss,
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = primaryContainerColor,
+                        contentColor = primaryContentColor,
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp),
+                ) {
+                    Text(
+                        text = stringResource(R.string.done),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+            }
         }
     }
 
@@ -481,7 +592,11 @@ private fun ReorderableSourceList(
                             }
                         },
                 ) {
-                    AlertRule()
+                    if (liveOrder.firstOrNull() == source) {
+                        Spacer(Modifier.height(0.5.dp))
+                    } else {
+                        AlertRule()
+                    }
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()

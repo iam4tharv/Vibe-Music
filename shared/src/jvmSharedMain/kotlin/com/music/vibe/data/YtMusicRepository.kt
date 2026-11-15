@@ -9,6 +9,7 @@ import com.music.vibe.data.model.isExactArtistMatch
 import com.music.vibe.data.model.normalizedArtistName
 import com.music.vibe.data.model.ArtistPage
 import com.music.vibe.data.model.BrowseType
+import com.music.vibe.data.model.HomeChip
 import com.music.vibe.data.model.HomeFeed
 import com.music.vibe.data.model.HomeShelf
 import com.music.vibe.data.model.LibraryPage
@@ -64,7 +65,36 @@ object YtMusicRepository {
      */
     suspend fun home(): Result<HomeFeed> = call("home") {
         val home = Innertube.browse("FEmusic_home")
-        HomeFeed(InnertubeParser.parseHome(home), InnertubeParser.continuationToken(home))
+        HomeFeed(
+            shelves = InnertubeParser.parseHome(home),
+            continuation = InnertubeParser.continuationToken(home),
+            chips = InnertubeParser.parseHomeChips(home),
+        )
+    }
+
+    /**
+     * Loads the shelves for a selected Home mood chip (`Focus`, `Workout`, `Relax`, `Energize`, etc.).
+     * If the chip carries direct Innertube browse `params`, queries that mood page directly;
+     * otherwise resolves the matching mood category from `FEmusic_moods_and_genres`.
+     */
+    suspend fun homeChipShelves(chip: HomeChip): Result<List<HomeShelf>> {
+        if (!chip.params.isNullOrBlank()) {
+            return moodGenreShelves(chip.browseId, chip.params)
+        }
+        val sections = moodAndGenres().getOrNull().orEmpty()
+        val matched = sections.asSequence()
+            .flatMap { it.items.asSequence() }
+            .firstOrNull {
+                it.title.equals(chip.title, ignoreCase = true) ||
+                    it.title.contains(chip.title, ignoreCase = true) ||
+                    chip.title.contains(it.title, ignoreCase = true)
+            }
+        if (matched != null) {
+            return moodGenreShelves(matched.browseId, matched.params)
+        }
+        return call("home-chip:${chip.title}") {
+            InnertubeParser.parseHome(Innertube.browse(chip.browseId, chip.params))
+        }
     }
 
     /** Recently played is rendered independently, at the top of the Play page. */
@@ -838,7 +868,6 @@ object YtMusicRepository {
         "Albums" to "FEmusic_liked_albums",
         "Artists" to "FEmusic_library_corpus_track_artists",
         "Subscriptions" to "FEmusic_library_corpus_artists",
-        "Podcasts" to "FEmusic_library_non_music_audio_list",
     )
 
     // ---- Writes -------------------------------------------------------------

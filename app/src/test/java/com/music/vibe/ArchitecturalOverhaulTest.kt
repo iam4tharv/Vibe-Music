@@ -565,4 +565,177 @@ class ArchitecturalOverhaulTest {
             rowSelectionKey(index = 3, song = withoutSetId, hasDuplicateVideoIds = true),
         )
     }
+
+    @Test
+    fun backupExportAndImport_usesVibemusicNameAcceptsLegacyBitchordAndRestoresYoutubeAndServiceLogins(): Unit = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val authStore = AuthStore(context)
+        AppSettings.init(context, authStore)
+        SearchHistory.init(context)
+        Downloads.init(context)
+        ListeningStats.init(context)
+
+        // 1. Verify suggested filename uses vibemusic
+        val suggested = Backup.suggestedName()
+        assertTrue(suggested.startsWith("vibemusic-backup-"))
+        assertTrue(suggested.endsWith(".json"))
+
+        // 2. Seed YouTube Music multi-account session + brand profile + connected services
+        val testCookie = "SAPISID=test_sapisid_123456; HSID=test_hsid"
+        val profile = com.music.vibe.auth.YouTubeProfile(
+            profileId = "page:UC_brand_123",
+            name = "Vibe Brand Channel",
+            handle = "@vibemusic",
+            avatar = "https://example.com/avatar.jpg",
+            pageId = "UC_brand_123",
+            dataSyncId = "datasync_999",
+            authUser = "0",
+            isBrandAccount = true,
+        )
+        val session = com.music.vibe.auth.GoogleAccountSession(
+            accountId = "acct_vibe_1",
+            cookie = testCookie,
+            name = "Vibe Listener",
+            email = "listener@example.com",
+            profiles = listOf(profile),
+            activeProfileId = profile.profileId,
+        )
+        authStore.upsertSession(session, activate = true)
+        authStore.cookie = testCookie
+        authStore.selectChannel(profile.pageId, profile.dataSyncId, profile.name, profile.authUser)
+        AppSettings.setDiscordToken("discord_secret_tok_99")
+        AppSettings.setLastfmUsername("vibe_lastfm_user")
+        AppSettings.setLastfmSessionKey("lastfm_sess_key_abc")
+        AppSettings.setListenBrainzToken("lb_token_xyz")
+        AppSettings.setSpotifySpdcToken("sp_dc_cookie_value_777")
+
+        val exportFile = java.io.File(context.cacheDir, "vibemusic-backup-test.json")
+        val exportUri = Uri.fromFile(exportFile)
+        Backup.exportTo(context, exportUri).getOrThrow()
+        val exportedJson = exportFile.readText()
+        assertTrue(exportedJson.contains("\"app\": \"vibemusic\""))
+
+        // Clear all logins and tokens
+        authStore.signOut()
+        AppSettings.clearDiscordAccount()
+        AppSettings.setLastfmUsername("")
+        AppSettings.setLastfmSessionKey("")
+        AppSettings.setListenBrainzToken("")
+        AppSettings.setSpotifySpdcToken("")
+        com.music.vibe.data.innertube.Innertube.cookie = null
+        assertFalse(authStore.isSignedIn)
+        assertEquals("", AppSettings.spotifySpdcToken.value)
+
+        // Restore from exported vibemusic backup
+        val summary = Backup.importFrom(context, exportUri).getOrThrow()
+
+        assertTrue(authStore.isSignedIn)
+        assertEquals("acct_vibe_1", authStore.activeAccountId)
+        assertEquals("page:UC_brand_123", authStore.activeProfileId)
+        assertEquals(testCookie, authStore.activeSession?.cookie)
+        assertEquals(testCookie, com.music.vibe.data.innertube.Innertube.cookie)
+        assertEquals("UC_brand_123", authStore.channelPageId)
+        assertEquals("Vibe Brand Channel", authStore.channelName)
+        assertEquals("discord_secret_tok_99", AppSettings.discordToken.value)
+        assertEquals("lastfm_sess_key_abc", AppSettings.lastfmSessionKey.value)
+        assertEquals("lb_token_xyz", AppSettings.listenBrainzToken.value)
+        assertEquals("sp_dc_cookie_value_777", AppSettings.spotifySpdcToken.value)
+        assertEquals(
+            listOf("YouTube Music", "Discord", "Last.fm", "ListenBrainz", "Spotify"),
+            summary.restoredAccounts,
+        )
+
+        // 3. Verify legacy "bitchord" backup file also imports cleanly
+        val legacyFile = java.io.File(context.cacheDir, "bitchord-legacy-backup.json")
+        legacyFile.writeText(exportedJson.replace("\"app\": \"vibemusic\"", "\"app\": \"bitchord\""))
+        authStore.signOut()
+        assertFalse(authStore.isSignedIn)
+
+        Backup.importFrom(context, Uri.fromFile(legacyFile)).getOrThrow()
+        assertTrue(authStore.isSignedIn)
+        assertEquals(testCookie, com.music.vibe.data.innertube.Innertube.cookie)
+
+        // 4. Verify GitHub release markdown body bullet parser
+        val sampleMarkdown = """
+            ## What's Changed in v2.0.0
+            - **Liquid Glass UI**: Added frosted backdrop popup cards
+            * Custom sleep timer from `5 min` to `12 hr`
+            - [Backup & Restore](https://github.com/iam4tharv/vibe-music) summary sheet
+            **Full Changelog**: https://github.com/iam4tharv/vibe-music/compare/v1.9.5...v2.0.0
+        """.trimIndent()
+        val parsedBullets = com.music.vibe.data.AppUpdateChecker.parseReleaseBodyToBullets(sampleMarkdown)
+        assertEquals(
+            listOf(
+                "Liquid Glass UI: Added frosted backdrop popup cards",
+                "Custom sleep timer from 5 min to 12 hr",
+                "Backup & Restore summary sheet",
+            ),
+            parsedBullets,
+        )
+
+        exportFile.delete()
+        legacyFile.delete()
+        Unit
+    }
+
+    @Test
+    fun appLaunchTracker_freshInstallAndUpdateFlows(): Unit {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        com.music.vibe.data.AppLaunchTracker.resetForTesting(context)
+
+        // 1. Fresh install state (no state file in noBackupFilesDir)
+        val freshPrompt = com.music.vibe.data.AppLaunchTracker.checkLaunchPrompt(
+            context = context,
+            currentVersionCode = 530,
+            currentVersionName = "2.0.0",
+        )
+        assertNotNull(freshPrompt)
+        assertEquals(com.music.vibe.data.AppLaunchTracker.LaunchPromptType.FRESH_INSTALL, freshPrompt?.type)
+        assertEquals("2.0.0", freshPrompt?.versionName)
+        assertEquals(530, freshPrompt?.versionCode)
+
+        // Acknowledge fresh install
+        com.music.vibe.data.AppLaunchTracker.acknowledgeLaunchPrompt(
+            context = context,
+            versionCode = 530,
+            versionName = "2.0.0",
+        )
+
+        // Subsequent launch on same version code returns null
+        val subsequentPrompt = com.music.vibe.data.AppLaunchTracker.checkLaunchPrompt(
+            context = context,
+            currentVersionCode = 530,
+            currentVersionName = "2.0.0",
+        )
+        assertNull(subsequentPrompt)
+
+        // 2. Simulate upgrade from previous version (e.g. 520 -> 530)
+        com.music.vibe.data.AppLaunchTracker.acknowledgeLaunchPrompt(
+            context = context,
+            versionCode = 520,
+            versionName = "1.9.5",
+        )
+        val updatePrompt = com.music.vibe.data.AppLaunchTracker.checkLaunchPrompt(
+            context = context,
+            currentVersionCode = 530,
+            currentVersionName = "2.0.0",
+        )
+        assertNotNull(updatePrompt)
+        assertEquals(com.music.vibe.data.AppLaunchTracker.LaunchPromptType.UPDATE, updatePrompt?.type)
+        assertEquals("2.0.0", updatePrompt?.versionName)
+
+        // Acknowledge update
+        com.music.vibe.data.AppLaunchTracker.acknowledgeLaunchPrompt(
+            context = context,
+            versionCode = 530,
+            versionName = "2.0.0",
+        )
+        assertNull(
+            com.music.vibe.data.AppLaunchTracker.checkLaunchPrompt(
+                context = context,
+                currentVersionCode = 530,
+                currentVersionName = "2.0.0",
+            ),
+        )
+    }
 }
