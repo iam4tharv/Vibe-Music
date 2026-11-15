@@ -16,11 +16,10 @@ data class ParsedJamInvite(
 /** Relays a Vibe Music web or scheme invite from [com.music.vibe.MainActivity] to Compose. */
 object JamInviteLink {
 
-    const val ORIGIN = "https://iam4tharv.cyou"
+    const val ORIGIN = "https://bitchord.kushagrasingh.in"
 
     private const val EXTRA_CONSUMED = "vibemusic.jamInviteConsumed"
-    private const val HOST = "iam4tharv.cyou"
-    private const val LEGACY_HOST = "bitchord.kushagrasingh.in"
+    private const val HOST = "bitchord.kushagrasingh.in"
     private const val CUSTOM_SCHEME = "vibemusic"
     private const val CUSTOM_HOST = "party"
 
@@ -51,7 +50,7 @@ object JamInviteLink {
     /**
      * Parses an incoming invite:
      * 1. vibemusic://party/<CODE>?server=<SERVER>
-     * 2. https://iam4tharv.cyou/invite/<CODE>?server=<SERVER>
+     * 2. https://bitchord.kushagrasingh.in/invite/<CODE>?server=<SERVER>
      */
     fun parseInvite(value: String?): ParsedJamInvite? {
         val uri = runCatching { URI(value ?: return null) }.getOrNull() ?: return null
@@ -68,8 +67,8 @@ object JamInviteLink {
             return ParsedJamInvite(code = code, serverUrl = server)
         }
 
-        // 2. Official web domain: https://iam4tharv.cyou/invite/<CODE>
-        if (scheme == "https" && (host == HOST || host == LEGACY_HOST)) {
+        // 2. Official web domain: https://bitchord.kushagrasingh.in/invite/<CODE>
+        if (scheme == "https" && host == HOST) {
             val match = INVITE_PATH.matchEntire(uri.path.orEmpty()) ?: return null
             val code = match.groupValues[1].uppercase()
             return ParsedJamInvite(code = code, serverUrl = server)

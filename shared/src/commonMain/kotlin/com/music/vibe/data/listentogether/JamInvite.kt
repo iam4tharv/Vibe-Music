@@ -9,8 +9,7 @@ package com.music.vibe.data.listentogether
  */
 object JamInvite {
 
-    const val ORIGIN = "https://iam4tharv.cyou"
-    private const val LEGACY_ORIGIN = "https://bitchord.kushagrasingh.in"
+    const val ORIGIN = "https://bitchord.kushagrasingh.in"
 
     /** How many characters a party code carries. */
     const val CODE_LENGTH = 6
@@ -19,13 +18,8 @@ object JamInvite {
     fun parse(value: String?): String? {
         val text = value?.trim() ?: return null
         val prefix = "$ORIGIN/invite/"
-        val legacyPrefix = "$LEGACY_ORIGIN/invite/"
-        val matchedPrefix = when {
-            text.startsWith(prefix, ignoreCase = true) -> prefix
-            text.startsWith(legacyPrefix, ignoreCase = true) -> legacyPrefix
-            else -> return null
-        }
-        val code = text.substring(matchedPrefix.length).substringBefore('?').substringBefore('#')
+        if (!text.startsWith(prefix, ignoreCase = true)) return null
+        val code = text.substring(prefix.length).substringBefore('?').substringBefore('#')
         if (code.length != CODE_LENGTH || !code.all(Char::isLetterOrDigit)) return null
         return code.uppercase()
     }

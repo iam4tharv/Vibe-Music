@@ -21,6 +21,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -40,9 +41,13 @@ fun SpotifyCanvasAuthScreen(
     onNavigateUp: () -> Unit
 ) {
     val currentToken by AppSettings.spotifySpdcToken.collectAsStateWithLifecycle()
+    val defaultToken by SpotifyToken.defaultSpDcFlow.collectAsStateWithLifecycle()
     val prioritizeSpotify by AppSettings.prioritizeSpotifyCanvas.collectAsStateWithLifecycle()
-    var tokenInput by remember(currentToken) {
-        mutableStateOf(currentToken.ifBlank { SpotifyToken.DEFAULT_CANVAS_SP_DC })
+    LaunchedEffect(Unit) {
+        SpotifyToken.refreshRemoteDefaultSpDc(force = false)
+    }
+    var tokenInput by remember(currentToken, defaultToken) {
+        mutableStateOf(currentToken.ifBlank { defaultToken })
     }
 
     Scaffold(

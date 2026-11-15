@@ -14,7 +14,13 @@ import com.music.vibe.data.DebugLog as Log
 import com.music.vibe.data.Http
 import com.music.vibe.data.settings.AppSettings
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -54,12 +60,27 @@ internal object SpotifyToken {
     private const val KEY_CLIENT_VERSION = "client_version"
     private const val KEY_DEVICE_ID = "device_id"
     private const val KEY_COOKIE_HASH = "cookie_hash"
+    private const val KEY_REMOTE_SP_DC = "remote_default_sp_dc"
+    private const val KEY_REMOTE_FETCHED_AT = "remote_sp_dc_fetched_at"
+    private const val ASSET_TOKEN_FILE = "spotify_token.txt"
     private const val HARVEST_TIMEOUT_MS = 8_000L
     private const val HARVEST_FAILURE_COOLDOWN_MS = 5 * 60_000L
     private const val DEFAULT_TOKEN_LIFETIME_MS = 3_600_000L
+    private const val REMOTE_REFRESH_INTERVAL_MS = 30 * 60_000L
 
-    internal const val DEFAULT_CANVAS_SP_DC =
-        "AQBKHsXtyCvHlX_Jky4OlSqsgEDxduquwUZa-FcRAXLc9DNCnLkuVsCffa1ZXttVhmFN0yKFba3OlvyZphkrC42w7huOjLXKeKwzsuCGngx1XB5FfBrE-mDdRnOjxq2wWQ9o3-pitwY4TJdwCtt1M8wsiPIt9G-mP5vS2yjhAq0T1ZKM5lF6NyjvdWYB-dlTT8kyN2X3ecEMVc_jiUs"
+    private val REMOTE_TOKEN_URLS = listOf(
+        "https://raw.githubusercontent.com/iam4tharv/vibe-music/main/spotify_token.txt",
+        "https://raw.githubusercontent.com/iam4tharv/vibe-music/master/spotify_token.txt"
+    )
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val remoteFetchMutex = Mutex()
+
+    private val _defaultSpDcFlow = MutableStateFlow("")
+    internal val defaultSpDcFlow: StateFlow<String> = _defaultSpDcFlow.asStateFlow()
+
+    internal val DEFAULT_CANVAS_SP_DC: String
+        get() = _defaultSpDcFlow.value
 
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
     private val harvestMutex = Mutex()
@@ -74,17 +95,41 @@ internal object SpotifyToken {
     @Volatile private var cachedClientToken: String? = null
     @Volatile private var clientTokenExpiresAtMs = 0L
     @Volatile private var harvestFailedUntilMs = 0L
+    @Volatile private var remoteFetchedAtMs = 0L
 
     private data class SessionInfo(val clientVersion: String, val deviceId: String)
     private data class HarvestedToken(val token: String, val expiresAt: Long, val clientId: String?)
+
+    private fun readBundledAssetToken(context: Context): String {
+        return runCatching {
+            context.assets.open(ASSET_TOKEN_FILE).bufferedReader().use { reader ->
+                reader.lineSequence()
+                    .map { it.trim() }
+                    .firstOrNull { it.isNotEmpty() && !it.startsWith("#") }
+                    .orEmpty()
+            }
+        }.getOrDefault("")
+    }
+
+    private fun activeCookie(): String {
+        return AppSettings.spotifySpdcToken.value.ifBlank { DEFAULT_CANVAS_SP_DC }
+    }
 
     fun init(context: Context) {
         val app = context.applicationContext
         appContext = app
         val prefs = app.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val activeCookie = AppSettings.spotifySpdcToken.value.ifBlank { DEFAULT_CANVAS_SP_DC }
+        val cachedRemote = prefs.getString(KEY_REMOTE_SP_DC, null)?.trim().orEmpty()
+        remoteFetchedAtMs = prefs.getLong(KEY_REMOTE_FETCHED_AT, 0L)
+        val bundled = readBundledAssetToken(app)
+        val initialDefault = cachedRemote.ifBlank { bundled }
+        if (initialDefault.isNotBlank()) {
+            _defaultSpDcFlow.value = initialDefault
+        }
+
+        val currentCookie = activeCookie()
         val savedHash = prefs.getInt(KEY_COOKIE_HASH, 0)
-        if (savedHash == activeCookie.hashCode()) {
+        if (currentCookie.isNotBlank() && savedHash == currentCookie.hashCode()) {
             val now = System.currentTimeMillis()
             val exp = prefs.getLong(KEY_ACCESS_EXPIRES, 0L)
             val tok = prefs.getString(KEY_ACCESS_TOKEN, null)
@@ -105,6 +150,72 @@ internal object SpotifyToken {
                 cachedSession = SessionInfo(cv, did)
             }
         }
+
+        scope.launch {
+            refreshRemoteDefaultSpDc(force = true)
+        }
+    }
+
+    suspend fun refreshRemoteDefaultSpDc(force: Boolean = false): String = withContext(Dispatchers.IO) {
+        val now = System.currentTimeMillis()
+        if (!force && _defaultSpDcFlow.value.isNotBlank() && now - remoteFetchedAtMs < REMOTE_REFRESH_INTERVAL_MS) {
+            return@withContext _defaultSpDcFlow.value
+        }
+        remoteFetchMutex.withLock {
+            val checkNow = System.currentTimeMillis()
+            if (!force && _defaultSpDcFlow.value.isNotBlank() && checkNow - remoteFetchedAtMs < REMOTE_REFRESH_INTERVAL_MS) {
+                return@withLock _defaultSpDcFlow.value
+            }
+
+            var fetchedToken: String? = null
+            for (url in REMOTE_TOKEN_URLS) {
+                val candidate = runCatching {
+                    val request = Request.Builder()
+                        .url(url)
+                        .header("Accept", "text/plain")
+                        .header("Cache-Control", "no-cache")
+                        .build()
+                    Http.client.newCall(request).execute().use { response ->
+                        if (!response.isSuccessful) return@use null
+                        response.body?.string()
+                            ?.lineSequence()
+                            ?.map { it.trim() }
+                            ?.firstOrNull { it.isNotEmpty() && !it.startsWith("#") }
+                    }
+                }.onFailure {
+                    Log.w(TAG, "remote sp_dc fetch from $url failed: ${it.message}")
+                }.getOrNull()
+
+                if (!candidate.isNullOrBlank() && candidate.length >= 20) {
+                    fetchedToken = candidate
+                    break
+                }
+            }
+
+            if (!fetchedToken.isNullOrBlank()) {
+                val previousDefault = _defaultSpDcFlow.value
+                _defaultSpDcFlow.value = fetchedToken
+                remoteFetchedAtMs = checkNow
+                appContext?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)?.edit()?.apply {
+                    putString(KEY_REMOTE_SP_DC, fetchedToken)
+                    putLong(KEY_REMOTE_FETCHED_AT, checkNow)
+                    apply()
+                }
+                if (previousDefault.isNotBlank() && previousDefault != fetchedToken && AppSettings.spotifySpdcToken.value.isBlank()) {
+                    Log.d(TAG, "remote default sp_dc rotated on GitHub; invalidating cached bearer token")
+                    cachedAccessToken = null
+                    accessTokenExpiresAtMs = 0L
+                    harvestFailedUntilMs = 0L
+                }
+            } else if (_defaultSpDcFlow.value.isBlank()) {
+                val fallback = appContext?.let { readBundledAssetToken(it) }.orEmpty()
+                if (fallback.isNotBlank()) {
+                    _defaultSpDcFlow.value = fallback
+                }
+            }
+
+            _defaultSpDcFlow.value
+        }
     }
 
     fun invalidate() {
@@ -114,7 +225,15 @@ internal object SpotifyToken {
         cachedClientToken = null
         clientTokenExpiresAtMs = 0L
         harvestFailedUntilMs = 0L
-        appContext?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)?.edit()?.clear()?.apply()
+        val currentDefault = _defaultSpDcFlow.value
+        appContext?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)?.edit()?.apply {
+            clear()
+            if (currentDefault.isNotBlank()) {
+                putString(KEY_REMOTE_SP_DC, currentDefault)
+                putLong(KEY_REMOTE_FETCHED_AT, remoteFetchedAtMs)
+            }
+            apply()
+        }
     }
 
     private fun saveCachedTokens(cookie: String) {
@@ -141,12 +260,15 @@ internal object SpotifyToken {
      * this per track.
      *
      * Minted by loading the real web player in an offscreen WebView with the
-     * listener's cookie (or [DEFAULT_CANVAS_SP_DC]) applied and reading the
-     * token it mints for itself — see [harvestViaWebView] for why signing the
-     * request ourselves isn't enough.
+     * listener's cookie (or the GitHub-fetched [DEFAULT_CANVAS_SP_DC]) applied
+     * and reading the token it mints for itself — see [harvestViaWebView] for
+     * why signing the request ourselves isn't enough.
      */
     suspend fun accessToken(): String? {
-        val cookie = AppSettings.spotifySpdcToken.value.ifBlank { DEFAULT_CANVAS_SP_DC }
+        if (AppSettings.spotifySpdcToken.value.isBlank()) {
+            refreshRemoteDefaultSpDc(force = false)
+        }
+        var cookie = activeCookie()
         if (cookie.isBlank()) return null
 
         val now = System.currentTimeMillis()
@@ -164,7 +286,14 @@ internal object SpotifyToken {
                 return@withLock null
             }
 
-            val harvested = withContext(Dispatchers.Main) { harvestViaWebView(context, cookie) }
+            var harvested = withContext(Dispatchers.Main) { harvestViaWebView(context, cookie) }
+            if (harvested == null && AppSettings.spotifySpdcToken.value.isBlank()) {
+                val refreshedCookie = refreshRemoteDefaultSpDc(force = true)
+                if (refreshedCookie.isNotBlank() && refreshedCookie != cookie) {
+                    cookie = refreshedCookie
+                    harvested = withContext(Dispatchers.Main) { harvestViaWebView(context, cookie) }
+                }
+            }
             if (harvested == null) {
                 harvestFailedUntilMs = System.currentTimeMillis() + HARVEST_FAILURE_COOLDOWN_MS
                 Log.w(TAG, "token harvest failed or timed out; cooling down for 5m")
